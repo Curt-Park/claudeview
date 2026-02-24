@@ -4,7 +4,7 @@ Terminal dashboard for Claude Code. Browse sessions, agents, tool calls, tasks, 
 
 ## Screenshots
 
-### Sessions — 진행 중인 세션 한눈에
+### Sessions — all active and past sessions at a glance
 
 ```
 ┌─ claudeview │ Project: my-app │ Model: opus-4-6 │ MCP: 3 ────────────────────┐
@@ -20,7 +20,7 @@ Terminal dashboard for Claude Code. Browse sessions, agents, tool calls, tasks, 
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Agents — 메인 에이전트와 서브에이전트 트리
+### Agents — main agent and subagents as a tree
 
 ```
 ┌─ claudeview │ Project: my-app │ Model: opus-4-6 │ MCP: 3 ────────────────────┐
@@ -37,7 +37,7 @@ Terminal dashboard for Claude Code. Browse sessions, agents, tool calls, tasks, 
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Tools — 도구 호출 이력 전체 조회
+### Tools — full history of tool calls
 
 ```
 ┌─ claudeview │ Project: my-app │ Model: opus-4-6 │ MCP: 3 ────────────────────┐
@@ -55,7 +55,7 @@ Terminal dashboard for Claude Code. Browse sessions, agents, tool calls, tasks, 
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Logs — 에이전트 트랜스크립트 실시간 팔로우
+### Logs — live-follow agent transcripts
 
 ```
 ┌─ claudeview │ Project: my-app │ Model: opus-4-6 │ MCP: 3 ────────────────────┐
@@ -74,7 +74,7 @@ Terminal dashboard for Claude Code. Browse sessions, agents, tool calls, tasks, 
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Tasks — 태스크 목록과 의존 관계
+### Tasks — task list with dependency tracking
 
 ```
 ┌─ claudeview │ Project: my-app │ Model: opus-4-6 │ MCP: 3 ────────────────────┐
