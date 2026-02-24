@@ -1,0 +1,5 @@
+  claudeview 
+ <enter> view  <l> logs  <d> detail  </> filter  <:> cmd  <?> help  <q> quit 
+
+ sessions 
+  
