@@ -27,7 +27,7 @@ func TestScanProjects(t *testing.T) {
 		}
 		// Touch to set mod time
 		now := time.Now()
-		os.Chtimes(sessionFile, now, now)
+		_ = os.Chtimes(sessionFile, now, now)
 	}
 
 	projects, err := transcript.ScanProjects(dir)
