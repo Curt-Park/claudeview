@@ -60,14 +60,6 @@ func sessionRow(id string) ui.Row {
 	}
 }
 
-// agentRow builds a Row whose Data is a *model.Agent.
-func agentRow(id string) ui.Row {
-	return ui.Row{
-		Cells: []string{id, "main", "done", "3", "read file"},
-		Data:  &model.Agent{ID: id},
-	}
-}
-
 // nRows returns n generic rows (no meaningful Data).
 func nRows(n int) []ui.Row {
 	rows := make([]ui.Row, n)
