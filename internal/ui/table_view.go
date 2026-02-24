@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Column defines a column in the table.
@@ -29,7 +30,7 @@ type TableView struct {
 	Offset   int // scroll offset
 	Width    int
 	Height   int
-	Keys     KeyMap
+	Filter   string
 }
 
 // NewTableView creates a new table view.
@@ -38,7 +39,6 @@ func NewTableView(cols []Column, width, height int) TableView {
 		Columns: cols,
 		Width:   width,
 		Height:  height,
-		Keys:    DefaultKeyMap(),
 	}
 }
 
@@ -74,6 +74,35 @@ func (t *TableView) MoveDown() {
 	t.ensureVisible()
 }
 
+// GotoTop moves to the first row.
+func (t *TableView) GotoTop() {
+	t.Selected = 0
+	t.Offset = 0
+}
+
+// GotoBottom moves to the last row.
+func (t *TableView) GotoBottom() {
+	if len(t.Rows) == 0 {
+		return
+	}
+	t.Selected = len(t.Rows) - 1
+	t.ensureVisible()
+}
+
+// PageUp moves up by half a page.
+func (t *TableView) PageUp() {
+	half := max(1, t.Height/2)
+	t.Selected = max(0, t.Selected-half)
+	t.ensureVisible()
+}
+
+// PageDown moves down by half a page.
+func (t *TableView) PageDown() {
+	half := max(1, t.Height/2)
+	t.Selected = min(len(t.Rows)-1, t.Selected+half)
+	t.ensureVisible()
+}
+
 func (t *TableView) ensureVisible() {
 	if t.Selected < t.Offset {
 		t.Offset = t.Selected
@@ -87,16 +116,46 @@ func (t *TableView) ensureVisible() {
 func (t *TableView) Update(msg tea.Msg) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch {
-		case msg.String() == "k" || msg.String() == "up":
+		switch msg.String() {
+		case "k", "up":
 			t.MoveUp()
 			return true, nil
-		case msg.String() == "j" || msg.String() == "down":
+		case "j", "down":
 			t.MoveDown()
+			return true, nil
+		case "g":
+			t.GotoTop()
+			return true, nil
+		case "G":
+			t.GotoBottom()
+			return true, nil
+		case "ctrl+u", "pgup":
+			t.PageUp()
+			return true, nil
+		case "ctrl+d", "pgdown":
+			t.PageDown()
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+// filteredRows returns rows matching the current filter (case-insensitive).
+func (t TableView) filteredRows() []Row {
+	if t.Filter == "" {
+		return t.Rows
+	}
+	needle := strings.ToLower(t.Filter)
+	var out []Row
+	for _, row := range t.Rows {
+		for _, cell := range row.Cells {
+			if strings.Contains(strings.ToLower(cell), needle) {
+				out = append(out, row)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // View renders the table.
@@ -104,6 +163,8 @@ func (t TableView) View() string {
 	if t.Width == 0 {
 		return ""
 	}
+
+	rows := t.filteredRows()
 
 	// Calculate column widths
 	cols := t.calculateWidths()
@@ -119,15 +180,22 @@ func (t TableView) View() string {
 		visible = 20
 	}
 
-	for i := t.Offset; i < len(t.Rows) && i < t.Offset+visible; i++ {
-		row := t.Rows[i]
-		line := t.renderRow(row, cols, i == t.Selected)
+	// Clamp offset/selected against filtered set
+	offset := t.Offset
+	selected := t.Selected
+	if offset >= len(rows) {
+		offset = max(0, len(rows)-1)
+	}
+
+	for i := offset; i < len(rows) && i < offset+visible; i++ {
+		row := rows[i]
+		line := t.renderRow(row, cols, i == selected)
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
 
 	// Fill empty rows
-	rendered := min(len(t.Rows)-t.Offset, visible)
+	rendered := min(len(rows)-offset, visible)
 	for i := rendered; i < visible; i++ {
 		sb.WriteString(strings.Repeat(" ", t.Width))
 		sb.WriteString("\n")
@@ -184,15 +252,12 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 }
 
 func padRight(s string, n int) string {
-	// Strip ANSI for width calculation (approximate)
 	visible := lipgloss.Width(s)
 	if visible >= n {
-		// Truncate if too long
-		runes := []rune(s)
-		if len(runes) > n {
-			return string(runes[:n-1]) + "…"
+		if n > 1 {
+			return ansi.Truncate(s, n-1, "…")
 		}
-		return s
+		return ansi.Truncate(s, n, "")
 	}
 	return s + strings.Repeat(" ", n-visible)
 }

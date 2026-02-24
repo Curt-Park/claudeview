@@ -73,12 +73,6 @@ func (d *DetailView) Update(msg tea.Msg) bool {
 		case "j", "down":
 			d.ScrollDown()
 			return true
-		case "h", "left":
-			d.ScrollUp()
-			return true
-		case "l", "right":
-			d.ScrollDown()
-			return true
 		case "g":
 			d.GotoTop()
 			return true

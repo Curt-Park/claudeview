@@ -36,14 +36,10 @@ func (v *SessionsView) SetSessions(sessions []*model.Session) {
 	v.Sessions = sessions
 	rows := make([]ui.Row, len(sessions))
 	for i, s := range sessions {
-		sel := " "
-		if i == v.Table.Selected {
-			sel = "►"
-		}
 		statusStyle := ui.StatusStyle(string(s.Status))
 		rows[i] = ui.Row{
 			Cells: []string{
-				sel + s.ShortID(),
+				s.ShortID(),
 				s.Model,
 				statusStyle.Render(string(s.Status)),
 				fmt.Sprintf("%d", len(s.Agents)),
