@@ -23,6 +23,7 @@ var (
 	demoMode     bool
 	projectFlag  string
 	resourceFlag string
+	renderOnce   bool
 )
 
 // Execute runs the root command.
@@ -48,6 +49,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&demoMode, "demo", false, "Run with synthetic demo data")
 	rootCmd.Flags().StringVar(&projectFlag, "project", "", "Filter to a specific project hash")
 	rootCmd.Flags().StringVar(&resourceFlag, "resource", "sessions", "Initial resource to display (projects|sessions|agents|tools|tasks|plugins|mcp)")
+	rootCmd.Flags().BoolVar(&renderOnce, "render-once", false, "Render one frame to stdout and exit (for debugging)")
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -68,6 +70,12 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Create top-level model that wraps AppModel with actual view data
 	root := newRootModel(appModel, dp)
+
+	if renderOnce {
+		root.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		fmt.Print(root.View())
+		return nil
+	}
 
 	p := tea.NewProgram(root,
 		tea.WithAltScreen(),
