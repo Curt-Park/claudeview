@@ -48,13 +48,12 @@ type UserMessage struct {
 	Content []MessageContent `json:"content"`
 }
 
-// SystemMessage is the message field when type=="system".
+// SystemMessage is parsed from a top-level system JSONL entry (fields are at entry root, not in "message").
 type SystemMessage struct {
-	Subtype       string  `json:"subtype"`
-	DurationMS    int64   `json:"duration_ms"`
-	DurationAPIMS int64   `json:"duration_api_ms"`
-	NumTurns      int     `json:"num_turns"`
-	TotalCostUSD  float64 `json:"total_cost_usd"`
+	Subtype      string  `json:"subtype"`
+	DurationMS   int64   `json:"durationMs"` // Claude Code uses camelCase
+	NumTurns     int     `json:"num_turns"`
+	TotalCostUSD float64 `json:"total_cost_usd"`
 }
 
 // ProgressMessage is the message field when type=="progress".

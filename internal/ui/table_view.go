@@ -242,6 +242,12 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 			cell = row.Cells[i]
 		}
 		padded := padRight(cell, widths[i])
+		if selected {
+			// Strip ANSI codes so the selection style renders uniformly across the whole row.
+			// Pre-rendered cells contain reset sequences (\x1b[0m) that would cut off the
+			// selection background mid-row.
+			padded = ansi.Strip(padded)
+		}
 		parts = append(parts, padded)
 	}
 	line := strings.Join(parts, " ")
@@ -253,7 +259,7 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 
 func padRight(s string, n int) string {
 	visible := lipgloss.Width(s)
-	if visible >= n {
+	if visible > n {
 		if n > 1 {
 			return ansi.Truncate(s, n-1, "…")
 		}

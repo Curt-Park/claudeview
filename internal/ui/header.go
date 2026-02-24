@@ -16,6 +16,25 @@ type HeaderModel struct {
 	Width       int
 }
 
+// ContentText returns the header content as plain text (no styling or padding).
+// Used to embed the header in the top border line.
+func (h HeaderModel) ContentText() string {
+	text := "claudeview"
+	if h.ProjectName != "" {
+		text += "  │  " + h.ProjectName
+	}
+	if h.Model != "" {
+		text += "  │  " + h.Model
+	}
+	if h.MCPCount > 0 {
+		text += fmt.Sprintf("  │  MCP: %d", h.MCPCount)
+	}
+	if h.Mode != "" {
+		text += "  │  " + h.Mode
+	}
+	return text
+}
+
 // View renders the header bar.
 func (h HeaderModel) View() string {
 	left := " claudeview"

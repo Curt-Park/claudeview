@@ -204,10 +204,11 @@ func (rm *rootModel) loadMCP() {
 }
 
 func (rm *rootModel) syncView() {
-	w := rm.app.Width
-	h := rm.app.Height - 4
-	if w == 0 {
-		w = 120
+	// Use inner dimensions matching AppModel.contentWidth/contentHeight.
+	w := rm.app.Width - 4
+	h := rm.app.Height - 7
+	if w <= 0 {
+		w = 116 // fallback inner width for 120-col terminal
 	}
 	if h <= 0 {
 		h = 30
@@ -749,8 +750,9 @@ func sessionFromInfo(si transcript.SessionInfo) *model.Session {
 		}
 	}
 
-	// Determine status based on file modification vs now
-	if time.Since(si.ModTime) < 30*time.Second {
+	// Determine status: active if JSONL was modified within the last 5 minutes
+	// (covers pauses between turns while Claude Code is still running).
+	if time.Since(si.ModTime) < 5*time.Minute {
 		s.Status = model.StatusActive
 	}
 

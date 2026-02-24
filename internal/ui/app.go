@@ -370,23 +370,24 @@ func (m *AppModel) showHelp() {
 }
 
 func (m *AppModel) updateSizes() {
-	m.Header.Width = m.Width
-	m.Menu.Width = m.Width
-	m.Crumbs.Width = m.Width
-	m.Flash.Width = m.Width
-	m.Command.Width = m.Width
-	m.Filter.Width = m.Width
-	m.Table.Width = m.Width
+	inner := m.contentWidth() // Width - 4 for bordered layout
+	m.Header.Width = inner
+	m.Menu.Width = inner
+	m.Crumbs.Width = inner
+	m.Flash.Width = inner
+	m.Command.Width = inner
+	m.Filter.Width = inner
+	m.Table.Width = inner
 	m.Table.Height = m.contentHeight()
-	m.Log.Width = m.contentWidth()
+	m.Log.Width = inner
 	m.Log.Height = m.contentHeight()
-	m.Detail.Width = m.contentWidth()
+	m.Detail.Width = inner
 	m.Detail.Height = m.contentHeight()
 }
 
 func (m AppModel) contentHeight() int {
-	// header(1) + menu(1) + crumbs(1) + flash(1) = 4 chrome rows
-	h := m.Height - 4
+	// top-border(1) + menu(1) + sep(1) + sep(1) + crumbs(1) + status(1) + bottom(1) = 7 chrome rows
+	h := m.Height - 7
 	if h < 5 {
 		return 5
 	}
@@ -394,44 +395,96 @@ func (m AppModel) contentHeight() int {
 }
 
 func (m AppModel) contentWidth() int {
-	return m.Width
+	// subtract 4 for "│ " on the left and " │" on the right
+	w := m.Width - 4
+	if w < 10 {
+		return 10
+	}
+	return w
 }
 
-// View renders the full UI.
+// View renders the full UI with a bordered box layout.
 func (m AppModel) View() string {
 	if m.Width == 0 {
 		return "Loading..."
 	}
 
-	var sections []string
+	bc := lipgloss.NewStyle().Foreground(colorGray)
+	titleStyle := lipgloss.NewStyle().Foreground(colorWhite).Bold(true)
+	innerW := m.contentWidth()
 
-	sections = append(sections, m.Header.View())
-	sections = append(sections, m.Menu.View())
+	// wrapLine adds "│ " prefix and " │" suffix around a pre-rendered inner line.
+	wrapLine := func(s string) string {
+		// Ensure inner content is exactly innerW visible chars.
+		w := lipgloss.Width(s)
+		if w < innerW {
+			s += strings.Repeat(" ", innerW-w)
+		}
+		return bc.Render("│") + " " + s + " " + bc.Render("│")
+	}
 
-	// Content area
-	var content string
+	hbar := func(left, right string) string {
+		return bc.Render(left + strings.Repeat("─", m.Width-2) + right)
+	}
+
+	// --- Top border with header text integrated ---
+	headerText := m.Header.ContentText()
+	prefix := "┌─ "
+	suffix := " ─┐"
+	fillLen := max(0, m.Width-len([]rune(prefix))-lipgloss.Width(headerText)-len([]rune(suffix)))
+	topBorder := bc.Render(prefix) + titleStyle.Render(headerText) +
+		bc.Render(" "+strings.Repeat("─", fillLen)+"─┐")
+
+	// --- Menu row ---
+	menuLine := wrapLine(m.Menu.View())
+
+	// --- Separator ---
+	sep := hbar("├", "┤")
+
+	// --- Content lines ---
+	var contentStr string
 	switch m.ViewMode {
 	case ModeTable:
-		content = m.Table.View()
+		contentStr = m.Table.View()
 	case ModeLog:
-		content = m.Log.View()
+		contentStr = m.Log.View()
 	case ModeDetail, ModeYAML:
-		content = m.Detail.View()
+		contentStr = m.Detail.View()
 	}
-	sections = append(sections, content)
+	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
+	wrappedContent := make([]string, len(rawLines))
+	for i, line := range rawLines {
+		wrappedContent[i] = wrapLine(line)
+	}
 
-	sections = append(sections, m.Crumbs.View())
+	// --- Bottom separator + crumbs + status ---
+	botSep := hbar("├", "┤")
+	crumbsLine := wrapLine(m.Crumbs.View())
 
-	// Bottom bar: flash or command or filter
+	var statusView string
 	if m.inCommand {
-		sections = append(sections, m.Command.View())
+		statusView = m.Command.View()
 	} else if m.inFilter {
-		sections = append(sections, m.Filter.View())
+		statusView = m.Filter.View()
 	} else {
-		sections = append(sections, m.Flash.View())
+		statusView = m.Flash.View()
 	}
+	statusLine := wrapLine(statusView)
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		strings.Join(sections, "\n"),
-	)
+	botBorder := hbar("└", "┘")
+
+	// --- Assemble ---
+	var sb strings.Builder
+	sb.WriteString(topBorder + "\n")
+	sb.WriteString(menuLine + "\n")
+	sb.WriteString(sep + "\n")
+	for _, cl := range wrappedContent {
+		sb.WriteString(cl + "\n")
+	}
+	sb.WriteString(botSep + "\n")
+	sb.WriteString(crumbsLine + "\n")
+	sb.WriteString(statusLine + "\n")
+	sb.WriteString(botBorder)
+
+	return sb.String()
 }
