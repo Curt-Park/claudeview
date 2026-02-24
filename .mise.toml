@@ -1,0 +1,7 @@
+# Install mise: curl https://mise.run | sh
+# Activate:     echo 'eval "$(mise activate bash)"' >> ~/.bashrc && source ~/.bashrc
+# Install tools: mise trust && mise install
+
+[tools]
+go = "1.26"
+golangci-lint = "1.64"
