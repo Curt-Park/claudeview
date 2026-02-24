@@ -34,7 +34,7 @@ type KeyMap struct {
 	ForceQuit key.Binding
 }
 
-// DefaultKeyMap returns the default k9s-style key bindings.
+// DefaultKeyMap returns the default vim-style key bindings.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		Up: key.NewBinding(

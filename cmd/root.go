@@ -34,7 +34,7 @@ func Execute() {
 
 var rootCmd = &cobra.Command{
 	Use:   "claudeview",
-	Short: "k9s-style TUI for Claude Code sessions",
+	Short: "Terminal dashboard for Claude Code sessions",
 	Long: `claudeview is a terminal UI for monitoring Claude Code sessions,
 agents, tool calls, tasks, plugins, and MCP servers.
 

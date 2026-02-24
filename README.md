@@ -20,7 +20,7 @@ Terminal dashboard for Claude Code. Browse sessions, agents, tool calls, tasks, 
 
 ## Features
 
-- **k9s-style navigation** — `:resource` command to switch views, vim `j/k` movement
+- **Vim-style navigation** — `:resource` command to switch views, `j/k` to move up/down
 - **Live transcript parsing** — reads `~/.claude/projects/` JSONL files directly, no hooks needed
 - **Drill-down navigation** — projects → sessions → agents → tools
 - **Log view** — scrollable transcript with follow mode (`f`)
