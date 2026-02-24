@@ -18,6 +18,7 @@ const (
 	ModeTable  ViewMode = iota
 	ModeLog             // l key
 	ModeDetail          // d key
+	ModeYAML            // y key — JSON dump of selected row
 )
 
 // TickMsg is sent on each timer tick for animations.
@@ -25,6 +26,15 @@ type TickMsg time.Time
 
 // RefreshMsg signals data has been refreshed.
 type RefreshMsg struct{}
+
+// DetailRequestMsg signals that the detail view should be populated.
+type DetailRequestMsg struct{}
+
+// LogRequestMsg signals that the log view should be populated.
+type LogRequestMsg struct{}
+
+// YAMLRequestMsg signals that the JSON dump view should be populated.
+type YAMLRequestMsg struct{}
 
 // AppModel is the top-level Bubble Tea model.
 type AppModel struct {
@@ -47,8 +57,10 @@ type AppModel struct {
 	Log      LogView
 	Detail   DetailView
 
-	// Navigation state
-	Keys KeyMap
+	// Navigation context (set on drill-down)
+	SelectedProjectHash string
+	SelectedSessionID   string
+	SelectedAgentID     string
 
 	// Data providers (injected from outside)
 	DataProvider DataProvider
@@ -79,7 +91,6 @@ type DataProvider interface {
 // NewAppModel creates a new application model.
 func NewAppModel(dp DataProvider, initialResource model.ResourceType) AppModel {
 	m := AppModel{
-		Keys:         DefaultKeyMap(),
 		DataProvider: dp,
 		Resource:     initialResource,
 	}
@@ -162,7 +173,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTable(msg)
 		case ModeLog:
 			return m.updateLog(msg)
-		case ModeDetail:
+		case ModeDetail, ModeYAML:
 			return m.updateDetail(msg)
 		}
 	}
@@ -198,14 +209,24 @@ func (m AppModel) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "enter":
+	case "esc":
+		m.inFilter = false
+		m.Filter.Deactivate()
+		m.Filter.Input = ""
+		m.Table.Filter = ""
+		m.Log.Filter = ""
+	case "enter":
 		m.inFilter = false
 		m.Filter.Deactivate()
 	case "backspace":
 		m.Filter.Backspace()
+		m.Table.Filter = m.Filter.Input
+		m.Log.Filter = m.Filter.Input
 	default:
 		if len(msg.Runes) == 1 {
 			m.Filter.AddChar(msg.Runes[0])
+			m.Table.Filter = m.Filter.Input
+			m.Log.Filter = m.Filter.Input
 		}
 	}
 	return m, nil
@@ -221,10 +242,17 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.ViewMode = ModeLog
 		m.Menu.Items = LogMenuItems()
 		m.refreshLog()
+		return m, func() tea.Msg { return LogRequestMsg{} }
 	case "d":
 		m.ViewMode = ModeDetail
 		m.Menu.Items = DetailMenuItems()
 		m.refreshDetail()
+		return m, func() tea.Msg { return DetailRequestMsg{} }
+	case "y":
+		m.ViewMode = ModeYAML
+		m.Menu.Items = DetailMenuItems()
+		m.refreshDetail()
+		return m, func() tea.Msg { return YAMLRequestMsg{} }
 	default:
 		m.Table.Update(msg)
 	}
@@ -271,23 +299,57 @@ func (m *AppModel) navigateBack() {
 	// Navigate up the resource hierarchy
 	switch m.Resource {
 	case model.ResourceTools:
-		m.switchResource(model.ResourceAgents)
+		m.SelectedAgentID = ""
+		m.Crumbs.Pop()
+		m.Resource = model.ResourceAgents
+		m.ViewMode = ModeTable
+		m.Menu.Items = TableMenuItems()
 	case model.ResourceAgents:
-		m.switchResource(model.ResourceSessions)
+		m.SelectedSessionID = ""
+		m.Crumbs.Pop()
+		m.Resource = model.ResourceSessions
+		m.ViewMode = ModeTable
+		m.Menu.Items = TableMenuItems()
 	case model.ResourceSessions:
-		m.switchResource(model.ResourceProjects)
+		m.SelectedProjectHash = ""
+		m.Crumbs.Pop()
+		m.Resource = model.ResourceProjects
+		m.ViewMode = ModeTable
+		m.Menu.Items = TableMenuItems()
 	}
 }
 
 func (m *AppModel) drillDown() {
+	row := m.Table.SelectedRow()
+	if row == nil {
+		return
+	}
 	switch m.Resource {
 	case model.ResourceProjects:
-		m.switchResource(model.ResourceSessions)
+		if p, ok := row.Data.(*model.Project); ok {
+			m.SelectedProjectHash = p.Hash
+		}
+		m.drillInto(model.ResourceSessions)
 	case model.ResourceSessions:
-		m.switchResource(model.ResourceAgents)
+		if s, ok := row.Data.(*model.Session); ok {
+			m.SelectedSessionID = s.ID
+		}
+		m.drillInto(model.ResourceAgents)
 	case model.ResourceAgents:
-		m.switchResource(model.ResourceTools)
+		if a, ok := row.Data.(*model.Agent); ok {
+			m.SelectedAgentID = a.ID
+		}
+		m.drillInto(model.ResourceTools)
 	}
+}
+
+func (m *AppModel) drillInto(rt model.ResourceType) {
+	m.Resource = rt
+	m.ViewMode = ModeTable
+	m.Menu.Items = TableMenuItems()
+	m.Crumbs.Push(string(rt))
+	m.Filter.Deactivate()
+	m.Filter.Input = ""
 }
 
 func (m *AppModel) refreshLog() {
@@ -353,7 +415,7 @@ func (m AppModel) View() string {
 		content = m.Table.View()
 	case ModeLog:
 		content = m.Log.View()
-	case ModeDetail:
+	case ModeDetail, ModeYAML:
 		content = m.Detail.View()
 	}
 	sections = append(sections, content)

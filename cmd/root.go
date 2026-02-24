@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,13 +65,6 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	appModel := ui.NewAppModel(dp, initialResource)
-
-	// Pre-load initial data
-	lp := dp.(*liveDataProvider)
-	if demoMode {
-		lp = nil
-	}
-	_ = lp
 
 	// Create top-level model that wraps AppModel with actual view data
 	root := newRootModel(appModel, dp)
@@ -137,13 +131,13 @@ func (rm *rootModel) loadData() {
 	case model.ResourceProjects:
 		rm.loadProjects()
 	case model.ResourceSessions:
-		rm.loadSessions("")
+		rm.loadSessions(rm.app.SelectedProjectHash)
 	case model.ResourceAgents:
-		rm.loadAgents("")
+		rm.loadAgents(rm.app.SelectedSessionID)
 	case model.ResourceTools:
-		rm.loadTools("")
+		rm.loadTools(rm.app.SelectedAgentID)
 	case model.ResourceTasks:
-		rm.loadTasks("")
+		rm.loadTasks(rm.app.SelectedSessionID)
 	case model.ResourcePlugins:
 		rm.loadPlugins()
 	case model.ResourceMCP:
@@ -296,32 +290,158 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.loadData()
 		rm.syncView()
 
+	case ui.DetailRequestMsg:
+		rm.populateDetail()
+
+	case ui.LogRequestMsg:
+		rm.populateLog()
+
+	case ui.YAMLRequestMsg:
+		rm.populateJSON()
+
 	case watcherMsg:
 		// start file watching in background
 		go rm.watchFiles()
 	}
 
 	// Update app model
+	prevResource := rm.app.Resource
 	newApp, cmd := rm.app.Update(msg)
 	rm.app = newApp.(ui.AppModel)
 
-	// Handle resource switch
-	if rm.app.Resource != model.ResourceType("") {
-		rm.syncViewAfterResourceChange()
+	// Only reload data when resource changes
+	if rm.app.Resource != prevResource {
+		rm.loadData()
 	}
 
 	return rm, cmd
 }
 
-func (rm *rootModel) syncViewAfterResourceChange() {
-	// Detect if we need to reload data after navigation
-	rm.loadData()
-	rm.syncView()
-}
-
 func (rm *rootModel) watchFiles() {
 	// File watching implementation would go here
 	// This is a simplified version
+}
+
+func (rm *rootModel) populateJSON() {
+	row := rm.app.Table.SelectedRow()
+	if row == nil {
+		return
+	}
+	b, err := json.MarshalIndent(row.Data, "", "  ")
+	if err != nil {
+		rm.app.Detail.SetContentString(fmt.Sprintf("error: %v", err))
+		return
+	}
+	rm.app.Detail.SetContentString(string(b))
+}
+
+func (rm *rootModel) populateDetail() {
+	row := rm.app.Table.SelectedRow()
+	if row == nil {
+		return
+	}
+	var lines []string
+	switch rm.app.Resource {
+	case model.ResourceSessions:
+		if s, ok := row.Data.(*model.Session); ok {
+			lines = view.SessionDetailLines(s)
+		}
+	case model.ResourceAgents:
+		if a, ok := row.Data.(*model.Agent); ok {
+			lines = view.AgentDetailLines(a)
+		}
+	case model.ResourceTasks:
+		if t, ok := row.Data.(*model.Task); ok {
+			lines = view.TaskDetailLines(t)
+		}
+	case model.ResourcePlugins:
+		if p, ok := row.Data.(*model.Plugin); ok {
+			lines = view.PluginDetailLines(p)
+		}
+	case model.ResourceMCP:
+		if s, ok := row.Data.(*model.MCPServer); ok {
+			lines = view.MCPDetailLines(s)
+		}
+	default:
+		// Fallback: JSON dump
+		if b, err := json.MarshalIndent(row.Data, "  ", "  "); err == nil {
+			lines = strings.Split(string(b), "\n")
+		}
+	}
+	rm.app.Detail.SetContent(lines)
+}
+
+func (rm *rootModel) populateLog() {
+	row := rm.app.Table.SelectedRow()
+	if row == nil {
+		return
+	}
+
+	var filePath string
+	switch rm.app.Resource {
+	case model.ResourceSessions:
+		if s, ok := row.Data.(*model.Session); ok {
+			filePath = s.FilePath
+		}
+	case model.ResourceAgents:
+		if a, ok := row.Data.(*model.Agent); ok {
+			filePath = a.FilePath
+		}
+	}
+
+	if filePath == "" {
+		rm.app.Log.SetLines([]ui.LogLine{{Text: "(no transcript file for this resource)", Style: "normal"}})
+		return
+	}
+
+	parsed, err := transcript.ParseFile(filePath)
+	if err != nil {
+		rm.app.Log.SetLines([]ui.LogLine{{Text: fmt.Sprintf("error reading transcript: %v", err), Style: "normal"}})
+		return
+	}
+
+	var logLines []ui.LogLine
+	for _, turn := range parsed.Turns {
+		ts := ""
+		if !turn.Timestamp.IsZero() {
+			ts = turn.Timestamp.Format("15:04:05")
+		}
+		header := fmt.Sprintf("[%s] %s", ts, turn.Role)
+		logLines = append(logLines, ui.LogLine{Text: header, Style: "time"})
+
+		if turn.Thinking != "" {
+			for line := range strings.SplitSeq(turn.Thinking, "\n") {
+				logLines = append(logLines, ui.LogLine{Text: "  <think> " + line, Style: "think"})
+			}
+		}
+		if turn.Text != "" {
+			for line := range strings.SplitSeq(turn.Text, "\n") {
+				logLines = append(logLines, ui.LogLine{Text: "  " + line, Style: "text"})
+			}
+		}
+		for _, tc := range turn.ToolCalls {
+			logLines = append(logLines, ui.LogLine{Text: fmt.Sprintf("  ► %s", tc.Name), Style: "tool"})
+			if len(tc.Input) > 0 && string(tc.Input) != "null" {
+				input := string(tc.Input)
+				if len(input) > 120 {
+					input = input[:119] + "…"
+				}
+				logLines = append(logLines, ui.LogLine{Text: "    input: " + input, Style: "tool"})
+			}
+			if len(tc.Result) > 0 && string(tc.Result) != "null" {
+				result := string(tc.Result)
+				if len(result) > 120 {
+					result = result[:119] + "…"
+				}
+				logLines = append(logLines, ui.LogLine{Text: "    result: " + result, Style: "result"})
+			}
+		}
+	}
+
+	if len(logLines) == 0 {
+		logLines = []ui.LogLine{{Text: "(empty transcript)", Style: "normal"}}
+	}
+	rm.app.Log.SetLines(logLines)
 }
 
 func (rm *rootModel) View() string {
