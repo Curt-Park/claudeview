@@ -147,7 +147,7 @@ func (w *Watcher) readAll(path string, fromOffset int64) (int64, error) {
 	if err != nil {
 		return fromOffset, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if fromOffset > 0 {
 		if _, err := f.Seek(fromOffset, io.SeekStart); err != nil {

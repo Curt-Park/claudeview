@@ -10,12 +10,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: "1.23"
+          go-version-file: go.mod
           cache: true
 
       - name: Verify dependencies
@@ -27,14 +27,20 @@ jobs:
       - name: Test
         run: go test -race -count=1 -coverprofile=coverage.txt ./...
 
+      - name: Read golangci-lint version
+        id: lint-version
+        run: |
+          VERSION=$(grep 'golangci-lint' .mise.toml | sed 's/.*= *"\(.*\)"/\1/')
+          echo "version=v${VERSION}" >> $GITHUB_OUTPUT
+
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: ${{ steps.lint-version.outputs.version }}
           args: --timeout=5m
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.txt
         continue-on-error: true

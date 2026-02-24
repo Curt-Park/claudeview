@@ -103,9 +103,6 @@ type rootModel struct {
 	tasksView    *view.TasksView
 	pluginsView  *view.PluginsView
 	mcpView      *view.MCPView
-
-	// Watcher for live updates
-	watcher *transcript.Watcher
 }
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {

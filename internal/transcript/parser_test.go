@@ -45,8 +45,8 @@ func TestParseEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
-	f.Close()
+	defer func() { _ = os.Remove(f.Name()) }()
+	_ = f.Close()
 
 	result, err := transcript.ParseFile(f.Name())
 	if err != nil {

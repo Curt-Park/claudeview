@@ -18,7 +18,7 @@ type HeaderModel struct {
 
 // View renders the header bar.
 func (h HeaderModel) View() string {
-	left := fmt.Sprintf(" claudeview")
+	left := " claudeview"
 	if h.ProjectName != "" {
 		left += fmt.Sprintf("  |  Project: %s", h.ProjectName)
 	}
