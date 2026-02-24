@@ -1,6 +1,6 @@
 # claudeview
 
-k9s-style terminal UI for monitoring Claude Code sessions, agents, tool calls, tasks, plugins, and MCP servers.
+Terminal dashboard for Claude Code. Browse sessions, agents, tool calls, tasks, plugins, and MCP servers — all from one place, in real time.
 
 ## Demo
 
