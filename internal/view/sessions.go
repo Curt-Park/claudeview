@@ -15,7 +15,7 @@ type SessionsView struct {
 
 var sessionColumns = []ui.Column{
 	{Title: "NAME", Width: 10},
-	{Title: "MODEL", Width: 16},
+	{Title: "MODEL", Width: 16, Flex: true},
 	{Title: "STATUS", Width: 12},
 	{Title: "AGENTS", Width: 6},
 	{Title: "TOOLS", Width: 6},

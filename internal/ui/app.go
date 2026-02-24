@@ -452,6 +452,12 @@ func (m AppModel) View() string {
 		contentStr = m.Detail.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
+	// Clip to the exact content height so the total view fits the terminal.
+	// The table View() produces contentHeight+1 lines (col header + data rows);
+	// clamping here prevents the top border from being scrolled off screen.
+	if limit := m.contentHeight(); len(rawLines) > limit {
+		rawLines = rawLines[:limit]
+	}
 	wrappedContent := make([]string, len(rawLines))
 	for i, line := range rawLines {
 		wrappedContent[i] = wrapLine(line)
