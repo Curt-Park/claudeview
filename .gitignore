@@ -3,3 +3,4 @@ bin/
 *.test
 *.out
 coverage.txt
+.vscode
