@@ -7,11 +7,11 @@ references: []
 relations:
   - type: affects
     target: component-2468
-    description: UI Spec이 키 바인딩, 모드 전환, 레이아웃 등 UI 구현 방향을 결정
+    description: The UI Spec defines key bindings, mode transitions, layout, and overall UI implementation direction
     confidence: 0.8
   - type: affects
     target: component-1792
-    description: UI Spec이 각 리소스 뷰의 컬럼 정의, 표시 형식, 정렬 순서를 규정
+    description: The UI Spec specifies column definitions, display formats, and sort order for each resource view
     confidence: 0.8
 source: manual
 status: active

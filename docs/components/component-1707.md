@@ -7,11 +7,11 @@ references: []
 relations:
   - type: implements
     target: component-1348
-    description: BDD 테스트 함수(TEST-NAV-001 등)가 UI Spec 각 섹션의 동작을 실행 가능한 형태로 검증
+    description: BDD test functions (TEST-NAV-001 etc.) verify the behavior of each UI Spec section in executable form
     confidence: 0.8
   - type: depends_on
     target: component-2468
-    description: BDD 테스트가 AppModel을 직접 구동하며 렌더링 결과를 단언
+    description: BDD tests drive AppModel directly and assert on rendered output
     confidence: 0.8
 source: manual
 status: active

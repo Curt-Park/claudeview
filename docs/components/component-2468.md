@@ -11,7 +11,7 @@ relations:
     confidence: 0.7000000000000001
   - type: depends_on
     target: component-1669
-    description: AppModel이 model.ResourceType, model.ResourceProjects 등 상수를 사용
+    description: AppModel uses model.ResourceType, model.ResourceProjects, and other constants
     confidence: 0.8
 source: manual
 status: active
@@ -84,7 +84,6 @@ type DataProvider interface {
 - `d` — detail view
 - `y` — YAML/JSON dump view
 - `t`/`p`/`m` — jump to tasks / plugins / MCP servers
-- `:` — command mode (resource switch with autocomplete)
 - `/` — filter mode
 - `esc` — back / exit mode
 - `ctrl+c` — quit

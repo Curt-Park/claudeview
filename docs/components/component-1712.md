@@ -11,7 +11,7 @@ relations:
     confidence: 0.7000000000000001
   - type: relates_to
     target: component-1669
-    description: transcript 파싱 결과(SessionInfo, Turn 등)가 cmd/root.go에서 model 타입으로 변환됨
+    description: Transcript parsing results (SessionInfo, Turn, etc.) are converted to model types in cmd/root.go
     confidence: 0.8
 source: manual
 status: active

@@ -11,31 +11,31 @@ relations:
     confidence: 0.7000000000000001
   - type: relates_to
     target: component-2468
-    description: 아키텍처 개요가 UI 패키지를 핵심 컴포넌트로 문서화
+    description: The architecture overview documents the UI package as a core component
     confidence: 0.8
   - type: relates_to
     target: component-1792
-    description: 아키텍처 개요가 View 패키지를 핵심 컴포넌트로 문서화
+    description: The architecture overview documents the View package as a core component
     confidence: 0.8
   - type: relates_to
     target: component-1712
-    description: 아키텍처 개요가 Transcript 패키지를 핵심 컴포넌트로 문서화
+    description: The architecture overview documents the Transcript package as a core component
     confidence: 0.8
   - type: relates_to
     target: component-1669
-    description: 아키텍처 개요가 Model 패키지를 핵심 컴포넌트로 문서화
+    description: The architecture overview documents the Model package as a core component
     confidence: 0.8
   - type: relates_to
     target: component-1365
-    description: 아키텍처 개요가 Config 패키지를 핵심 컴포넌트로 문서화
+    description: The architecture overview documents the Config package as a core component
     confidence: 0.8
   - type: relates_to
     target: component-1707
-    description: 아키텍처 개요가 BDD 테스트 스위트를 품질 보증 레이어로 문서화
+    description: The architecture overview documents the BDD test suite as the quality assurance layer
     confidence: 0.8
   - type: relates_to
     target: component-1348
-    description: 아키텍처 개요가 UI Spec을 동작 정의 문서로 참조
+    description: The architecture overview references the UI Spec as the behavior definition document
     confidence: 0.8
 source: manual
 status: active
@@ -53,7 +53,7 @@ claudeview is a Go TUI (terminal UI) application for monitoring and exploring Cl
 ## Entry Points
 
 - `main.go` — sets `AppVersion` from build-time ldflags, calls `cmd.Execute()`
-- `cmd/root.go` — Cobra CLI; defines `--demo`, `--project`, `--resource`, `--render-once` flags; wires together `DataProvider`, `AppModel`, and `rootModel`
+- `cmd/root.go` — Cobra CLI; defines `--demo`, `--render-once` flags; wires together `DataProvider`, `AppModel`, and `rootModel`
 
 ## Top-Level Architecture
 

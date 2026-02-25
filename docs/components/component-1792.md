@@ -11,11 +11,11 @@ relations:
     confidence: 0.7000000000000001
   - type: depends_on
     target: component-2468
-    description: view 패키지가 ui.TableView 타입을 직접 임포트해서 사용
+    description: The view package imports and uses the ui.TableView type directly
     confidence: 0.8
   - type: depends_on
     target: component-1669
-    description: view 패키지가 model.Project/Session/Agent 등 타입을 직접 참조해서 렌더링
+    description: The view package references model.Project/Session/Agent and other types directly for rendering
     confidence: 0.8
 source: manual
 status: active

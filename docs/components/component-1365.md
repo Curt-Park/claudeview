@@ -7,7 +7,7 @@ references: []
 relations:
   - type: relates_to
     target: component-1669
-    description: config 파싱 결과(InstalledPlugin, TaskEntry 등)가 cmd/root.go에서 model 타입으로 변환됨
+    description: Config parsing results (InstalledPlugin, TaskEntry, etc.) are converted to model types in cmd/root.go
     confidence: 0.8
 source: manual
 status: active
