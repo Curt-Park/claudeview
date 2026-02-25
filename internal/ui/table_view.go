@@ -91,24 +91,26 @@ func (t *TableView) GotoBottom() {
 
 // PageUp moves up by half a page.
 func (t *TableView) PageUp() {
-	half := max(1, t.Height/2)
+	half := max(1, (t.Height-1)/2)
 	t.Selected = max(0, t.Selected-half)
 	t.ensureVisible()
 }
 
 // PageDown moves down by half a page.
 func (t *TableView) PageDown() {
-	half := max(1, t.Height/2)
+	half := max(1, (t.Height-1)/2)
 	t.Selected = min(len(t.Rows)-1, t.Selected+half)
 	t.ensureVisible()
 }
 
 func (t *TableView) ensureVisible() {
+	// The header occupies 1 line, so only Height-1 data rows are visible at once.
+	dataRows := max(t.Height-1, 1)
 	if t.Selected < t.Offset {
 		t.Offset = t.Selected
 	}
-	if t.Selected >= t.Offset+t.Height {
-		t.Offset = t.Selected - t.Height + 1
+	if t.Selected >= t.Offset+dataRows {
+		t.Offset = t.Selected - dataRows + 1
 	}
 }
 
@@ -174,8 +176,8 @@ func (t TableView) View() string {
 	sb.WriteString(t.renderHeader(cols))
 	sb.WriteString("\n")
 
-	// Rows
-	visible := t.Height
+	// Rows — header occupies 1 line, so data area is Height-1.
+	visible := t.Height - 1
 	if visible <= 0 {
 		visible = 20
 	}
