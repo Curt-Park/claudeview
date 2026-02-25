@@ -42,10 +42,20 @@ func (l *LogView) SetLines(lines []LogLine) {
 	}
 }
 
+// visibleLines returns the number of content lines that fit in the view.
+func (l *LogView) visibleLines() int {
+	v := l.Height - 2 // subtract title and status bar
+	if v <= 0 {
+		return 10
+	}
+	return v
+}
+
 // ScrollToBottom scrolls to the last line.
 func (l *LogView) ScrollToBottom() {
-	if len(l.Lines) > l.Height {
-		l.Offset = len(l.Lines) - l.Height
+	visible := l.visibleLines()
+	if len(l.Lines) > visible {
+		l.Offset = len(l.Lines) - visible
 	}
 }
 
@@ -58,7 +68,7 @@ func (l *LogView) ScrollUp() {
 
 // ScrollDown scrolls down by one line.
 func (l *LogView) ScrollDown() {
-	maxOff := max(0, len(l.Lines)-l.Height)
+	maxOff := max(0, len(l.Lines)-l.visibleLines())
 	if l.Offset < maxOff {
 		l.Offset++
 	}
@@ -153,10 +163,7 @@ func (l LogView) View() string {
 	sb.WriteString("\n")
 
 	// Content
-	visible := l.Height - 2 // -2 for title and status
-	if visible <= 0 {
-		visible = 10
-	}
+	visible := l.visibleLines()
 
 	for i := l.Offset; i < len(lines) && i < l.Offset+visible; i++ {
 		line := lines[i]

@@ -18,9 +18,14 @@ type MenuModel struct {
 	Width int
 }
 
+// ResourceHasLog reports whether a resource type has a log view.
+func ResourceHasLog(rt model.ResourceType) bool {
+	return rt == model.ResourceSessions || rt == model.ResourceAgents
+}
+
 // TableMenuItems returns menu items for the table view based on the current resource.
 func TableMenuItems(rt model.ResourceType) []MenuItem {
-	hasLog := rt == model.ResourceSessions || rt == model.ResourceAgents
+	hasLog := ResourceHasLog(rt)
 	hasDrillDown := rt == model.ResourceProjects || rt == model.ResourceSessions || rt == model.ResourceAgents
 
 	var items []MenuItem

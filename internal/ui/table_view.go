@@ -10,9 +10,10 @@ import (
 
 // Column defines a column in the table.
 type Column struct {
-	Title string
-	Width int
-	Flex  bool // if true, grows to fill remaining space
+	Title      string
+	Width      int     // fixed width, or minimum width when Flex=true
+	Flex       bool    // if true, grows to fill remaining space
+	MaxPercent float64 // if Flex and > 0, caps expansion at this fraction of terminal width (0–1)
 }
 
 // Row is a single row in the table (slice of cell strings + raw data).
@@ -205,22 +206,82 @@ func (t TableView) View() string {
 
 func (t TableView) calculateWidths() []int {
 	widths := make([]int, len(t.Columns))
-	total := 0
-	flexIdx := -1
+	spacing := len(t.Columns) - 1
 
+	// Pass 1: assign fixed columns and sum their widths.
+	fixedTotal := 0
 	for i, col := range t.Columns {
-		if col.Flex {
-			flexIdx = i
-		} else {
+		if !col.Flex {
 			widths[i] = col.Width
-			total += col.Width + 1 // +1 for spacing
+			fixedTotal += col.Width
 		}
 	}
+	avail := max(0, t.Width-fixedTotal-spacing)
 
-	if flexIdx >= 0 {
-		widths[flexIdx] = max(10, t.Width-total-1)
+	// Pass 2: collect flex columns and compute their desired widths.
+	// Fixed columns always take priority; flex columns share whatever remains.
+	// Flex column minimum widths (col.Width) are treated as soft hints — they
+	// will NOT cause the table to overflow the terminal.
+	type fInfo struct {
+		idx     int
+		desired int
+		pct     float64 // MaxPercent, or 0 if uncapped
+	}
+	var fCols []fInfo
+	for i, col := range t.Columns {
+		if !col.Flex {
+			continue
+		}
+		desired := avail
+		pct := col.MaxPercent
+		if pct > 0 {
+			if capped := int(float64(t.Width) * pct); capped < desired {
+				desired = capped
+			}
+		}
+		// Do NOT enforce col.Width here: that would cause overflow on narrow terminals.
+		fCols = append(fCols, fInfo{i, desired, pct})
+	}
+	if len(fCols) == 0 {
+		return widths
 	}
 
+	// If the sum of desired widths fits within avail, use them directly.
+	totalDesired := 0
+	for _, f := range fCols {
+		totalDesired += f.desired
+	}
+	if totalDesired <= avail {
+		for _, f := range fCols {
+			widths[f.idx] = f.desired
+		}
+		return widths
+	}
+
+	// Otherwise scale down proportionally using MaxPercent as weights.
+	totalPct := 0.0
+	for _, f := range fCols {
+		totalPct += f.pct
+	}
+	if totalPct == 0 {
+		// No MaxPercent set: distribute equally.
+		share := avail / len(fCols)
+		for _, f := range fCols {
+			widths[f.idx] = max(0, share)
+		}
+		return widths
+	}
+	remaining := avail
+	for j, f := range fCols {
+		var w int
+		if j == len(fCols)-1 {
+			w = remaining
+		} else {
+			w = int(float64(avail) * f.pct / totalPct)
+			remaining -= w
+		}
+		widths[f.idx] = max(0, w)
+	}
 	return widths
 }
 

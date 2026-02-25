@@ -14,7 +14,7 @@ type ProjectsView struct {
 }
 
 var projectColumns = []ui.Column{
-	{Title: "NAME", Width: 50, Flex: true},
+	{Title: "NAME", Width: 20, Flex: true, MaxPercent: 0.55},
 	{Title: "SESSIONS", Width: 8},
 	{Title: "ACTIVE", Width: 6},
 	{Title: "LAST SEEN", Width: 10},

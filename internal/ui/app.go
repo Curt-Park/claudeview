@@ -83,6 +83,8 @@ type jumpFromState struct {
 	SelectedSessionID   string
 	SelectedAgentID     string
 	Crumbs              CrumbsModel
+	ViewMode            ViewMode
+	MenuItems           []MenuItem
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -153,7 +155,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateFilter(msg)
 		}
 
-		// Global keys
+		// Global keys (work in all view modes)
 		switch msg.String() {
 		case "/":
 			m.inFilter = true
@@ -162,6 +164,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m.ViewMode = ModeHelp
 			m.Help = NewHelpView(m.contentWidth(), m.contentHeight())
+			return m, nil
+		case "t":
+			m.jumpTo(model.ResourceTasks)
+			return m, nil
+		case "p":
+			m.jumpTo(model.ResourcePlugins)
+			return m, nil
+		case "m":
+			m.jumpTo(model.ResourceMCP)
 			return m, nil
 		}
 
@@ -218,10 +229,12 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.drillDown()
 	case "l":
-		m.ViewMode = ModeLog
-		m.Menu.Items = LogMenuItems()
-		m.refreshLog()
-		return m, func() tea.Msg { return LogRequestMsg{} }
+		if ResourceHasLog(m.Resource) {
+			m.ViewMode = ModeLog
+			m.Menu.Items = LogMenuItems()
+			m.refreshLog()
+			return m, func() tea.Msg { return LogRequestMsg{} }
+		}
 	case "d":
 		m.ViewMode = ModeDetail
 		m.Menu.Items = DetailMenuItems()
@@ -232,12 +245,6 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Menu.Items = DetailMenuItems()
 		m.refreshDetail()
 		return m, func() tea.Msg { return YAMLRequestMsg{} }
-	case "t":
-		m.jumpTo(model.ResourceTasks)
-	case "p":
-		m.jumpTo(model.ResourcePlugins)
-	case "m":
-		m.jumpTo(model.ResourceMCP)
 	default:
 		m.Table.Update(msg)
 	}
@@ -252,6 +259,8 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 		SelectedSessionID:   m.SelectedSessionID,
 		SelectedAgentID:     m.SelectedAgentID,
 		Crumbs:              m.Crumbs,
+		ViewMode:            m.ViewMode,
+		MenuItems:           m.Menu.Items,
 	}
 	m.Resource = rt
 	m.ViewMode = ModeTable
@@ -307,9 +316,9 @@ func (m *AppModel) navigateBack() {
 			m.SelectedSessionID = m.jumpFrom.SelectedSessionID
 			m.SelectedAgentID = m.jumpFrom.SelectedAgentID
 			m.Crumbs = m.jumpFrom.Crumbs
+			m.ViewMode = m.jumpFrom.ViewMode
+			m.Menu.Items = m.jumpFrom.MenuItems
 			m.jumpFrom = nil
-			m.ViewMode = ModeTable
-			m.Menu.Items = TableMenuItems(m.Resource)
 		}
 		return
 	}
