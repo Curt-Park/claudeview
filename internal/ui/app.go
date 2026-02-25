@@ -316,6 +316,16 @@ func (m *AppModel) navigateBack() {
 			m.Menu.NavItems = m.jumpFrom.NavItems
 			m.Menu.UtilItems = m.jumpFrom.UtilItems
 			m.jumpFrom = nil
+		} else {
+			// No saved state (e.g. started directly on this resource): go to projects.
+			m.Resource = model.ResourceProjects
+			m.SelectedProjectHash = ""
+			m.SelectedSessionID = ""
+			m.SelectedAgentID = ""
+			m.Crumbs.Reset(string(model.ResourceProjects))
+			m.ViewMode = ModeTable
+			m.Menu.NavItems = TableNavItems(model.ResourceProjects)
+			m.Menu.UtilItems = TableUtilItems(model.ResourceProjects)
 		}
 		return
 	}

@@ -33,7 +33,7 @@ func (info InfoModel) Height(navCount, utilCount int) int {
 // Row 0 (Project) spans the full width. Remaining rows use the 4-column layout.
 func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 	const labelW = 14 // visible chars reserved for label column
-	const leftW = 46  // total visible chars for the left info column
+	const leftW = 32  // total visible chars for the left info column
 
 	dim := StyleDim
 
@@ -59,16 +59,30 @@ func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 		{"claudeview:", val(info.AppVersion)},
 	}
 
-	// Compute menu column width from the widest item across both columns.
+	// Within each column, pad keys to the column's max key width so descriptions align.
+	maxNavKeyW := 0
+	for _, item := range navItems {
+		if w := lipgloss.Width(StyleKey.Render("<" + item.Key + ">")); w > maxNavKeyW {
+			maxNavKeyW = w
+		}
+	}
+	maxUtilKeyW := 0
+	for _, item := range utilItems {
+		if w := lipgloss.Width(StyleKey.Render("<" + item.Key + ">")); w > maxUtilKeyW {
+			maxUtilKeyW = w
+		}
+	}
+
+	// menuColW = max aligned item width across both columns, plus trailing gap.
 	menuColW := 0
 	for _, item := range navItems {
-		w := lipgloss.Width(StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc))
+		w := maxNavKeyW + 1 + lipgloss.Width(StyleKeyDesc.Render(item.Desc))
 		if w > menuColW {
 			menuColW = w
 		}
 	}
 	for _, item := range utilItems {
-		w := lipgloss.Width(StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc))
+		w := maxUtilKeyW + 1 + lipgloss.Width(StyleKeyDesc.Render(item.Desc))
 		if w > menuColW {
 			menuColW = w
 		}
@@ -107,20 +121,24 @@ func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 			leftPadding = strings.Repeat(" ", leftW+2)
 		}
 
-		// Nav column (col 1)
+		// Nav column (col 1) — key padded to maxNavKeyW so descriptions align.
 		nav := ""
 		if i < len(navItems) {
 			item := navItems[i]
-			nav = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
+			keyStr := StyleKey.Render("<" + item.Key + ">")
+			keyPad := strings.Repeat(" ", max(maxNavKeyW-lipgloss.Width(keyStr), 0))
+			nav = keyStr + keyPad + " " + StyleKeyDesc.Render(item.Desc)
 		}
 		navVis := lipgloss.Width(nav)
 		navPad := strings.Repeat(" ", max(menuColW-navVis, 2))
 
-		// Util column (col 2)
+		// Util column (col 2) — key padded to maxUtilKeyW so descriptions align.
 		util := ""
 		if i < len(utilItems) {
 			item := utilItems[i]
-			util = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
+			keyStr := StyleKey.Render("<" + item.Key + ">")
+			keyPad := strings.Repeat(" ", max(maxUtilKeyW-lipgloss.Width(keyStr), 0))
+			util = keyStr + keyPad + " " + StyleKeyDesc.Render(item.Desc)
 		}
 		utilVis := lipgloss.Width(util)
 		utilPad := strings.Repeat(" ", max(menuColW-utilVis, 2))

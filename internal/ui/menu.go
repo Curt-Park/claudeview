@@ -22,14 +22,18 @@ func ResourceHasLog(rt model.ResourceType) bool {
 }
 
 // TableNavItems returns navigation menu items for the table view.
+// esc is excluded for ResourceProjects (root level — nothing to go back to).
 func TableNavItems(rt model.ResourceType) []MenuItem {
 	items := []MenuItem{
-		{Key: "j/k", Desc: "up/down"},
-		{Key: "g/G", Desc: "top/bottom"},
-		{Key: "ctrl+u/d", Desc: "page"},
+		{Key: "j/k", Desc: "down/up"},
+		{Key: "G/g", Desc: "bottom/top"},
+		{Key: "ctrl+d/u", Desc: "page down/up"},
 	}
 	if rt == model.ResourceProjects || rt == model.ResourceSessions || rt == model.ResourceAgents {
 		items = append(items, MenuItem{Key: "enter", Desc: "drill-down"})
+	}
+	if rt != model.ResourceProjects {
+		items = append(items, MenuItem{Key: "esc", Desc: "back"})
 	}
 	return items
 }
@@ -43,16 +47,16 @@ func TableUtilItems(rt model.ResourceType) []MenuItem {
 		items = append(items, MenuItem{Key: "l", Desc: "logs"})
 	}
 	items = append(items, MenuItem{Key: "d", Desc: "detail"})
-	items = append(items, MenuItem{Key: "esc", Desc: "back"})
 	return items
 }
 
 // LogNavItems returns navigation menu items for the log view.
 func LogNavItems() []MenuItem {
 	return []MenuItem{
-		{Key: "j/k", Desc: "up/down"},
-		{Key: "g/G", Desc: "top/bottom"},
-		{Key: "ctrl+u/d", Desc: "page"},
+		{Key: "j/k", Desc: "down/up"},
+		{Key: "G/g", Desc: "bottom/top"},
+		{Key: "ctrl+d/u", Desc: "page down/up"},
+		{Key: "esc", Desc: "back"},
 	}
 }
 
@@ -61,22 +65,20 @@ func LogUtilItems() []MenuItem {
 	return []MenuItem{
 		{Key: "f", Desc: "follow"},
 		{Key: "/", Desc: "filter"},
-		{Key: "esc", Desc: "back"},
 	}
 }
 
 // DetailNavItems returns navigation menu items for the detail/YAML view.
 func DetailNavItems() []MenuItem {
 	return []MenuItem{
-		{Key: "j/k", Desc: "up/down"},
-		{Key: "g/G", Desc: "top/bottom"},
-		{Key: "ctrl+u/d", Desc: "page"},
+		{Key: "j/k", Desc: "down/up"},
+		{Key: "G/g", Desc: "bottom/top"},
+		{Key: "ctrl+d/u", Desc: "page down/up"},
+		{Key: "esc", Desc: "back"},
 	}
 }
 
 // DetailUtilItems returns utility menu items for the detail/YAML view.
 func DetailUtilItems() []MenuItem {
-	return []MenuItem{
-		{Key: "esc", Desc: "back"},
-	}
+	return []MenuItem{}
 }

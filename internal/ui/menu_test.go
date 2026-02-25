@@ -8,32 +8,53 @@ import (
 )
 
 func TestTableNavItems(t *testing.T) {
-	// Sessions: enter in nav items
+	// Sessions: enter + esc in nav items
 	nav := ui.TableNavItems(model.ResourceSessions)
 	if len(nav) == 0 {
 		t.Fatal("TableNavItems returned empty slice")
 	}
-	hasEnter := false
+	hasEnter, hasEsc := false, false
 	for _, item := range nav {
 		if item.Key == "enter" {
 			hasEnter = true
+		}
+		if item.Key == "esc" {
+			hasEsc = true
 		}
 	}
 	if !hasEnter {
 		t.Error("TableNavItems(sessions): missing 'enter' key")
 	}
+	if !hasEsc {
+		t.Error("TableNavItems(sessions): missing 'esc' key")
+	}
 
-	// Tools: no enter
+	// Tools: no enter, but has esc
 	toolNav := ui.TableNavItems(model.ResourceTools)
+	hasEscTools := false
 	for _, item := range toolNav {
 		if item.Key == "enter" {
 			t.Error("TableNavItems(tools): unexpected 'enter' key")
+		}
+		if item.Key == "esc" {
+			hasEscTools = true
+		}
+	}
+	if !hasEscTools {
+		t.Error("TableNavItems(tools): missing 'esc' key")
+	}
+
+	// Projects: no esc (root level, nothing to go back to)
+	projNav := ui.TableNavItems(model.ResourceProjects)
+	for _, item := range projNav {
+		if item.Key == "esc" {
+			t.Error("TableNavItems(projects): unexpected 'esc' key (root level)")
 		}
 	}
 }
 
 func TestTableUtilItems(t *testing.T) {
-	// Sessions: logs key present
+	// Sessions: logs key present, no esc (moved to nav)
 	util := ui.TableUtilItems(model.ResourceSessions)
 	if len(util) == 0 {
 		t.Fatal("TableUtilItems returned empty slice")
@@ -42,6 +63,9 @@ func TestTableUtilItems(t *testing.T) {
 	for _, item := range util {
 		if item.Key == "l" {
 			hasLogs = true
+		}
+		if item.Key == "esc" {
+			t.Error("TableUtilItems: unexpected 'esc' key (should be in nav)")
 		}
 	}
 	if !hasLogs {
@@ -91,11 +115,13 @@ func TestDetailNavItems(t *testing.T) {
 	if len(items) == 0 {
 		t.Fatal("DetailNavItems returned empty slice")
 	}
-}
-
-func TestDetailUtilItems(t *testing.T) {
-	items := ui.DetailUtilItems()
-	if len(items) == 0 {
-		t.Fatal("DetailUtilItems returned empty slice")
+	hasEsc := false
+	for _, item := range items {
+		if item.Key == "esc" {
+			hasEsc = true
+		}
+	}
+	if !hasEsc {
+		t.Error("DetailNavItems: missing 'esc' key")
 	}
 }
