@@ -101,7 +101,7 @@ Fixed shortcuts always visible in the right column:
 | COST    | 8     | `$X.XXXX` or `-`                               |
 | AGE     | 6     | time since last modification                   |
 
-**Note**: PROJECT column is only shown during flat access (`:sessions` command). During drill-down from a project, PROJECT column is hidden.
+**Note**: PROJECT column is only shown during flat access (via `t`/`p`/`m` jump shortcuts or when no project is selected). During drill-down from a project, PROJECT column is hidden.
 
 **Navigation**: Enter → Agents (filtered to this session)
 
@@ -273,7 +273,7 @@ projects
 
 **Drill-down** (`enter`): moves deeper, pushing breadcrumb
 **Navigate back** (`esc`): pops breadcrumb, returns to parent
-**Flat access** (`:command`): always shows full unfiltered data with parent columns
+**Flat access** (`t`/`p`/`m` jump shortcuts): always shows full unfiltered data with parent columns visible
 
 ### Breadcrumb Examples
 ```
@@ -282,24 +282,6 @@ projects > sessions
 projects > sessions > agents
 projects > sessions > agents > tools
 ```
-
-When using `:command` to switch resources, breadcrumbs reset to just the new resource name.
-
----
-
-## Command Mode Resources
-
-`:` followed by any resource name (with tab-autocomplete) switches the view:
-
-| Command     | Shows                              |
-|-------------|------------------------------------|
-| `:projects` | all projects                       |
-| `:sessions` | all sessions (with PROJECT column) |
-| `:agents`   | all agents (with SESSION column)   |
-| `:tools`    | all tools (with SESSION+AGENT cols)|
-| `:tasks`    | all tasks (with SESSION column)    |
-| `:plugins`  | all plugins                        |
-| `:mcp`      | all MCP servers                    |
 
 ---
 
@@ -314,9 +296,8 @@ When using `:command` to switch resources, breadcrumbs reset to just the new res
 ## Status Bar
 
 The single status bar row shows (in priority order):
-1. **Command mode**: `:sessions` with ghost autocomplete hint
-2. **Filter mode**: `/my-filter` input
-3. **Flash message**: info (yellow) or error (red), with auto-expiry
+1. **Filter mode**: `/my-filter` input
+2. **Flash message**: info (yellow) or error (red), with auto-expiry
 
 ---
 
