@@ -19,7 +19,6 @@ var (
 
 	// Base styles
 	StyleNormal = lipgloss.NewStyle()
-	StyleBold   = lipgloss.NewStyle().Bold(true)
 	StyleDim    = lipgloss.NewStyle().Foreground(colorGray)
 
 	// Status styles
@@ -30,7 +29,6 @@ var (
 	StyleSearching = lipgloss.NewStyle().Foreground(colorPurple)
 	StyleExecuting = lipgloss.NewStyle().Foreground(colorOrange)
 	StyleDone      = lipgloss.NewStyle().Foreground(colorGray)
-	StyleEnded     = lipgloss.NewStyle().Foreground(colorGray)
 	StyleError     = lipgloss.NewStyle().Foreground(colorRed).Bold(true)
 	StyleRunning   = lipgloss.NewStyle().Foreground(colorGreen)
 
@@ -67,10 +65,6 @@ var (
 	StyleColumnHeader = lipgloss.NewStyle().
 				Foreground(colorCyan).
 				Bold(true)
-
-	StyleBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorGray)
 
 	StyleTitle = lipgloss.NewStyle().
 			Foreground(colorCyan).

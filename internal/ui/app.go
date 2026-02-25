@@ -19,6 +19,7 @@ const (
 	ModeLog             // l key
 	ModeDetail          // d key
 	ModeYAML            // y key — JSON dump of selected row
+	ModeHelp            // ? key — full-screen help overlay
 )
 
 // TickMsg is sent on each timer tick for animations.
@@ -56,11 +57,15 @@ type AppModel struct {
 	Table    TableView
 	Log      LogView
 	Detail   DetailView
+	Help     HelpView
 
 	// Navigation context (set on drill-down)
 	SelectedProjectHash string
 	SelectedSessionID   string
 	SelectedAgentID     string
+
+	// ParentFilter is the label of the currently selected parent shortcut (0=all means "").
+	ParentFilter string
 
 	// Data providers (injected from outside)
 	DataProvider DataProvider
@@ -85,7 +90,6 @@ type DataProvider interface {
 	// Navigation context
 	CurrentProject() string
 	CurrentSession() string
-	CurrentAgent() string
 }
 
 // NewAppModel creates a new application model.
@@ -132,10 +136,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Flash.IsExpired() // lazy expiry check
 		return m, tick()
 
-	case RefreshMsg:
-		m.refreshCurrentView()
-		return m, nil
-
 	case tea.KeyMsg:
 		// Ctrl+C always quits
 		if msg.String() == "ctrl+c" {
@@ -163,7 +163,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Filter.Activate()
 			return m, nil
 		case "?":
-			m.showHelp()
+			m.ViewMode = ModeHelp
+			m.Help = NewHelpView(m.contentWidth(), m.contentHeight())
 			return m, nil
 		}
 
@@ -175,6 +176,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLog(msg)
 		case ModeDetail, ModeYAML:
 			return m.updateDetail(msg)
+		case ModeHelp:
+			return m.updateHelp(msg)
 		}
 	}
 
@@ -253,6 +256,20 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Menu.Items = DetailMenuItems()
 		m.refreshDetail()
 		return m, func() tea.Msg { return YAMLRequestMsg{} }
+	case "0":
+		// Clear parent filter — show all
+		m.Table.Filter = ""
+		m.Filter.Input = ""
+		m.ParentFilter = ""
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		idx := int(msg.Runes[0] - '1')
+		if idx < len(m.Info.ParentShortcuts) {
+			sc := m.Info.ParentShortcuts[idx]
+			m.ParentFilter = sc.Label
+			// Apply as table filter so rows are filtered by parent label
+			m.Table.Filter = sc.Label
+			m.Filter.Input = sc.Label
+		}
 	default:
 		m.Table.Update(msg)
 	}
@@ -279,15 +296,30 @@ func (m AppModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m AppModel) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "esc" || msg.String() == "q" || msg.String() == "?" {
+		m.ViewMode = ModeTable
+		m.Menu.Items = TableMenuItems()
+		return m, nil
+	}
+	m.Help.Update(msg)
+	return m, nil
+}
+
 func (m *AppModel) switchResource(rt model.ResourceType) {
 	m.Resource = rt
+	// Reset navigation context for flat (unfiltered) access via :command
+	m.SelectedProjectHash = ""
+	m.SelectedSessionID = ""
+	m.SelectedAgentID = ""
+	m.ParentFilter = ""
 	m.ViewMode = ModeTable
 	m.Menu.Items = TableMenuItems()
 	m.Crumbs.Reset(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
 	m.Flash.Set(fmt.Sprintf("switched to %s", rt), FlashInfo, 2*time.Second)
-	m.refreshCurrentView()
+
 }
 
 func (m *AppModel) navigateBack() {
@@ -296,6 +328,7 @@ func (m *AppModel) navigateBack() {
 		m.Menu.Items = TableMenuItems()
 		return
 	}
+	m.ParentFilter = ""
 	// Navigate up the resource hierarchy
 	switch m.Resource {
 	case model.ResourceTools:
@@ -360,14 +393,6 @@ func (m *AppModel) refreshDetail() {
 	m.Detail = NewDetailView(string(m.Resource), m.contentWidth(), m.contentHeight())
 }
 
-func (m *AppModel) refreshCurrentView() {
-	// Trigger data refresh — actual implementation in cmd layer
-}
-
-func (m *AppModel) showHelp() {
-	m.Flash.Set("?: help  q: quit  j/k: nav  enter: drill  l: logs  d: detail  :: command  /: filter", FlashInfo, 10*time.Second)
-}
-
 func (m *AppModel) updateSizes() {
 	w := m.contentWidth()
 	h := m.contentHeight()
@@ -382,6 +407,8 @@ func (m *AppModel) updateSizes() {
 	m.Log.Height = h
 	m.Detail.Width = w
 	m.Detail.Height = h
+	m.Help.Width = w
+	m.Help.Height = h
 }
 
 func (m AppModel) contentHeight() int {
@@ -421,6 +448,8 @@ func (m AppModel) View() string {
 		contentStr = m.Log.View()
 	case ModeDetail, ModeYAML:
 		contentStr = m.Detail.View()
+	case ModeHelp:
+		contentStr = m.Help.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
 	if limit := m.contentHeight(); len(rawLines) > limit {
@@ -468,10 +497,9 @@ func (m AppModel) renderTitleBar() string {
 	titleVis := lipgloss.Width(titleStyled)
 
 	gray := lipgloss.NewStyle().Foreground(colorGray)
-	inner := m.Width - titleVis - 2 // 2 for the spaces around title
-	if inner < 0 {
-		inner = 0
-	}
+	inner := max(
+		// 2 for the spaces around title
+		m.Width-titleVis-2, 0)
 	leftDash := inner / 2
 	rightDash := inner - leftDash
 

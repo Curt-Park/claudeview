@@ -9,11 +9,20 @@ import (
 
 // TasksView renders the tasks list.
 type TasksView struct {
-	Tasks []*model.Task
-	Table ui.TableView
+	Tasks    []*model.Task
+	Table    ui.TableView
+	FlatMode bool // when true, SESSION column is shown (flat :command access)
 }
 
-var taskColumns = []ui.Column{
+var taskColumnsBase = []ui.Column{
+	{Title: "ID", Width: 4},
+	{Title: "STATUS", Width: 12},
+	{Title: "SUBJECT", Width: 40, Flex: true},
+	{Title: "BLOCKED BY", Width: 14},
+}
+
+var taskColumnsFlat = []ui.Column{
+	{Title: "SESSION", Width: 12},
 	{Title: "ID", Width: 4},
 	{Title: "STATUS", Width: 12},
 	{Title: "SUBJECT", Width: 40, Flex: true},
@@ -23,26 +32,37 @@ var taskColumns = []ui.Column{
 // NewTasksView creates a tasks view.
 func NewTasksView(width, height int) *TasksView {
 	return &TasksView{
-		Table: ui.NewTableView(taskColumns, width, height),
+		Table: ui.NewTableView(taskColumnsBase, width, height),
 	}
 }
 
 // SetTasks updates the tasks list.
 func (v *TasksView) SetTasks(tasks []*model.Task) {
 	v.Tasks = tasks
+	if v.FlatMode {
+		v.Table.Columns = taskColumnsFlat
+	} else {
+		v.Table.Columns = taskColumnsBase
+	}
 	rows := make([]ui.Row, len(tasks))
 	for i, t := range tasks {
 		statusStyle := ui.StatusStyle(string(t.Status))
 		blockedBy := strings.Join(t.BlockedBy, ", ")
-		rows[i] = ui.Row{
-			Cells: []string{
-				t.ID,
-				statusStyle.Render(t.StatusIcon() + " " + string(t.Status)),
-				t.Subject,
-				blockedBy,
-			},
-			Data: t,
+		var cells []string
+		if v.FlatMode {
+			sessionID := t.SessionID
+			if len(sessionID) > 8 {
+				sessionID = sessionID[:8]
+			}
+			cells = append(cells, sessionID)
 		}
+		cells = append(cells,
+			t.ID,
+			statusStyle.Render(t.StatusIcon()+" "+string(t.Status)),
+			t.Subject,
+			blockedBy,
+		)
+		rows[i] = ui.Row{Cells: cells, Data: t}
 	}
 	v.Table.SetRows(rows)
 }

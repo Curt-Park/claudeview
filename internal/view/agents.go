@@ -9,11 +9,21 @@ import (
 
 // AgentsView renders the agents tree.
 type AgentsView struct {
-	Agents []*model.Agent
-	Table  ui.TableView
+	Agents   []*model.Agent
+	Table    ui.TableView
+	FlatMode bool // when true, SESSION column is shown (flat :command access)
 }
 
-var agentColumns = []ui.Column{
+var agentColumnsBase = []ui.Column{
+	{Title: "NAME", Width: 26, Flex: true},
+	{Title: "TYPE", Width: 12},
+	{Title: "STATUS", Width: 14},
+	{Title: "TOOLS", Width: 6},
+	{Title: "LAST ACTIVITY", Width: 30},
+}
+
+var agentColumnsFlat = []ui.Column{
+	{Title: "SESSION", Width: 12},
 	{Title: "NAME", Width: 26, Flex: true},
 	{Title: "TYPE", Width: 12},
 	{Title: "STATUS", Width: 14},
@@ -24,13 +34,18 @@ var agentColumns = []ui.Column{
 // NewAgentsView creates an agents view.
 func NewAgentsView(width, height int) *AgentsView {
 	return &AgentsView{
-		Table: ui.NewTableView(agentColumns, width, height),
+		Table: ui.NewTableView(agentColumnsBase, width, height),
 	}
 }
 
 // SetAgents updates the agents list.
 func (v *AgentsView) SetAgents(agents []*model.Agent) {
 	v.Agents = agents
+	if v.FlatMode {
+		v.Table.Columns = agentColumnsFlat
+	} else {
+		v.Table.Columns = agentColumnsBase
+	}
 	rows := make([]ui.Row, len(agents))
 	for i, a := range agents {
 		isLast := isLastSubagent(agents, i)
@@ -38,16 +53,22 @@ func (v *AgentsView) SetAgents(agents []*model.Agent) {
 		name := prefix + a.DisplayName()
 
 		statusStyle := ui.StatusStyle(string(a.Status))
-		rows[i] = ui.Row{
-			Cells: []string{
-				name,
-				string(a.Type),
-				statusStyle.Render(string(a.Status)),
-				fmt.Sprintf("%d", len(a.ToolCalls)),
-				a.LastActivity,
-			},
-			Data: a,
+		var cells []string
+		if v.FlatMode {
+			sessionID := a.SessionID
+			if len(sessionID) > 8 {
+				sessionID = sessionID[:8]
+			}
+			cells = append(cells, sessionID)
 		}
+		cells = append(cells,
+			name,
+			string(a.Type),
+			statusStyle.Render(string(a.Status)),
+			fmt.Sprintf("%d", len(a.ToolCalls)),
+			a.LastActivity,
+		)
+		rows[i] = ui.Row{Cells: cells, Data: a}
 	}
 	v.Table.SetRows(rows)
 }

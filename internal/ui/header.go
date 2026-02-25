@@ -7,6 +7,13 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// ParentShortcut is a numbered parent context entry shown in the info panel right column.
+type ParentShortcut struct {
+	Number int    // 0-9 (0 = all)
+	Label  string // display name, e.g. "my-project"
+	Active bool   // true if this parent is currently selected
+}
+
 // InfoModel holds the top info panel data (k9s-style left column + right menu).
 type InfoModel struct {
 	Project       string // active project display name / path
@@ -17,9 +24,13 @@ type InfoModel struct {
 	CPUPercent    float64
 	MemMiB        uint64
 	Width         int
+
+	// ParentShortcuts is the list of numbered parent shortcuts (1-9).
+	// Index 0 = shortcut 1, index 1 = shortcut 2, etc.
+	ParentShortcuts []ParentShortcut
 }
 
-// ViewWithMenu renders the 7-row info panel alongside key binding hints.
+// ViewWithMenu renders the 7-row info panel alongside key binding hints (3 columns).
 func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 	const labelW = 14 // visible chars reserved for label column
 	const leftW = 46  // total visible chars for the left column (label + value)
@@ -43,6 +54,23 @@ func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 		{"MEM:", fmt.Sprintf("%d MiB", info.MemMiB)},
 	}
 
+	// Build shortcut entries: row 0 is always "0: all", rows 1+ are ParentShortcuts
+	shortcuts := make([]string, len(leftRows))
+	shortcuts[0] = StyleKey.Render("<0>") + StyleKeyDesc.Render(" all")
+	for i, sc := range info.ParentShortcuts {
+		row := i + 1
+		if row >= len(shortcuts) {
+			break
+		}
+		label := sc.Label
+		if sc.Active {
+			label = StyleActive.Render(label)
+		} else {
+			label = StyleKeyDesc.Render(label)
+		}
+		shortcuts[row] = StyleKey.Render(fmt.Sprintf("<%d>", sc.Number)) + " " + label
+	}
+
 	var lines []string
 	for i, row := range leftRows {
 		styledLabel := StyleKey.Render(row.label)
@@ -53,13 +81,23 @@ func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 		leftVis := lipgloss.Width(leftPart)
 		leftPadding := strings.Repeat(" ", max(leftW-leftVis, 2))
 
-		right := ""
+		// Center column: keybinding hint
+		center := ""
 		if i < len(items) {
 			item := items[i]
-			right = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
+			center = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
 		}
 
-		lines = append(lines, leftPart+leftPadding+right)
+		// Right column: parent shortcut
+		right := ""
+		if i < len(shortcuts) && shortcuts[i] != "" {
+			centerVis := lipgloss.Width(center)
+			const centerW = 22
+			centerPad := strings.Repeat(" ", max(centerW-centerVis, 2))
+			right = centerPad + shortcuts[i]
+		}
+
+		lines = append(lines, leftPart+leftPadding+center+right)
 	}
 
 	return strings.Join(lines, "\n")

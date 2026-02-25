@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -55,14 +54,14 @@ Use : to switch resource types (sessions, agents, tools, tasks, plugins, mcp).`,
 func init() {
 	rootCmd.Flags().BoolVar(&demoMode, "demo", false, "Run with synthetic demo data")
 	rootCmd.Flags().StringVar(&projectFlag, "project", "", "Filter to a specific project hash")
-	rootCmd.Flags().StringVar(&resourceFlag, "resource", "sessions", "Initial resource to display (projects|sessions|agents|tools|tasks|plugins|mcp)")
+	rootCmd.Flags().StringVar(&resourceFlag, "resource", "projects", "Initial resource to display (projects|sessions|agents|tools|tasks|plugins|mcp)")
 	rootCmd.Flags().BoolVar(&renderOnce, "render-once", false, "Render one frame to stdout and exit (for debugging)")
 }
 
 func run(cmd *cobra.Command, args []string) error {
 	initialResource := model.ResourceType(resourceFlag)
 	if _, ok := model.ResolveResource(resourceFlag); !ok {
-		initialResource = model.ResourceSessions
+		initialResource = model.ResourceProjects
 	}
 
 	var dp ui.DataProvider
@@ -154,21 +153,7 @@ func detectClaudeVersion() string {
 }
 
 func (rm *rootModel) Init() tea.Cmd {
-	return tea.Batch(
-		rm.app.Init(),
-		rm.startWatcher(),
-	)
-}
-
-type watcherMsg struct{}
-
-func (rm *rootModel) startWatcher() tea.Cmd {
-	if _, ok := rm.dp.(*demoDataProvider); ok {
-		return nil
-	}
-	return func() tea.Msg {
-		return watcherMsg{}
-	}
+	return rm.app.Init()
 }
 
 func (rm *rootModel) loadData() {
@@ -251,6 +236,9 @@ func (rm *rootModel) syncView() {
 		h = 30
 	}
 
+	// Always recompute shortcuts after data changes
+	defer rm.computeParentShortcuts()
+
 	switch rm.app.Resource {
 	case model.ResourceProjects:
 		if rm.projectsView == nil {
@@ -267,6 +255,7 @@ func (rm *rootModel) syncView() {
 		}
 		rm.sessionsView.Table.Width = w
 		rm.sessionsView.Table.Height = h
+		rm.sessionsView.FlatMode = rm.app.SelectedProjectHash == ""
 		rm.sessionsView.SetSessions(rm.sessions)
 		rm.app.Table = rm.sessionsView.Table
 		rm.updateInfo()
@@ -276,6 +265,7 @@ func (rm *rootModel) syncView() {
 		}
 		rm.agentsView.Table.Width = w
 		rm.agentsView.Table.Height = h
+		rm.agentsView.FlatMode = rm.app.SelectedSessionID == ""
 		rm.agentsView.SetAgents(rm.agents)
 		rm.app.Table = rm.agentsView.Table
 	case model.ResourceTools:
@@ -284,6 +274,7 @@ func (rm *rootModel) syncView() {
 		}
 		rm.toolsView.Table.Width = w
 		rm.toolsView.Table.Height = h
+		rm.toolsView.FlatMode = rm.app.SelectedAgentID == ""
 		rm.toolsView.SetToolCalls(rm.toolCalls)
 		rm.app.Table = rm.toolsView.Table
 	case model.ResourceTasks:
@@ -292,6 +283,7 @@ func (rm *rootModel) syncView() {
 		}
 		rm.tasksView.Table.Width = w
 		rm.tasksView.Table.Height = h
+		rm.tasksView.FlatMode = rm.app.SelectedSessionID == ""
 		rm.tasksView.SetTasks(rm.tasks)
 		rm.app.Table = rm.tasksView.Table
 	case model.ResourcePlugins:
@@ -323,6 +315,121 @@ func (rm *rootModel) updateInfo() {
 	rm.app.Info.User = rm.userStr
 	rm.app.Info.ClaudeVersion = rm.claudeVersion
 	rm.app.Info.AppVersion = AppVersion
+}
+
+// shortcutEntry is used to build parent shortcut lists.
+type shortcutEntry struct {
+	label  string
+	count  int
+	active bool
+}
+
+// sortShortcutEntries sorts entries: active first, then by count descending (in-place).
+func sortShortcutEntries(entries []shortcutEntry) {
+	for i := range entries {
+		for j := i + 1; j < len(entries); j++ {
+			ei, ej := entries[i], entries[j]
+			less := false
+			if ei.active && !ej.active {
+				less = true
+			} else if !ei.active && ej.active {
+				less = false
+			} else {
+				less = ei.count >= ej.count
+			}
+			if !less {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+}
+
+// computeParentShortcuts builds the numbered parent shortcut list for the info panel.
+// Active parents are sorted first, then by item count descending.
+func (rm *rootModel) computeParentShortcuts() {
+	rm.app.Info.ParentShortcuts = nil
+
+	var entries []shortcutEntry
+
+	switch rm.app.Resource {
+	case model.ResourceSessions:
+		// Parent = projects
+		entryMap := make(map[string]*shortcutEntry)
+		for _, s := range rm.sessions {
+			e, ok := entryMap[s.ProjectHash]
+			if !ok {
+				label := s.ProjectHash
+				if len(label) > 16 {
+					label = "…" + label[len(label)-15:]
+				}
+				entryMap[s.ProjectHash] = &shortcutEntry{label: label}
+				e = entryMap[s.ProjectHash]
+			}
+			e.count++
+			if s.Status == model.StatusActive {
+				e.active = true
+			}
+		}
+		for _, e := range entryMap {
+			entries = append(entries, *e)
+		}
+
+	case model.ResourceAgents:
+		// Parent = sessions
+		entryMap := make(map[string]*shortcutEntry)
+		for _, a := range rm.agents {
+			e, ok := entryMap[a.SessionID]
+			if !ok {
+				label := a.SessionID
+				if len(label) > 8 {
+					label = label[:8]
+				}
+				entryMap[a.SessionID] = &shortcutEntry{label: label}
+				e = entryMap[a.SessionID]
+			}
+			e.count++
+			if a.Status == model.StatusActive || a.Status == model.StatusThinking {
+				e.active = true
+			}
+		}
+		for _, e := range entryMap {
+			entries = append(entries, *e)
+		}
+
+	case model.ResourceTasks:
+		// Parent = sessions
+		entryMap := make(map[string]*shortcutEntry)
+		for _, t := range rm.tasks {
+			e, ok := entryMap[t.SessionID]
+			if !ok {
+				label := t.SessionID
+				if len(label) > 8 {
+					label = label[:8]
+				}
+				entryMap[t.SessionID] = &shortcutEntry{label: label}
+				e = entryMap[t.SessionID]
+			}
+			e.count++
+		}
+		for _, e := range entryMap {
+			entries = append(entries, *e)
+		}
+
+	default:
+		return
+	}
+
+	sortShortcutEntries(entries)
+	for i, e := range entries {
+		if i >= 9 {
+			break
+		}
+		rm.app.Info.ParentShortcuts = append(rm.app.Info.ParentShortcuts, ui.ParentShortcut{
+			Number: i + 1,
+			Label:  e.label,
+			Active: rm.app.ParentFilter == e.label,
+		})
+	}
 }
 
 func (rm *rootModel) updateSystemStats() {
@@ -373,9 +480,6 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.YAMLRequestMsg:
 		rm.populateJSON()
 
-	case watcherMsg:
-		// start file watching in background
-		go rm.watchFiles()
 	}
 
 	// Update app model
@@ -389,11 +493,6 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return rm, cmd
-}
-
-func (rm *rootModel) watchFiles() {
-	// File watching implementation would go here
-	// This is a simplified version
 }
 
 func (rm *rootModel) populateJSON() {
@@ -552,9 +651,18 @@ func (d *demoDataProvider) GetSessions(projectHash string) any {
 	return []*model.Session{}
 }
 func (d *demoDataProvider) GetAgents(sessionID string) any {
+	if sessionID == "" {
+		var all []*model.Agent
+		for _, p := range d.projects {
+			for _, s := range p.Sessions {
+				all = append(all, s.Agents...)
+			}
+		}
+		return all
+	}
 	for _, p := range d.projects {
 		for _, s := range p.Sessions {
-			if sessionID == "" || s.ID == sessionID {
+			if s.ID == sessionID {
 				return s.Agents
 			}
 		}
@@ -562,10 +670,21 @@ func (d *demoDataProvider) GetAgents(sessionID string) any {
 	return []*model.Agent{}
 }
 func (d *demoDataProvider) GetTools(agentID string) any {
+	if agentID == "" {
+		var all []*model.ToolCall
+		for _, p := range d.projects {
+			for _, s := range p.Sessions {
+				for _, a := range s.Agents {
+					all = append(all, a.ToolCalls...)
+				}
+			}
+		}
+		return all
+	}
 	for _, p := range d.projects {
 		for _, s := range p.Sessions {
 			for _, a := range s.Agents {
-				if agentID == "" || a.ID == agentID {
+				if a.ID == agentID {
 					return a.ToolCalls
 				}
 			}
@@ -592,7 +711,6 @@ func (d *demoDataProvider) CurrentProject() string {
 	return ""
 }
 func (d *demoDataProvider) CurrentSession() string { return "" }
-func (d *demoDataProvider) CurrentAgent() string   { return "" }
 
 // --- Live Data Provider ---
 
@@ -602,7 +720,6 @@ type liveDataProvider struct {
 	currentProject string
 	currentSession string
 	currentAgent   string
-	cachedSettings *config.Settings
 }
 
 func newLiveProvider(claudeDir, projectFilter string) ui.DataProvider {
@@ -610,17 +727,6 @@ func newLiveProvider(claudeDir, projectFilter string) ui.DataProvider {
 		claudeDir:     claudeDir,
 		projectFilter: projectFilter,
 	}
-}
-
-func (l *liveDataProvider) getSettings() (*config.Settings, error) {
-	if l.cachedSettings != nil {
-		return l.cachedSettings, nil
-	}
-	s, err := config.LoadSettings(l.claudeDir)
-	if err == nil {
-		l.cachedSettings = s
-	}
-	return s, err
 }
 
 func (l *liveDataProvider) GetProjects() any {
@@ -680,11 +786,17 @@ func (l *liveDataProvider) GetAgents(sessionID string) any {
 		l.currentSession = sessionID
 	}
 	sessions := l.GetSessions(l.currentProject).([]*model.Session)
+	if sessionID == "" {
+		// Flat mode: return all agents from all sessions
+		var all []*model.Agent
+		for _, s := range sessions {
+			all = append(all, parseAgentsFromSession(s)...)
+		}
+		return all
+	}
 	for _, s := range sessions {
-		if sessionID == "" || s.ID == sessionID {
-			// Parse transcript for this session
-			agents := parseAgentsFromSession(s)
-			return agents
+		if s.ID == sessionID {
+			return parseAgentsFromSession(s)
 		}
 	}
 	return []*model.Agent{}
@@ -695,8 +807,16 @@ func (l *liveDataProvider) GetTools(agentID string) any {
 		l.currentAgent = agentID
 	}
 	agents := l.GetAgents(l.currentSession).([]*model.Agent)
+	if agentID == "" {
+		// Flat mode: return all tool calls from all agents
+		var all []*model.ToolCall
+		for _, a := range agents {
+			all = append(all, a.ToolCalls...)
+		}
+		return all
+	}
 	for _, a := range agents {
-		if agentID == "" || a.ID == agentID {
+		if a.ID == agentID {
 			return a.ToolCalls
 		}
 	}
@@ -782,7 +902,6 @@ func (l *liveDataProvider) GetMCPServers() any {
 
 func (l *liveDataProvider) CurrentProject() string { return l.currentProject }
 func (l *liveDataProvider) CurrentSession() string { return l.currentSession }
-func (l *liveDataProvider) CurrentAgent() string   { return l.currentAgent }
 
 // sessionFromInfo creates a Session model from a transcript SessionInfo.
 func sessionFromInfo(si transcript.SessionInfo) *model.Session {
@@ -842,6 +961,7 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 			for _, tc := range turn.ToolCalls {
 				mainAgent.ToolCalls = append(mainAgent.ToolCalls, &model.ToolCall{
 					ID:        tc.ID,
+					SessionID: s.ID,
 					AgentID:   "",
 					Name:      tc.Name,
 					Input:     tc.Input,
@@ -880,6 +1000,7 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 						for _, tc := range turn.ToolCalls {
 							sub.ToolCalls = append(sub.ToolCalls, &model.ToolCall{
 								ID:        tc.ID,
+								SessionID: s.ID,
 								AgentID:   si.ID,
 								Name:      tc.Name,
 								Input:     tc.Input,
@@ -917,11 +1038,4 @@ func detectAgentType(id string) model.AgentType {
 	default:
 		return model.AgentTypeGeneral
 	}
-}
-
-// DurationMS is needed on Session model — add a field.
-// We'll store it directly on Session.
-func init() {
-	// Register subcommands if needed in future
-	_ = filepath.Join // ensure filepath is used
 }

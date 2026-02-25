@@ -52,6 +52,13 @@ internal/
   demo/                          # synthetic demo data generator
 ```
 
+## UI Specification
+
+- **Spec document**: `docs/ui-spec.md` — all UI changes must be kept in sync with this document
+- **BDD tests**: `internal/ui/bdd/` — teatest-based integration tests covering all spec behaviors
+- **Test IDs**: each spec section references a test function (e.g. `TEST-NAV-001`)
+- **Run BDD tests**: `go test -race ./internal/ui/bdd/...`
+
 ## Development Setup
 
 Use [mise](https://mise.jdx.dev/) for automatic tool version management:

@@ -10,6 +10,7 @@ import (
 // ToolCall represents a single tool invocation and its result.
 type ToolCall struct {
 	ID        string
+	SessionID string
 	AgentID   string
 	Name      string
 	Input     json.RawMessage
