@@ -115,7 +115,8 @@ func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 			labelPad := strings.Repeat(" ", max(labelW-labelVis, 1))
 			leftPart = styledLabel + labelPad + row.value
 			leftVis := lipgloss.Width(leftPart)
-			leftPadding = strings.Repeat(" ", max(leftW-leftVis, 2))
+			// Always place nav at column leftW+2 so all rows align.
+			leftPadding = strings.Repeat(" ", max(leftW+2-leftVis, 1))
 		} else {
 			leftPart = ""
 			leftPadding = strings.Repeat(" ", leftW+2)
