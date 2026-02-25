@@ -27,6 +27,9 @@ jobs:
       - name: Test
         run: go test -race -count=1 -coverprofile=coverage.txt ./...
 
+      - name: BDD Tests
+        run: go test -race -count=1 -v ./internal/ui/bdd/...
+
       - name: Read golangci-lint version
         id: lint-version
         run: |
