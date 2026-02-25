@@ -20,32 +20,33 @@ type ToolCall struct {
 	Duration  time.Duration
 }
 
-// InputSummary returns a one-line summary of the tool input.
+// InputSummary returns a one-line summary of the tool input (not truncated;
+// the caller is responsible for display-time truncation or wrapping).
 func (tc *ToolCall) InputSummary() string {
 	if tc.Input == nil {
 		return ""
 	}
 	var m map[string]any
 	if err := json.Unmarshal(tc.Input, &m); err != nil {
-		return string(tc.Input)
+		return singleLine(string(tc.Input))
 	}
 
 	switch tc.Name {
 	case "Read":
 		if fp, ok := m["file_path"].(string); ok {
-			return truncate(fp, 40)
+			return singleLine(fp)
 		}
 	case "Write":
 		if fp, ok := m["file_path"].(string); ok {
-			return truncate(fp, 40)
+			return singleLine(fp)
 		}
 	case "Edit":
 		if fp, ok := m["file_path"].(string); ok {
-			return truncate(fp, 40)
+			return singleLine(fp)
 		}
 	case "Bash":
 		if cmd, ok := m["command"].(string); ok {
-			return truncate(cmd, 40)
+			return singleLine(cmd)
 		}
 	case "Grep":
 		pattern, _ := m["pattern"].(string)
@@ -53,28 +54,34 @@ func (tc *ToolCall) InputSummary() string {
 		if path == "" {
 			path = "."
 		}
-		return truncate(fmt.Sprintf("%q in %s", pattern, path), 40)
+		return singleLine(fmt.Sprintf("%q in %s", pattern, path))
 	case "Glob":
 		if p, ok := m["pattern"].(string); ok {
-			return truncate(p, 40)
+			return singleLine(p)
 		}
 	case "Task":
 		if desc, ok := m["description"].(string); ok {
-			return truncate(desc, 40)
+			return singleLine(desc)
 		}
 	case "WebFetch":
 		if url, ok := m["url"].(string); ok {
-			return truncate(url, 40)
+			return singleLine(url)
 		}
 	}
 
 	// Fallback: first string value
 	for _, v := range m {
 		if s, ok := v.(string); ok && s != "" {
-			return truncate(s, 40)
+			return singleLine(s)
 		}
 	}
-	return truncate(string(tc.Input), 40)
+	return singleLine(string(tc.Input))
+}
+
+// singleLine replaces newlines with spaces so callers get a flat string
+// suitable for wrapping at arbitrary column widths.
+func singleLine(s string) string {
+	return strings.ReplaceAll(s, "\n", " ")
 }
 
 // ResultSummary returns a one-line summary of the tool result.
