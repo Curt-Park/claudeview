@@ -210,7 +210,7 @@ func (t TableView) View() string {
 		expandedLines = strings.Split(t.renderExpandedRow(rows[selected], cols), "\n")
 		linesBeforeSel := selected - offset
 		if linesBeforeSel+len(expandedLines) > visible {
-			offset = max(0, selected-(visible-len(expandedLines)))
+			offset = min(selected, max(0, selected-(visible-len(expandedLines))))
 		}
 	}
 
