@@ -86,6 +86,19 @@ func (l *LogView) ScrollRight() {
 	l.ColOff += 4
 }
 
+// PageUp scrolls up by half a page.
+func (l *LogView) PageUp() {
+	half := max(1, l.visibleLines()/2)
+	l.Offset = max(0, l.Offset-half)
+}
+
+// PageDown scrolls down by half a page.
+func (l *LogView) PageDown() {
+	half := max(1, l.visibleLines()/2)
+	maxOff := max(0, len(l.Lines)-l.visibleLines())
+	l.Offset = min(maxOff, l.Offset+half)
+}
+
 // GotoTop scrolls to the top.
 func (l *LogView) GotoTop() {
 	l.Offset = 0
@@ -129,6 +142,12 @@ func (l *LogView) Update(msg tea.Msg) bool {
 			return true
 		case "f":
 			l.ToggleFollow()
+			return true
+		case "ctrl+u", "pgup":
+			l.PageUp()
+			return true
+		case "ctrl+d", "pgdown":
+			l.PageDown()
 			return true
 		}
 	}

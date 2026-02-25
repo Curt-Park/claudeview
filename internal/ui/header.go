@@ -17,17 +17,23 @@ type InfoModel struct {
 }
 
 // Height returns the number of terminal lines rendered by ViewWithMenu.
-// This must stay in sync with the number of lines returned by ViewWithMenu.
-func (info InfoModel) Height() int {
-	// 1 project row + 4 data rows (Session, User, Claude Code, claudeview)
-	return 5
+// navCount and utilCount are the number of items in each menu column.
+// Minimum is 5 (1 project row + 4 data rows); expands if more items are needed.
+func (info InfoModel) Height(navCount, utilCount int) int {
+	return max(5, 1+max(navCount, utilCount))
 }
 
-// ViewWithMenu renders the info panel alongside key binding hints.
-// Row 0 (Project) spans the full width. Rows 1-4 use the standard 3-column layout.
-func (info InfoModel) ViewWithMenu(items []MenuItem) string {
+// ViewWithMenu renders the info panel with a 4-column layout:
+//
+//	Col 0 (leftW chars):    info labels + values
+//	Col 1 (menuColW chars): nav menu items (movement commands)
+//	Col 2 (menuColW chars): util menu items (filter/follow/detail/back)
+//	Col 3 (rightW chars):   t/p/m jump shortcuts
+//
+// Row 0 (Project) spans the full width. Remaining rows use the 4-column layout.
+func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 	const labelW = 14 // visible chars reserved for label column
-	const leftW = 46  // total visible chars for the left column (label + value) on rows 1-4
+	const leftW = 46  // total visible chars for the left info column
 
 	dim := StyleDim
 
@@ -45,7 +51,7 @@ func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 	availW := max(info.Width-labelW-1, 10)
 	projectLine := projectLabel + projectLabelPad + truncateLeft(info.Project, availW)
 
-	// --- Rows 1-4: standard 3-column layout ---
+	// --- Data rows ---
 	otherRows := []struct{ label, value string }{
 		{"Session:", val(info.Session)},
 		{"User:", val(info.User)},
@@ -53,60 +59,79 @@ func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 		{"claudeview:", val(info.AppVersion)},
 	}
 
-	// Right column: t/p/m shortcuts (fixed to rows 1-3)
+	// Compute menu column width from the widest item across both columns.
+	menuColW := 0
+	for _, item := range navItems {
+		w := lipgloss.Width(StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc))
+		if w > menuColW {
+			menuColW = w
+		}
+	}
+	for _, item := range utilItems {
+		w := lipgloss.Width(StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc))
+		if w > menuColW {
+			menuColW = w
+		}
+	}
+	menuColW += 2 // trailing gap between menu columns
+
+	// Right column: t/p/m shortcuts.
 	jumpHints := []string{
 		StyleKey.Render("<t>") + StyleKeyDesc.Render(" tasks"),
 		StyleKey.Render("<p>") + StyleKeyDesc.Render(" plugins"),
 		StyleKey.Render("<m>") + StyleKeyDesc.Render(" mcps"),
-		StyleKey.Render("<?>") + StyleKeyDesc.Render(" help"),
 	}
-	// Compute the widest hint so all hints start at the same column.
 	rightColW := 0
 	for _, h := range jumpHints {
 		if w := lipgloss.Width(h); w > rightColW {
 			rightColW = w
 		}
 	}
-	// Compute widest center item to avoid overlap.
-	maxCenterW := 0
-	for _, item := range items {
-		w := lipgloss.Width(StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc))
-		if w > maxCenterW {
-			maxCenterW = w
-		}
-	}
-	// Place right column at leftW*2 so column-start spacing mirrors the left→center gap.
-	rightColStart := max(leftW*2, leftW+maxCenterW+2)
-	if rightColStart+rightColW > info.Width {
-		rightColStart = info.Width - rightColW - 1
-	}
+
+	// Total rows to render (at least len(otherRows)).
+	totalRows := max(len(otherRows), max(len(navItems), len(utilItems)))
 
 	lines := []string{projectLine}
-	for i, row := range otherRows {
-		styledLabel := StyleKey.Render(row.label)
-		labelVis := lipgloss.Width(styledLabel)
-		labelPad := strings.Repeat(" ", max(labelW-labelVis, 1))
-
-		leftPart := styledLabel + labelPad + row.value
-		leftVis := lipgloss.Width(leftPart)
-		leftPadding := strings.Repeat(" ", max(leftW-leftVis, 2))
-
-		// Center column: keybinding hint
-		center := ""
-		if i < len(items) {
-			item := items[i]
-			center = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
+	for i := range totalRows {
+		var leftPart, leftPadding string
+		if i < len(otherRows) {
+			row := otherRows[i]
+			styledLabel := StyleKey.Render(row.label)
+			labelVis := lipgloss.Width(styledLabel)
+			labelPad := strings.Repeat(" ", max(labelW-labelVis, 1))
+			leftPart = styledLabel + labelPad + row.value
+			leftVis := lipgloss.Width(leftPart)
+			leftPadding = strings.Repeat(" ", max(leftW-leftVis, 2))
+		} else {
+			leftPart = ""
+			leftPadding = strings.Repeat(" ", leftW+2)
 		}
 
-		// Right column: t/p/m hint (rows 0-2 of otherRows), left-aligned at rightColStart
+		// Nav column (col 1)
+		nav := ""
+		if i < len(navItems) {
+			item := navItems[i]
+			nav = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
+		}
+		navVis := lipgloss.Width(nav)
+		navPad := strings.Repeat(" ", max(menuColW-navVis, 2))
+
+		// Util column (col 2)
+		util := ""
+		if i < len(utilItems) {
+			item := utilItems[i]
+			util = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
+		}
+		utilVis := lipgloss.Width(util)
+		utilPad := strings.Repeat(" ", max(menuColW-utilVis, 2))
+
+		// Right column (col 3): jump hints
+		right := ""
 		if i < len(jumpHints) {
-			used := lipgloss.Width(leftPart) + len(leftPadding) + lipgloss.Width(center)
-			pad := strings.Repeat(" ", max(rightColStart-used, 1))
-			lines = append(lines, leftPart+leftPadding+center+pad+jumpHints[i])
-			continue
+			right = jumpHints[i]
 		}
 
-		lines = append(lines, leftPart+leftPadding+center)
+		lines = append(lines, leftPart+leftPadding+nav+navPad+util+utilPad+right)
 	}
 
 	return strings.Join(lines, "\n")

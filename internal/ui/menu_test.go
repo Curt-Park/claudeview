@@ -7,59 +7,95 @@ import (
 	"github.com/Curt-Park/claudeview/internal/ui"
 )
 
-func TestTableMenuItems(t *testing.T) {
-	// Sessions: enter + l + d + filter
-	items := ui.TableMenuItems(model.ResourceSessions)
-	if len(items) == 0 {
-		t.Fatal("TableMenuItems returned empty slice")
+func TestTableNavItems(t *testing.T) {
+	// Sessions: enter in nav items
+	nav := ui.TableNavItems(model.ResourceSessions)
+	if len(nav) == 0 {
+		t.Fatal("TableNavItems returned empty slice")
 	}
-	hasEnter, hasLogs := false, false
-	for _, item := range items {
+	hasEnter := false
+	for _, item := range nav {
 		if item.Key == "enter" {
 			hasEnter = true
 		}
+	}
+	if !hasEnter {
+		t.Error("TableNavItems(sessions): missing 'enter' key")
+	}
+
+	// Tools: no enter
+	toolNav := ui.TableNavItems(model.ResourceTools)
+	for _, item := range toolNav {
+		if item.Key == "enter" {
+			t.Error("TableNavItems(tools): unexpected 'enter' key")
+		}
+	}
+}
+
+func TestTableUtilItems(t *testing.T) {
+	// Sessions: logs key present
+	util := ui.TableUtilItems(model.ResourceSessions)
+	if len(util) == 0 {
+		t.Fatal("TableUtilItems returned empty slice")
+	}
+	hasLogs := false
+	for _, item := range util {
 		if item.Key == "l" {
 			hasLogs = true
 		}
 	}
-	if !hasEnter {
-		t.Error("TableMenuItems(sessions): missing 'enter' key")
-	}
 	if !hasLogs {
-		t.Error("TableMenuItems(sessions): missing 'l' (logs) key")
+		t.Error("TableUtilItems(sessions): missing 'l' (logs) key")
 	}
 
-	// Tools: no enter, no logs
-	toolItems := ui.TableMenuItems(model.ResourceTools)
-	for _, item := range toolItems {
-		if item.Key == "enter" {
-			t.Error("TableMenuItems(tools): unexpected 'enter' key")
-		}
+	// Tools: no logs
+	toolUtil := ui.TableUtilItems(model.ResourceTools)
+	for _, item := range toolUtil {
 		if item.Key == "l" {
-			t.Error("TableMenuItems(tools): unexpected 'l' key")
+			t.Error("TableUtilItems(tools): unexpected 'l' key")
 		}
 	}
 }
 
-func TestLogMenuItems(t *testing.T) {
-	items := ui.LogMenuItems()
+func TestLogNavItems(t *testing.T) {
+	items := ui.LogNavItems()
 	if len(items) == 0 {
-		t.Fatal("LogMenuItems returned empty slice")
+		t.Fatal("LogNavItems returned empty slice")
 	}
-	hasFollow := false
+}
+
+func TestLogUtilItems(t *testing.T) {
+	items := ui.LogUtilItems()
+	if len(items) == 0 {
+		t.Fatal("LogUtilItems returned empty slice")
+	}
+	hasFollow, hasFilter := false, false
 	for _, item := range items {
 		if item.Key == "f" {
 			hasFollow = true
 		}
+		if item.Key == "/" {
+			hasFilter = true
+		}
 	}
 	if !hasFollow {
-		t.Error("LogMenuItems: missing 'f' (follow) key")
+		t.Error("LogUtilItems: missing 'f' (follow) key")
+	}
+	if !hasFilter {
+		t.Error("LogUtilItems: missing '/' (filter) key")
 	}
 }
 
-func TestDetailMenuItems(t *testing.T) {
-	items := ui.DetailMenuItems()
+func TestDetailNavItems(t *testing.T) {
+	items := ui.DetailNavItems()
 	if len(items) == 0 {
-		t.Fatal("DetailMenuItems returned empty slice")
+		t.Fatal("DetailNavItems returned empty slice")
+	}
+}
+
+func TestDetailUtilItems(t *testing.T) {
+	items := ui.DetailUtilItems()
+	if len(items) == 0 {
+		t.Fatal("DetailUtilItems returned empty slice")
 	}
 }

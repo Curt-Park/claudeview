@@ -19,7 +19,6 @@ const (
 	ModeLog             // l key
 	ModeDetail          // d key
 	ModeYAML            // y key — JSON dump of selected row
-	ModeHelp            // ? key — full-screen help overlay
 )
 
 // TickMsg is sent on each timer tick for animations.
@@ -56,7 +55,6 @@ type AppModel struct {
 	Table    TableView
 	Log      LogView
 	Detail   DetailView
-	Help     HelpView
 
 	// Navigation context (set on drill-down)
 	SelectedProjectHash string
@@ -84,7 +82,8 @@ type jumpFromState struct {
 	SelectedAgentID     string
 	Crumbs              CrumbsModel
 	ViewMode            ViewMode
-	MenuItems           []MenuItem
+	NavItems            []MenuItem
+	UtilItems           []MenuItem
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -108,7 +107,10 @@ func NewAppModel(dp DataProvider, initialResource model.ResourceType) AppModel {
 		Resource:     initialResource,
 	}
 	m.Info = InfoModel{}
-	m.Menu = MenuModel{Items: TableMenuItems(m.Resource)}
+	m.Menu = MenuModel{
+		NavItems:  TableNavItems(m.Resource),
+		UtilItems: TableUtilItems(m.Resource),
+	}
 	m.Crumbs = CrumbsModel{Items: []string{string(initialResource)}}
 	m.Flash = FlashModel{}
 	m.Filter = FilterModel{}
@@ -161,10 +163,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.inFilter = true
 			m.Filter.Activate()
 			return m, nil
-		case "?":
-			m.ViewMode = ModeHelp
-			m.Help = NewHelpView(m.contentWidth(), m.contentHeight())
-			return m, nil
 		case "t":
 			m.jumpTo(model.ResourceTasks)
 			return m, nil
@@ -184,8 +182,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLog(msg)
 		case ModeDetail, ModeYAML:
 			return m.updateDetail(msg)
-		case ModeHelp:
-			return m.updateHelp(msg)
 		}
 	}
 
@@ -206,11 +202,13 @@ func (m AppModel) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "backspace":
 		m.Filter.Backspace()
 		m.Table.Filter = m.Filter.Input
+		m.Table.Selected = 0
 		m.Log.Filter = m.Filter.Input
 	default:
 		if len(msg.Runes) == 1 {
 			m.Filter.AddChar(msg.Runes[0])
 			m.Table.Filter = m.Filter.Input
+			m.Table.Selected = 0
 			m.Log.Filter = m.Filter.Input
 		}
 	}
@@ -231,18 +229,21 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l":
 		if ResourceHasLog(m.Resource) {
 			m.ViewMode = ModeLog
-			m.Menu.Items = LogMenuItems()
+			m.Menu.NavItems = LogNavItems()
+			m.Menu.UtilItems = LogUtilItems()
 			m.refreshLog()
 			return m, func() tea.Msg { return LogRequestMsg{} }
 		}
 	case "d":
 		m.ViewMode = ModeDetail
-		m.Menu.Items = DetailMenuItems()
+		m.Menu.NavItems = DetailNavItems()
+		m.Menu.UtilItems = DetailUtilItems()
 		m.refreshDetail()
 		return m, func() tea.Msg { return DetailRequestMsg{} }
 	case "y":
 		m.ViewMode = ModeYAML
-		m.Menu.Items = DetailMenuItems()
+		m.Menu.NavItems = DetailNavItems()
+		m.Menu.UtilItems = DetailUtilItems()
 		m.refreshDetail()
 		return m, func() tea.Msg { return YAMLRequestMsg{} }
 	default:
@@ -260,11 +261,13 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 		SelectedAgentID:     m.SelectedAgentID,
 		Crumbs:              m.Crumbs,
 		ViewMode:            m.ViewMode,
-		MenuItems:           m.Menu.Items,
+		NavItems:            m.Menu.NavItems,
+		UtilItems:           m.Menu.UtilItems,
 	}
 	m.Resource = rt
 	m.ViewMode = ModeTable
-	m.Menu.Items = TableMenuItems(rt)
+	m.Menu.NavItems = TableNavItems(rt)
+	m.Menu.UtilItems = TableUtilItems(rt)
 	m.Crumbs.Reset(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
@@ -274,7 +277,8 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 func (m AppModel) updateLog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems(m.Resource)
+		m.Menu.NavItems = TableNavItems(m.Resource)
+		m.Menu.UtilItems = TableUtilItems(m.Resource)
 		return m, nil
 	}
 	m.Log.Update(msg)
@@ -284,27 +288,19 @@ func (m AppModel) updateLog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m AppModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems(m.Resource)
+		m.Menu.NavItems = TableNavItems(m.Resource)
+		m.Menu.UtilItems = TableUtilItems(m.Resource)
 		return m, nil
 	}
 	m.Detail.Update(msg)
 	return m, nil
 }
 
-func (m AppModel) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" || msg.String() == "?" {
-		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems(m.Resource)
-		return m, nil
-	}
-	m.Help.Update(msg)
-	return m, nil
-}
-
 func (m *AppModel) navigateBack() {
 	if m.ViewMode != ModeTable {
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems(m.Resource)
+		m.Menu.NavItems = TableNavItems(m.Resource)
+		m.Menu.UtilItems = TableUtilItems(m.Resource)
 		return
 	}
 	// Flat resources jumped to via t/p/m: restore previous state
@@ -317,7 +313,8 @@ func (m *AppModel) navigateBack() {
 			m.SelectedAgentID = m.jumpFrom.SelectedAgentID
 			m.Crumbs = m.jumpFrom.Crumbs
 			m.ViewMode = m.jumpFrom.ViewMode
-			m.Menu.Items = m.jumpFrom.MenuItems
+			m.Menu.NavItems = m.jumpFrom.NavItems
+			m.Menu.UtilItems = m.jumpFrom.UtilItems
 			m.jumpFrom = nil
 		}
 		return
@@ -329,19 +326,22 @@ func (m *AppModel) navigateBack() {
 		m.Crumbs.Pop()
 		m.Resource = model.ResourceAgents
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems(m.Resource)
+		m.Menu.NavItems = TableNavItems(m.Resource)
+		m.Menu.UtilItems = TableUtilItems(m.Resource)
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
 		m.Crumbs.Pop()
 		m.Resource = model.ResourceSessions
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems(m.Resource)
+		m.Menu.NavItems = TableNavItems(m.Resource)
+		m.Menu.UtilItems = TableUtilItems(m.Resource)
 	case model.ResourceSessions:
 		m.SelectedProjectHash = ""
 		m.Crumbs.Pop()
 		m.Resource = model.ResourceProjects
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems(m.Resource)
+		m.Menu.NavItems = TableNavItems(m.Resource)
+		m.Menu.UtilItems = TableUtilItems(m.Resource)
 	}
 }
 
@@ -372,7 +372,8 @@ func (m *AppModel) drillDown() {
 func (m *AppModel) drillInto(rt model.ResourceType) {
 	m.Resource = rt
 	m.ViewMode = ModeTable
-	m.Menu.Items = TableMenuItems(m.Resource)
+	m.Menu.NavItems = TableNavItems(m.Resource)
+	m.Menu.UtilItems = TableUtilItems(m.Resource)
 	m.Crumbs.Push(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
@@ -399,8 +400,6 @@ func (m *AppModel) updateSizes() {
 	m.Log.Height = h
 	m.Detail.Width = w
 	m.Detail.Height = h
-	m.Help.Width = w
-	m.Help.Height = h
 }
 
 // ContentHeight returns the number of terminal lines available for content.
@@ -411,7 +410,7 @@ func (m AppModel) ContentHeight() int {
 func (m AppModel) contentHeight() int {
 	// Sum chrome heights dynamically so adding/removing UI rows only
 	// requires updating the relevant component's Height() method.
-	chrome := m.Info.Height() + // info panel (top)
+	chrome := m.Info.Height(len(m.Menu.NavItems), len(m.Menu.UtilItems)) + // info panel (top)
 		1 + // title bar (renderTitleBar → always 1 line)
 		m.Crumbs.Height() + // breadcrumb bar
 		m.Flash.Height() // status bar (Flash and Filter render the same 1 line)
@@ -436,7 +435,7 @@ func (m AppModel) View() string {
 	}
 
 	// --- 1. Info panel (7 lines) ---
-	infoStr := m.Info.ViewWithMenu(m.Menu.Items)
+	infoStr := m.Info.ViewWithMenu(m.Menu.NavItems, m.Menu.UtilItems)
 
 	// --- 2. Resource title bar ---
 	titleStr := m.renderTitleBar()
@@ -450,8 +449,6 @@ func (m AppModel) View() string {
 		contentStr = m.Log.View()
 	case ModeDetail, ModeYAML:
 		contentStr = m.Detail.View()
-	case ModeHelp:
-		contentStr = m.Help.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
 	if limit := m.contentHeight(); len(rawLines) > limit {

@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"strings"
-
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
@@ -14,8 +12,8 @@ type MenuItem struct {
 
 // MenuModel holds the menu bar state.
 type MenuModel struct {
-	Items []MenuItem
-	Width int
+	NavItems  []MenuItem // col 2: navigation commands (up/down/page/top/bottom/enter)
+	UtilItems []MenuItem // col 3: utility commands (filter/follow/detail/log)
 }
 
 // ResourceHasLog reports whether a resource type has a log view.
@@ -23,51 +21,62 @@ func ResourceHasLog(rt model.ResourceType) bool {
 	return rt == model.ResourceSessions || rt == model.ResourceAgents
 }
 
-// TableMenuItems returns menu items for the table view based on the current resource.
-func TableMenuItems(rt model.ResourceType) []MenuItem {
-	hasLog := ResourceHasLog(rt)
-	hasDrillDown := rt == model.ResourceProjects || rt == model.ResourceSessions || rt == model.ResourceAgents
-
-	var items []MenuItem
-	if hasDrillDown {
-		items = append(items, MenuItem{Key: "enter", Desc: "view"})
+// TableNavItems returns navigation menu items for the table view.
+func TableNavItems(rt model.ResourceType) []MenuItem {
+	items := []MenuItem{
+		{Key: "j/k", Desc: "up/down"},
+		{Key: "g/G", Desc: "top/bottom"},
+		{Key: "ctrl+u/d", Desc: "page"},
 	}
-	if hasLog {
-		items = append(items, MenuItem{Key: "l", Desc: "logs"})
+	if rt == model.ResourceProjects || rt == model.ResourceSessions || rt == model.ResourceAgents {
+		items = append(items, MenuItem{Key: "enter", Desc: "drill-down"})
 	}
-	items = append(items, MenuItem{Key: "d", Desc: "detail"})
-	items = append(items, MenuItem{Key: "/", Desc: "filter"})
 	return items
 }
 
-// LogMenuItems returns menu items for the log view.
-func LogMenuItems() []MenuItem {
+// TableUtilItems returns utility menu items for the table view.
+func TableUtilItems(rt model.ResourceType) []MenuItem {
+	items := []MenuItem{
+		{Key: "/", Desc: "filter"},
+	}
+	if ResourceHasLog(rt) {
+		items = append(items, MenuItem{Key: "l", Desc: "logs"})
+	}
+	items = append(items, MenuItem{Key: "d", Desc: "detail"})
+	items = append(items, MenuItem{Key: "esc", Desc: "back"})
+	return items
+}
+
+// LogNavItems returns navigation menu items for the log view.
+func LogNavItems() []MenuItem {
 	return []MenuItem{
-		{Key: "h/j/k/l", Desc: "scroll"},
+		{Key: "j/k", Desc: "up/down"},
+		{Key: "g/G", Desc: "top/bottom"},
+		{Key: "ctrl+u/d", Desc: "page"},
+	}
+}
+
+// LogUtilItems returns utility menu items for the log view.
+func LogUtilItems() []MenuItem {
+	return []MenuItem{
 		{Key: "f", Desc: "follow"},
-		{Key: "/", Desc: "search"},
-		{Key: "g/G", Desc: "top/bottom"},
+		{Key: "/", Desc: "filter"},
 		{Key: "esc", Desc: "back"},
 	}
 }
 
-// DetailMenuItems returns menu items for the detail view.
-func DetailMenuItems() []MenuItem {
+// DetailNavItems returns navigation menu items for the detail/YAML view.
+func DetailNavItems() []MenuItem {
 	return []MenuItem{
-		{Key: "h/j/k/l", Desc: "scroll"},
+		{Key: "j/k", Desc: "up/down"},
 		{Key: "g/G", Desc: "top/bottom"},
-		{Key: "esc", Desc: "back"},
+		{Key: "ctrl+u/d", Desc: "page"},
 	}
 }
 
-// View renders the menu bar.
-func (m MenuModel) View() string {
-	var parts []string
-	for _, item := range m.Items {
-		key := StyleKey.Render("<" + item.Key + ">")
-		desc := StyleKeyDesc.Render(" " + item.Desc)
-		parts = append(parts, key+desc)
+// DetailUtilItems returns utility menu items for the detail/YAML view.
+func DetailUtilItems() []MenuItem {
+	return []MenuItem{
+		{Key: "esc", Desc: "back"},
 	}
-	line := strings.Join(parts, "  ")
-	return StyleMenu.Width(m.Width).Render(line)
 }

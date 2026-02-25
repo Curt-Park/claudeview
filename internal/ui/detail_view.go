@@ -71,6 +71,19 @@ func (d *DetailView) GotoBottom() {
 	d.Offset = max(0, len(d.Lines)-d.visibleLines())
 }
 
+// PageUp scrolls up by half a page.
+func (d *DetailView) PageUp() {
+	half := max(1, d.visibleLines()/2)
+	d.Offset = max(0, d.Offset-half)
+}
+
+// PageDown scrolls down by half a page.
+func (d *DetailView) PageDown() {
+	half := max(1, d.visibleLines()/2)
+	maxOff := max(0, len(d.Lines)-d.visibleLines())
+	d.Offset = min(maxOff, d.Offset+half)
+}
+
 // Update handles key input.
 func (d *DetailView) Update(msg tea.Msg) bool {
 	switch msg := msg.(type) {
@@ -87,6 +100,12 @@ func (d *DetailView) Update(msg tea.Msg) bool {
 			return true
 		case "G":
 			d.GotoBottom()
+			return true
+		case "ctrl+u", "pgup":
+			d.PageUp()
+			return true
+		case "ctrl+d", "pgdown":
+			d.PageDown()
 			return true
 		}
 	}

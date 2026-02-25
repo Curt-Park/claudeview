@@ -42,23 +42,27 @@ func NewTableView(cols []Column, width, height int) TableView {
 	}
 }
 
-// SetRows sets the table rows.
+// SetRows sets the table rows and clamps Selected to the filtered set.
 func (t *TableView) SetRows(rows []Row) {
 	t.Rows = rows
-	if t.Selected >= len(rows) {
-		t.Selected = max(0, len(rows)-1)
+	n := t.FilteredCount()
+	if n == 0 {
+		t.Selected = 0
+	} else if t.Selected >= n {
+		t.Selected = n - 1
 	}
 }
 
-// SelectedRow returns the currently selected row data.
+// SelectedRow returns the currently selected row (from the filtered set).
 func (t *TableView) SelectedRow() *Row {
-	if len(t.Rows) == 0 || t.Selected >= len(t.Rows) {
+	rows := t.filteredRows()
+	if len(rows) == 0 || t.Selected >= len(rows) {
 		return nil
 	}
-	return &t.Rows[t.Selected]
+	return &rows[t.Selected]
 }
 
-// MoveUp moves the selection up.
+// MoveUp moves the selection up within the filtered set.
 func (t *TableView) MoveUp() {
 	if t.Selected > 0 {
 		t.Selected--
@@ -66,26 +70,27 @@ func (t *TableView) MoveUp() {
 	t.ensureVisible()
 }
 
-// MoveDown moves the selection down.
+// MoveDown moves the selection down within the filtered set.
 func (t *TableView) MoveDown() {
-	if t.Selected < len(t.Rows)-1 {
+	if t.Selected < t.FilteredCount()-1 {
 		t.Selected++
 	}
 	t.ensureVisible()
 }
 
-// GotoTop moves to the first row.
+// GotoTop moves to the first row of the filtered set.
 func (t *TableView) GotoTop() {
 	t.Selected = 0
 	t.Offset = 0
 }
 
-// GotoBottom moves to the last row.
+// GotoBottom moves to the last row of the filtered set.
 func (t *TableView) GotoBottom() {
-	if len(t.Rows) == 0 {
+	n := t.FilteredCount()
+	if n == 0 {
 		return
 	}
-	t.Selected = len(t.Rows) - 1
+	t.Selected = n - 1
 	t.ensureVisible()
 }
 
@@ -101,10 +106,10 @@ func (t *TableView) PageUp() {
 	t.ensureVisible()
 }
 
-// PageDown moves down by half a page.
+// PageDown moves down by half a page within the filtered set.
 func (t *TableView) PageDown() {
 	half := max(1, t.dataRows()/2)
-	t.Selected = min(len(t.Rows)-1, t.Selected+half)
+	t.Selected = min(t.FilteredCount()-1, t.Selected+half)
 	t.ensureVisible()
 }
 
@@ -185,8 +190,16 @@ func (t TableView) View() string {
 	// Clamp offset/selected against filtered set
 	offset := t.Offset
 	selected := t.Selected
-	if offset >= len(rows) {
-		offset = max(0, len(rows)-1)
+	if len(rows) == 0 {
+		offset = 0
+		selected = -1
+	} else {
+		if offset >= len(rows) {
+			offset = len(rows) - 1
+		}
+		if selected >= len(rows) {
+			selected = len(rows) - 1
+		}
 	}
 
 	// Pre-render the expanded (selected) row so we know its line count.
