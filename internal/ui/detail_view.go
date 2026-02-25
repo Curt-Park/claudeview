@@ -44,9 +44,18 @@ func (d *DetailView) ScrollUp() {
 	}
 }
 
+// visibleLines returns the number of content lines that fit in the view.
+func (d *DetailView) visibleLines() int {
+	v := d.Height - 2 // subtract title and status bar
+	if v <= 0 {
+		return 10
+	}
+	return v
+}
+
 // ScrollDown scrolls down.
 func (d *DetailView) ScrollDown() {
-	maxOff := max(0, len(d.Lines)-d.Height+2)
+	maxOff := max(0, len(d.Lines)-d.visibleLines())
 	if d.Offset < maxOff {
 		d.Offset++
 	}
@@ -59,7 +68,7 @@ func (d *DetailView) GotoTop() {
 
 // GotoBottom scrolls to bottom.
 func (d *DetailView) GotoBottom() {
-	d.Offset = max(0, len(d.Lines)-d.Height+2)
+	d.Offset = max(0, len(d.Lines)-d.visibleLines())
 }
 
 // Update handles key input.
@@ -92,10 +101,7 @@ func (d DetailView) View() string {
 	sb.WriteString(StyleTitle.Render(title))
 	sb.WriteString("\n")
 
-	visible := d.Height - 2
-	if visible <= 0 {
-		visible = 10
-	}
+	visible := d.visibleLines()
 
 	for i := d.Offset; i < len(d.Lines) && i < d.Offset+visible; i++ {
 		line := d.Lines[i]

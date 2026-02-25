@@ -403,6 +403,11 @@ func (m *AppModel) updateSizes() {
 	m.Help.Height = h
 }
 
+// ContentHeight returns the number of terminal lines available for content.
+func (m AppModel) ContentHeight() int {
+	return m.contentHeight()
+}
+
 func (m AppModel) contentHeight() int {
 	// Sum chrome heights dynamically so adding/removing UI rows only
 	// requires updating the relevant component's Height() method.

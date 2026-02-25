@@ -221,7 +221,7 @@ func (rm *rootModel) loadMCP() {
 
 func (rm *rootModel) syncView() {
 	w := rm.app.Width
-	h := rm.app.Height - 8
+	h := rm.app.ContentHeight()
 	if w <= 0 {
 		w = 120
 	}

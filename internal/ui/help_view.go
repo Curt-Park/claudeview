@@ -18,6 +18,15 @@ func NewHelpView(width, height int) HelpView {
 	return HelpView{Width: width, Height: height}
 }
 
+// visibleLines returns the number of content lines that fit in the view.
+func (h *HelpView) visibleLines() int {
+	v := h.Height - 2 // subtract title and status bar
+	if v <= 0 {
+		return 20
+	}
+	return v
+}
+
 // Update handles key events for scrolling the help view.
 func (h *HelpView) Update(msg tea.Msg) {
 	switch msg := msg.(type) {
@@ -33,9 +42,7 @@ func (h *HelpView) Update(msg tea.Msg) {
 			h.Offset = 0
 		case "G":
 			lines := helpLines()
-			if len(lines) > h.Height {
-				h.Offset = len(lines) - h.Height
-			}
+			h.Offset = max(0, len(lines)-h.visibleLines())
 		}
 	}
 }
@@ -49,10 +56,7 @@ func (h HelpView) View() string {
 	sb.WriteString(StyleTitle.Render("── Help "))
 	sb.WriteString("\n")
 
-	visible := h.Height - 2 // title + blank
-	if visible <= 0 {
-		visible = 20
-	}
+	visible := h.visibleLines()
 	offset := h.Offset
 	if offset >= len(lines) {
 		offset = max(0, len(lines)-1)
