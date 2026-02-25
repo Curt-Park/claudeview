@@ -75,10 +75,15 @@ func ScanProjects(claudeDir string) ([]ProjectInfo, error) {
 	return projects, nil
 }
 
-// ScanSessions scans a project directory for session JSONL files.
-func ScanSessions(projectPath string) ([]SessionInfo, error) {
-	entries, err := os.ReadDir(projectPath)
+// scanJSONLFiles reads a directory for .jsonl files and returns SessionInfo entries.
+// If descending is true, entries are sorted newest-first; otherwise oldest-first.
+// If includeSubagentDir is true, each entry's SubagentDir is populated.
+func scanJSONLFiles(dir string, descending bool, includeSubagentDir bool) ([]SessionInfo, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -88,15 +93,18 @@ func ScanSessions(projectPath string) ([]SessionInfo, error) {
 			continue
 		}
 		id := strings.TrimSuffix(e.Name(), ".jsonl")
-		filePath := filepath.Join(projectPath, e.Name())
+		filePath := filepath.Join(dir, e.Name())
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
 
-		subagentDir := filepath.Join(projectPath, id, "subagents")
-		if _, err := os.Stat(subagentDir); os.IsNotExist(err) {
-			subagentDir = ""
+		subagentDir := ""
+		if includeSubagentDir {
+			candidate := filepath.Join(dir, id, "subagents")
+			if _, err := os.Stat(candidate); err == nil {
+				subagentDir = candidate
+			}
 		}
 
 		sessions = append(sessions, SessionInfo{
@@ -107,12 +115,19 @@ func ScanSessions(projectPath string) ([]SessionInfo, error) {
 		})
 	}
 
-	// Sort by mod time descending
 	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].ModTime.After(sessions[j].ModTime)
+		if descending {
+			return sessions[i].ModTime.After(sessions[j].ModTime)
+		}
+		return sessions[i].ModTime.Before(sessions[j].ModTime)
 	})
 
 	return sessions, nil
+}
+
+// ScanSessions scans a project directory for session JSONL files.
+func ScanSessions(projectPath string) ([]SessionInfo, error) {
+	return scanJSONLFiles(projectPath, true, true)
 }
 
 // ScanSubagents scans the subagents/ directory of a session.
@@ -120,35 +135,5 @@ func ScanSubagents(subagentDir string) ([]SessionInfo, error) {
 	if subagentDir == "" {
 		return nil, nil
 	}
-	entries, err := os.ReadDir(subagentDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	var agents []SessionInfo
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
-			continue
-		}
-		id := strings.TrimSuffix(e.Name(), ".jsonl")
-		filePath := filepath.Join(subagentDir, e.Name())
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		agents = append(agents, SessionInfo{
-			ID:       id,
-			FilePath: filePath,
-			ModTime:  info.ModTime(),
-		})
-	}
-
-	sort.Slice(agents, func(i, j int) bool {
-		return agents[i].ModTime.Before(agents[j].ModTime)
-	})
-
-	return agents, nil
+	return scanJSONLFiles(subagentDir, false, false)
 }

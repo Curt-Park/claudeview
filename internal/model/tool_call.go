@@ -32,15 +32,7 @@ func (tc *ToolCall) InputSummary() string {
 	}
 
 	switch tc.Name {
-	case "Read":
-		if fp, ok := m["file_path"].(string); ok {
-			return singleLine(fp)
-		}
-	case "Write":
-		if fp, ok := m["file_path"].(string); ok {
-			return singleLine(fp)
-		}
-	case "Edit":
+	case "Read", "Write", "Edit":
 		if fp, ok := m["file_path"].(string); ok {
 			return singleLine(fp)
 		}

@@ -7,13 +7,6 @@ import (
 	"github.com/Curt-Park/claudeview/internal/ui"
 )
 
-// SessionsView renders the sessions list.
-type SessionsView struct {
-	Sessions []*model.Session
-	Table    ui.TableView
-	FlatMode bool // when true, PROJECT column is shown (flat :command access)
-}
-
 var sessionColumnsBase = []ui.Column{
 	{Title: "NAME", Width: 10},
 	{Title: "MODEL", Width: 16, Flex: true, MaxPercent: 0.30},
@@ -38,55 +31,26 @@ var sessionColumnsFlat = []ui.Column{
 }
 
 // NewSessionsView creates a sessions view.
-func NewSessionsView(width, height int) *SessionsView {
-	return &SessionsView{
-		Table: ui.NewTableView(sessionColumnsBase, width, height),
-	}
+func NewSessionsView(width, height int) *ResourceView[*model.Session] {
+	return NewResourceView(sessionColumnsBase, sessionColumnsFlat, sessionRow, width, height)
 }
 
-// SetSessions updates the sessions list.
-func (v *SessionsView) SetSessions(sessions []*model.Session) {
-	v.Sessions = sessions
-	if v.FlatMode {
-		v.Table.Columns = sessionColumnsFlat
-	} else {
-		v.Table.Columns = sessionColumnsBase
+func sessionRow(items []*model.Session, i int, flatMode bool) ui.Row {
+	s := items[i]
+	statusStyle := ui.StatusStyle(string(s.Status))
+	var cells []string
+	if flatMode {
+		cells = append(cells, truncateHash(s.ProjectHash))
 	}
-	rows := make([]ui.Row, len(sessions))
-	for i, s := range sessions {
-		statusStyle := ui.StatusStyle(string(s.Status))
-		var cells []string
-		if v.FlatMode {
-			cells = append(cells, truncateHash(s.ProjectHash))
-		}
-		cells = append(cells,
-			s.ShortID(),
-			s.Model,
-			statusStyle.Render(string(s.Status)),
-			fmt.Sprintf("%d", len(s.Agents)),
-			fmt.Sprintf("%d", s.ToolCount()),
-			s.TokenString(),
-			s.CostString(),
-			s.Age(),
-		)
-		rows[i] = ui.Row{Cells: cells, Data: s}
-	}
-	v.Table.SetRows(rows)
-}
-
-// SelectedSession returns the currently selected session.
-func (v *SessionsView) SelectedSession() *model.Session {
-	row := v.Table.SelectedRow()
-	if row == nil {
-		return nil
-	}
-	if s, ok := row.Data.(*model.Session); ok {
-		return s
-	}
-	return nil
-}
-
-// View renders the sessions table.
-func (v *SessionsView) View() string {
-	return v.Table.View()
+	cells = append(cells,
+		s.ShortID(),
+		s.Model,
+		statusStyle.Render(string(s.Status)),
+		fmt.Sprintf("%d", len(s.Agents)),
+		fmt.Sprintf("%d", s.ToolCount()),
+		s.TokenString(),
+		s.CostString(),
+		s.Age(),
+	)
+	return ui.Row{Cells: cells, Data: s}
 }

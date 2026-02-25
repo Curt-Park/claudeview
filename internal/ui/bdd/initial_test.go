@@ -21,19 +21,6 @@ func TestInitialProjectsTable(t *testing.T) {
 	})
 }
 
-func TestInitialInfoPanelDashes(t *testing.T) {
-	dp := &mockDP{}
-	tm := newTestModel(t, model.ResourceProjects, dp, projectRows(1))
-	t.Cleanup(func() { _ = tm.Quit() })
-
-	waitForOutput(t, tm, func(bts []byte) bool {
-		out := string(bts)
-		// At projects level, all context fields show "--"
-		return strings.Contains(out, "Project:") &&
-			strings.Contains(out, "Session:")
-	})
-}
-
 func TestInitialMenuShown(t *testing.T) {
 	dp := &mockDP{}
 	tm := newTestModel(t, model.ResourceProjects, dp, projectRows(2))

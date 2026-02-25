@@ -20,11 +20,6 @@ func (f *FilterModel) Deactivate() {
 	f.Active = false
 }
 
-// Clear clears the filter but keeps it active.
-func (f *FilterModel) Clear() {
-	f.Input = ""
-}
-
 // AddChar adds a character to the filter input.
 func (f *FilterModel) AddChar(ch rune) {
 	f.Input += string(ch)

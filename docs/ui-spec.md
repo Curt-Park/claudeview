@@ -101,7 +101,7 @@ Fixed shortcuts always visible in the right column:
 | COST    | 8     | `$X.XXXX` or `-`                               |
 | AGE     | 6     | time since last modification                   |
 
-**Note**: PROJECT column is only shown during flat access (`:sessions` command). During drill-down from a project, PROJECT column is hidden.
+**Note**: PROJECT column is only shown during flat access (via `t`/`p`/`m` jump shortcuts or when no project is selected). During drill-down from a project, PROJECT column is hidden.
 
 **Navigation**: Enter → Agents (filtered to this session)
 
@@ -110,11 +110,11 @@ Fixed shortcuts always visible in the right column:
 | Column        | Width | Description                                |
 |---------------|-------|--------------------------------------------|
 | SESSION       | 12    | parent session short ID (flat access only) |
-| NAME          | 26    | tree-prefixed display name (flex)          |
-| TYPE          | 12    | agent type string                          |
-| STATUS        | 14    | colored status                             |
+| NAME          | 10    | tree-prefixed display name (flex, max 20%) |
+| TYPE          | 16    | agent type string                          |
+| STATUS        | 10    | colored status                             |
 | TOOLS         | 6     | tool call count                            |
-| LAST ACTIVITY | 30    | last tool name + input summary             |
+| LAST ACTIVITY | 20    | last tool name + input summary (flex)      |
 
 **Navigation**: Enter → Tools (filtered to this agent)
 
@@ -144,24 +144,25 @@ Fixed shortcuts always visible in the right column:
 
 ### 6. Plugins
 
-| Column      | Width | Description                     |
-|-------------|-------|---------------------------------|
-| NAME        | 20    | plugin name (flex)              |
-| VERSION     | 10    | semver string                   |
-| ENABLED     | 8     | `yes` / `no`                    |
-| SKILLS      | 6     | skill count                     |
-| COMMANDS    | 8     | command count                   |
-| HOOKS       | 6     | hook count                      |
-| MARKETPLACE | 12    | marketplace name                |
+| Column    | Width | Description                          |
+|-----------|-------|--------------------------------------|
+| NAME      | 20    | plugin name (flex)                   |
+| VERSION   | 10    | semver string                        |
+| STATUS    | 10    | `enabled` / `disabled` (colored)     |
+| SKILLS    | 7     | skill count                          |
+| COMMANDS  | 9     | command count                        |
+| HOOKS     | 6     | hook count                           |
+| INSTALLED | 12    | installation date                    |
 
 ### 7. MCP Servers
 
 | Column    | Width | Description                       |
 |-----------|-------|-----------------------------------|
-| NAME      | 20    | server name (flex)                |
+| NAME      | 16    | server name                       |
+| PLUGIN    | 14    | plugin name                       |
 | TRANSPORT | 10    | `stdio` / `http` / `sse`          |
-| STATUS    | 10    | colored status                    |
-| COMMAND   | 30    | command + args                    |
+| TOOLS     | 6     | available tool count              |
+| COMMAND   | 40    | command + args (flex)             |
 
 ---
 
@@ -223,9 +224,7 @@ The content area renders one of four modes:
 | `l`            | log view                                |
 | `d`            | detail view                             |
 | `y`            | YAML/JSON dump view                     |
-| `0`            | clear parent filter (show all)          |
-| `1`-`9`        | filter by Nth parent shortcut           |
-| `esc` / `q`    | navigate back (or back to projects)     |
+| `esc`          | navigate back (or back to projects)     |
 
 ### Log Mode
 | Key              | Action              |
@@ -273,8 +272,8 @@ projects
 ```
 
 **Drill-down** (`enter`): moves deeper, pushing breadcrumb
-**Navigate back** (`esc`/`q`): pops breadcrumb, returns to parent
-**Flat access** (`:command`): always shows full unfiltered data with parent columns
+**Navigate back** (`esc`): pops breadcrumb, returns to parent
+**Flat access** (`t`/`p`/`m` jump shortcuts): always shows full unfiltered data with parent columns visible
 
 ### Breadcrumb Examples
 ```
@@ -284,31 +283,12 @@ projects > sessions > agents
 projects > sessions > agents > tools
 ```
 
-When using `:command` to switch resources, breadcrumbs reset to just the new resource name.
-
----
-
-## Command Mode Resources
-
-`:` followed by any resource name (with tab-autocomplete) switches the view:
-
-| Command     | Shows                              |
-|-------------|------------------------------------|
-| `:projects` | all projects                       |
-| `:sessions` | all sessions (with PROJECT column) |
-| `:agents`   | all agents (with SESSION column)   |
-| `:tools`    | all tools (with SESSION+AGENT cols)|
-| `:tasks`    | all tasks (with SESSION column)    |
-| `:plugins`  | all plugins                        |
-| `:mcp`      | all MCP servers                    |
-
 ---
 
 ## Filter (`/`) Behavior
 
 - Filters are applied as case-insensitive substring match across **all cells** in a row
 - Filter is shown in the title bar: `Sessions(my-filter)[3]`
-- `0` key clears the filter when in table mode (equivalent to parent-filter "all")
 - Filter resets when switching resource or navigating back
 
 ---
@@ -316,9 +296,8 @@ When using `:command` to switch resources, breadcrumbs reset to just the new res
 ## Status Bar
 
 The single status bar row shows (in priority order):
-1. **Command mode**: `:sessions` with ghost autocomplete hint
-2. **Filter mode**: `/my-filter` input
-3. **Flash message**: info (yellow) or error (red), with auto-expiry
+1. **Filter mode**: `/my-filter` input
+2. **Flash message**: info (yellow) or error (red), with auto-expiry
 
 ---
 
@@ -331,17 +310,9 @@ Each behavior maps to a BDD test in `internal/ui/bdd/`:
 | Initial render (projects table)    | `initial_test.go`      | `TestInitial`        |
 | Table navigation (j/k/g/G)         | `navigation_test.go`   | `TestNav`            |
 | Drill-down + breadcrumbs           | `drilldown_test.go`    | `TestDrilldown`      |
-| `:command` resource switch         | `command_test.go`      | `TestCommand`        |
 | `/` filter                         | `filter_test.go`       | `TestFilter`         |
 | d/l/y/esc view mode switch         | `viewmode_test.go`     | `TestViewMode`       |
-| 0-9 number shortcuts               | `shortcuts_test.go`    | `TestShortcut`       |
 | Info panel context values          | `info_context_test.go` | `TestInfoContext`    |
 | Parent columns (flat access)       | `parent_columns_test.go` | `TestParentCols`   |
 | Window resize                      | `resize_test.go`       | `TestResize`         |
 | Flash message display/expiry       | `flash_test.go`        | `TestFlash`          |
-| Detail/YAML view content           | `detail_yaml_test.go`  | `TestDetailYAML`     |
-
-**Golden file regeneration**:
-```bash
-UPDATE_SNAPSHOTS=1 go test ./internal/ui/bdd/...
-```

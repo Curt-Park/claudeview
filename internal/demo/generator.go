@@ -173,24 +173,23 @@ func GenerateTasks(sessionID string) []*model.Task {
 func GeneratePlugins() []*model.Plugin {
 	return []*model.Plugin{
 		{
-			Name:        "superpowers",
-			Version:     "4.3.1",
-			Marketplace: "claude-plugins-official",
-			Enabled:     true,
-			InstalledAt: "2025-12-15",
-			MCPServers:  nil,
-			SkillCount:  15,
+			Name:         "superpowers",
+			Version:      "4.3.1",
+			Marketplace:  "claude-plugins-official",
+			Enabled:      true,
+			InstalledAt:  "2025-12-15",
+			SkillCount:   15,
+			CommandCount: 2,
+			HookCount:    1,
 		},
 		{
-			Name:        "Notion",
-			Version:     "1.2.0",
-			Marketplace: "claude-plugins-official",
-			Enabled:     true,
-			InstalledAt: "2025-11-20",
-			MCPServers: []*model.MCPServer{
-				{Name: "notion", Plugin: "Notion", Transport: "stdio", Command: "notion-mcp-server", ToolCount: 12},
-			},
-			SkillCount: 8,
+			Name:         "Notion",
+			Version:      "1.2.0",
+			Marketplace:  "claude-plugins-official",
+			Enabled:      true,
+			InstalledAt:  "2025-11-20",
+			SkillCount:   8,
+			CommandCount: 1,
 		},
 		{
 			Name:        "code-review",
@@ -198,7 +197,6 @@ func GeneratePlugins() []*model.Plugin {
 			Marketplace: "claude-plugins-official",
 			Enabled:     false,
 			InstalledAt: "2025-10-01",
-			MCPServers:  nil,
 			SkillCount:  3,
 		},
 	}

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 )
@@ -26,16 +25,8 @@ type MCPServer struct {
 
 // LoadSettings loads ~/.claude/settings.json.
 func LoadSettings(claudeDir string) (*Settings, error) {
-	path := filepath.Join(claudeDir, "settings.json")
-	data, err := os.ReadFile(path)
+	s, err := loadJSON[Settings](filepath.Join(claudeDir, "settings.json"))
 	if err != nil {
-		if os.IsNotExist(err) {
-			return &Settings{}, nil
-		}
-		return nil, err
-	}
-	var s Settings
-	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}
 	return &s, nil

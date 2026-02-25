@@ -32,15 +32,13 @@ type mockDP struct {
 	mcpServers []*model.MCPServer
 }
 
-func (m *mockDP) GetProjects() any         { return m.projects }
-func (m *mockDP) GetSessions(_ string) any { return m.sessions }
-func (m *mockDP) GetAgents(_ string) any   { return m.agents }
-func (m *mockDP) GetTools(_ string) any    { return m.toolCalls }
-func (m *mockDP) GetTasks(_ string) any    { return m.tasks }
-func (m *mockDP) GetPlugins() any          { return m.plugins }
-func (m *mockDP) GetMCPServers() any       { return m.mcpServers }
-func (m *mockDP) CurrentProject() string   { return "" }
-func (m *mockDP) CurrentSession() string   { return "" }
+func (m *mockDP) GetProjects() []*model.Project         { return m.projects }
+func (m *mockDP) GetSessions(_ string) []*model.Session { return m.sessions }
+func (m *mockDP) GetAgents(_ string) []*model.Agent     { return m.agents }
+func (m *mockDP) GetTools(_ string) []*model.ToolCall   { return m.toolCalls }
+func (m *mockDP) GetTasks(_ string) []*model.Task       { return m.tasks }
+func (m *mockDP) GetPlugins() []*model.Plugin           { return m.plugins }
+func (m *mockDP) GetMCPServers() []*model.MCPServer     { return m.mcpServers }
 
 // newTestModel creates an AppModel pre-populated with test data for the given resource.
 // It wraps the AppModel in a thin coordinating model to populate Table rows from dp.

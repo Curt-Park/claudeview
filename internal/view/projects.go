@@ -2,16 +2,11 @@ package view
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Curt-Park/claudeview/internal/model"
 	"github.com/Curt-Park/claudeview/internal/ui"
 )
-
-// ProjectsView renders the projects list.
-type ProjectsView struct {
-	Projects []*model.Project
-	Table    ui.TableView
-}
 
 var projectColumns = []ui.Column{
 	{Title: "NAME", Width: 20, Flex: true, MaxPercent: 0.55},
@@ -21,44 +16,20 @@ var projectColumns = []ui.Column{
 }
 
 // NewProjectsView creates a projects view.
-func NewProjectsView(width, height int) *ProjectsView {
-	return &ProjectsView{
-		Table: ui.NewTableView(projectColumns, width, height),
-	}
+func NewProjectsView(width, height int) *ResourceView[*model.Project] {
+	return NewResourceView(projectColumns, nil, projectRow, width, height)
 }
 
-// SetProjects updates the projects list.
-func (v *ProjectsView) SetProjects(projects []*model.Project) {
-	v.Projects = projects
-	rows := make([]ui.Row, len(projects))
-	for i, p := range projects {
-		active := len(p.ActiveSessions())
-		rows[i] = ui.Row{
-			Cells: []string{
-				truncateHash(p.Hash),
-				fmt.Sprintf("%d", p.SessionCount()),
-				fmt.Sprintf("%d", active),
-				formatAge(p.LastSeen),
-			},
-			Data: p,
-		}
+func projectRow(items []*model.Project, i int, _ bool) ui.Row {
+	p := items[i]
+	active := len(p.ActiveSessions())
+	return ui.Row{
+		Cells: []string{
+			truncateHash(p.Hash),
+			fmt.Sprintf("%d", p.SessionCount()),
+			fmt.Sprintf("%d", active),
+			model.FormatAge(time.Since(p.LastSeen)),
+		},
+		Data: p,
 	}
-	v.Table.SetRows(rows)
-}
-
-// SelectedProject returns the currently selected project.
-func (v *ProjectsView) SelectedProject() *model.Project {
-	row := v.Table.SelectedRow()
-	if row == nil {
-		return nil
-	}
-	if p, ok := row.Data.(*model.Project); ok {
-		return p
-	}
-	return nil
-}
-
-// View renders the projects table.
-func (v *ProjectsView) View() string {
-	return v.Table.View()
 }

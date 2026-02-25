@@ -3,7 +3,6 @@ package config_test
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/Curt-Park/claudeview/internal/config"
@@ -80,9 +79,12 @@ func TestEnabledPlugins_WithField(t *testing.T) {
 
 func TestEnabledPlugins_MissingFile(t *testing.T) {
 	enabled, err := config.EnabledPlugins(t.TempDir())
-	// missing file should not be fatal
-	_ = err
-	_ = enabled
+	if err != nil {
+		t.Fatalf("expected no error for missing settings file, got %v", err)
+	}
+	if len(enabled) != 0 {
+		t.Errorf("expected empty map for missing file, got %v", enabled)
+	}
 }
 
 func TestEnabledPlugins_NoField(t *testing.T) {
@@ -98,5 +100,4 @@ func TestEnabledPlugins_NoField(t *testing.T) {
 	if len(enabled) != 0 {
 		t.Errorf("expected empty map, got %v", enabled)
 	}
-	_ = strings.Join([]string{}, "") // suppress unused import
 }
