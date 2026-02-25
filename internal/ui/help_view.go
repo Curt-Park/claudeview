@@ -71,10 +71,10 @@ func (h HelpView) View() string {
 
 	// Scroll indicator
 	total := len(lines)
-	status := StyleDim.Render("j/k: scroll  esc/q: close")
+	status := StyleDim.Render("j/k: scroll  esc: close")
 	if total > visible {
 		shown := min(offset+visible, total)
-		status = StyleDim.Render("j/k: scroll  g/G: top/bottom  esc/q: close") +
+		status = StyleDim.Render("j/k: scroll  g/G: top/bottom  esc: close") +
 			StyleDim.Render("  "+styleCount(shown, total))
 	}
 	sb.WriteString(status)
@@ -108,7 +108,6 @@ func helpLines() []string {
 		"",
 		section("Global"),
 		key("ctrl+c") + "    " + desc("quit immediately"),
-		key(":") + "         " + desc("enter command mode (switch resource)"),
 		key("/") + "         " + desc("enter filter mode"),
 		key("?") + "         " + desc("show this help screen"),
 		"",
@@ -123,9 +122,10 @@ func helpLines() []string {
 		key("l") + "         " + desc("log view"),
 		key("d") + "         " + desc("detail view"),
 		key("y") + "         " + desc("YAML/JSON dump view"),
-		key("0") + "         " + desc("clear parent filter (show all)"),
-		key("1-9") + "       " + desc("filter by Nth parent shortcut"),
-		key("esc") + " / " + key("q") + "  " + desc("navigate back"),
+		key("t") + "         " + desc("jump to tasks"),
+		key("p") + "         " + desc("jump to plugins"),
+		key("m") + "         " + desc("jump to mcp"),
+		key("esc") + "       " + desc("clear filter / navigate back"),
 		"",
 		section("Log Mode"),
 		key("j/k") + "       " + desc("scroll down/up"),
@@ -141,14 +141,6 @@ func helpLines() []string {
 		key("g/G") + "       " + desc("top/bottom"),
 		key("esc") + "       " + desc("return to table"),
 		"",
-		section("Command Mode (:)"),
-		key("typing") + "    " + desc("input resource name"),
-		key("tab") + "       " + desc("accept autocomplete suggestion"),
-		key("enter") + "     " + desc("execute (switch resource)"),
-		key("esc") + "       " + desc("cancel"),
-		"",
-		desc("Resources: projects, sessions, agents, tools, tasks, plugins, mcp"),
-		"",
 		section("Filter Mode (/)"),
 		key("typing") + "    " + desc("live filter table rows (substring, case-insensitive)"),
 		key("enter") + "     " + desc("confirm filter"),
@@ -158,12 +150,10 @@ func helpLines() []string {
 		desc("At projects level:  all fields show --"),
 		desc("After drill-down to sessions: Project field filled"),
 		desc("After drill-down to agents:   Session field filled"),
-		desc("CPU/MEM: claudeview process stats"),
 		"",
 		section("Navigation Hierarchy"),
-		desc("projects → sessions → agents → tools"),
-		desc("Use :command for flat (unfiltered) access to any resource"),
-		desc("Parent columns (PROJECT/SESSION/AGENT) shown in flat mode"),
+		desc("projects → sessions → agents → tools  (enter/esc)"),
+		desc("t/p/m: jump to tasks / plugins / mcp from anywhere"),
 		"",
 	}
 	return lines

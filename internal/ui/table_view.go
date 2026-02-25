@@ -260,7 +260,9 @@ func padRight(s string, n int) string {
 	visible := lipgloss.Width(s)
 	if visible > n {
 		if n > 1 {
-			return ansi.Truncate(s, n-1, "…")
+			truncated := ansi.Truncate(s, n-1, "…")
+			tw := lipgloss.Width(truncated)
+			return truncated + strings.Repeat(" ", max(n-tw, 0))
 		}
 		return ansi.Truncate(s, n, "")
 	}

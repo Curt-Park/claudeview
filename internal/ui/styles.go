@@ -77,10 +77,6 @@ var (
 	StyleKeyDesc = lipgloss.NewStyle().
 			Foreground(colorGray)
 
-	StyleCommand = lipgloss.NewStyle().
-			Foreground(colorGreen).
-			Bold(true)
-
 	StyleFilter = lipgloss.NewStyle().
 			Foreground(colorYellow)
 

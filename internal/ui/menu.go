@@ -2,6 +2,8 @@ package ui
 
 import (
 	"strings"
+
+	"github.com/Curt-Park/claudeview/internal/model"
 )
 
 // MenuItem is a single key+description pair for the menu bar.
@@ -16,17 +18,21 @@ type MenuModel struct {
 	Width int
 }
 
-// TableMenuItems returns menu items for the table view.
-func TableMenuItems() []MenuItem {
-	return []MenuItem{
-		{Key: "enter", Desc: "view"},
-		{Key: "l", Desc: "logs"},
-		{Key: "d", Desc: "detail"},
-		{Key: "/", Desc: "filter"},
-		{Key: ":", Desc: "cmd"},
-		{Key: "?", Desc: "help"},
-		{Key: "q", Desc: "quit"},
+// TableMenuItems returns menu items for the table view based on the current resource.
+func TableMenuItems(rt model.ResourceType) []MenuItem {
+	hasLog := rt == model.ResourceSessions || rt == model.ResourceAgents
+	hasDrillDown := rt == model.ResourceProjects || rt == model.ResourceSessions || rt == model.ResourceAgents
+
+	var items []MenuItem
+	if hasDrillDown {
+		items = append(items, MenuItem{Key: "enter", Desc: "view"})
 	}
+	if hasLog {
+		items = append(items, MenuItem{Key: "l", Desc: "logs"})
+	}
+	items = append(items, MenuItem{Key: "d", Desc: "detail"})
+	items = append(items, MenuItem{Key: "/", Desc: "filter"})
+	return items
 }
 
 // LogMenuItems returns menu items for the log view.

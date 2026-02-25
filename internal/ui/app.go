@@ -44,12 +44,11 @@ type AppModel struct {
 	Height int
 
 	// Chrome components
-	Info    InfoModel
-	Menu    MenuModel
-	Crumbs  CrumbsModel
-	Flash   FlashModel
-	Command CommandModel
-	Filter  FilterModel
+	Info   InfoModel
+	Menu   MenuModel
+	Crumbs CrumbsModel
+	Flash  FlashModel
+	Filter FilterModel
 
 	// Content
 	ViewMode ViewMode
@@ -64,18 +63,26 @@ type AppModel struct {
 	SelectedSessionID   string
 	SelectedAgentID     string
 
-	// ParentFilter is the label of the currently selected parent shortcut (0=all means "").
-	ParentFilter string
-
 	// Data providers (injected from outside)
 	DataProvider DataProvider
 
 	// Animation tick counter
 	tick int
 
-	// Command/filter mode flags
-	inCommand bool
-	inFilter  bool
+	// Filter mode flag
+	inFilter bool
+
+	// State saved before a t/p/m jump (for esc-to-restore)
+	jumpFrom *jumpFromState
+}
+
+// jumpFromState holds the navigation state before a t/p/m resource jump.
+type jumpFromState struct {
+	Resource            model.ResourceType
+	SelectedProjectHash string
+	SelectedSessionID   string
+	SelectedAgentID     string
+	Crumbs              CrumbsModel
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -99,10 +106,9 @@ func NewAppModel(dp DataProvider, initialResource model.ResourceType) AppModel {
 		Resource:     initialResource,
 	}
 	m.Info = InfoModel{}
-	m.Menu = MenuModel{Items: TableMenuItems()}
+	m.Menu = MenuModel{Items: TableMenuItems(m.Resource)}
 	m.Crumbs = CrumbsModel{Items: []string{string(initialResource)}}
 	m.Flash = FlashModel{}
-	m.Command = CommandModel{}
 	m.Filter = FilterModel{}
 	return m
 }
@@ -142,11 +148,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		// Command mode
-		if m.inCommand {
-			return m.updateCommand(msg)
-		}
-
 		// Filter mode
 		if m.inFilter {
 			return m.updateFilter(msg)
@@ -154,10 +155,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Global keys
 		switch msg.String() {
-		case ":":
-			m.inCommand = true
-			m.Command.Activate()
-			return m, nil
 		case "/":
 			m.inFilter = true
 			m.Filter.Activate()
@@ -181,32 +178,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
-}
-
-func (m AppModel) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.inCommand = false
-		m.Command.Deactivate()
-	case "enter":
-		rt, ok := m.Command.Submit()
-		m.inCommand = false
-		m.Command.Deactivate()
-		if ok {
-			m.switchResource(rt)
-		} else {
-			m.Flash.Set(fmt.Sprintf("unknown resource: %s", m.Command.Input), FlashError, 3*time.Second)
-		}
-	case "tab":
-		m.Command.Input = m.Command.Accept()
-	case "backspace":
-		m.Command.Backspace()
-	default:
-		if len(msg.Runes) == 1 {
-			m.Command.AddChar(msg.Runes[0])
-		}
-	}
 	return m, nil
 }
 
@@ -237,8 +208,13 @@ func (m AppModel) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q":
-		m.navigateBack()
+	case "esc":
+		if m.Table.Filter != "" {
+			m.Table.Filter = ""
+			m.Filter.Input = ""
+		} else {
+			m.navigateBack()
+		}
 	case "enter":
 		m.drillDown()
 	case "l":
@@ -256,30 +232,40 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Menu.Items = DetailMenuItems()
 		m.refreshDetail()
 		return m, func() tea.Msg { return YAMLRequestMsg{} }
-	case "0":
-		// Clear parent filter — show all
-		m.Table.Filter = ""
-		m.Filter.Input = ""
-		m.ParentFilter = ""
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		idx := int(msg.Runes[0] - '1')
-		if idx < len(m.Info.ParentShortcuts) {
-			sc := m.Info.ParentShortcuts[idx]
-			m.ParentFilter = sc.Label
-			// Apply as table filter so rows are filtered by parent label
-			m.Table.Filter = sc.Label
-			m.Filter.Input = sc.Label
-		}
+	case "t":
+		m.jumpTo(model.ResourceTasks)
+	case "p":
+		m.jumpTo(model.ResourcePlugins)
+	case "m":
+		m.jumpTo(model.ResourceMCP)
 	default:
 		m.Table.Update(msg)
 	}
 	return m, nil
 }
 
+// jumpTo switches to a flat resource, saving the current state for esc-restore.
+func (m *AppModel) jumpTo(rt model.ResourceType) {
+	m.jumpFrom = &jumpFromState{
+		Resource:            m.Resource,
+		SelectedProjectHash: m.SelectedProjectHash,
+		SelectedSessionID:   m.SelectedSessionID,
+		SelectedAgentID:     m.SelectedAgentID,
+		Crumbs:              m.Crumbs,
+	}
+	m.Resource = rt
+	m.ViewMode = ModeTable
+	m.Menu.Items = TableMenuItems(rt)
+	m.Crumbs.Reset(string(rt))
+	m.Filter.Deactivate()
+	m.Filter.Input = ""
+	m.Table.Filter = ""
+}
+
 func (m AppModel) updateLog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems()
+		m.Menu.Items = TableMenuItems(m.Resource)
 		return m, nil
 	}
 	m.Log.Update(msg)
@@ -289,7 +275,7 @@ func (m AppModel) updateLog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m AppModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems()
+		m.Menu.Items = TableMenuItems(m.Resource)
 		return m, nil
 	}
 	m.Detail.Update(msg)
@@ -297,38 +283,36 @@ func (m AppModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m AppModel) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" || msg.String() == "q" || msg.String() == "?" {
+	if msg.String() == "esc" || msg.String() == "?" {
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems()
+		m.Menu.Items = TableMenuItems(m.Resource)
 		return m, nil
 	}
 	m.Help.Update(msg)
 	return m, nil
 }
 
-func (m *AppModel) switchResource(rt model.ResourceType) {
-	m.Resource = rt
-	// Reset navigation context for flat (unfiltered) access via :command
-	m.SelectedProjectHash = ""
-	m.SelectedSessionID = ""
-	m.SelectedAgentID = ""
-	m.ParentFilter = ""
-	m.ViewMode = ModeTable
-	m.Menu.Items = TableMenuItems()
-	m.Crumbs.Reset(string(rt))
-	m.Filter.Deactivate()
-	m.Filter.Input = ""
-	m.Flash.Set(fmt.Sprintf("switched to %s", rt), FlashInfo, 2*time.Second)
-
-}
-
 func (m *AppModel) navigateBack() {
 	if m.ViewMode != ModeTable {
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems()
+		m.Menu.Items = TableMenuItems(m.Resource)
 		return
 	}
-	m.ParentFilter = ""
+	// Flat resources jumped to via t/p/m: restore previous state
+	switch m.Resource {
+	case model.ResourceTasks, model.ResourcePlugins, model.ResourceMCP:
+		if m.jumpFrom != nil {
+			m.Resource = m.jumpFrom.Resource
+			m.SelectedProjectHash = m.jumpFrom.SelectedProjectHash
+			m.SelectedSessionID = m.jumpFrom.SelectedSessionID
+			m.SelectedAgentID = m.jumpFrom.SelectedAgentID
+			m.Crumbs = m.jumpFrom.Crumbs
+			m.jumpFrom = nil
+			m.ViewMode = ModeTable
+			m.Menu.Items = TableMenuItems(m.Resource)
+		}
+		return
+	}
 	// Navigate up the resource hierarchy
 	switch m.Resource {
 	case model.ResourceTools:
@@ -336,19 +320,19 @@ func (m *AppModel) navigateBack() {
 		m.Crumbs.Pop()
 		m.Resource = model.ResourceAgents
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems()
+		m.Menu.Items = TableMenuItems(m.Resource)
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
 		m.Crumbs.Pop()
 		m.Resource = model.ResourceSessions
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems()
+		m.Menu.Items = TableMenuItems(m.Resource)
 	case model.ResourceSessions:
 		m.SelectedProjectHash = ""
 		m.Crumbs.Pop()
 		m.Resource = model.ResourceProjects
 		m.ViewMode = ModeTable
-		m.Menu.Items = TableMenuItems()
+		m.Menu.Items = TableMenuItems(m.Resource)
 	}
 }
 
@@ -379,7 +363,7 @@ func (m *AppModel) drillDown() {
 func (m *AppModel) drillInto(rt model.ResourceType) {
 	m.Resource = rt
 	m.ViewMode = ModeTable
-	m.Menu.Items = TableMenuItems()
+	m.Menu.Items = TableMenuItems(m.Resource)
 	m.Crumbs.Push(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
@@ -399,7 +383,6 @@ func (m *AppModel) updateSizes() {
 	m.Info.Width = w
 	m.Crumbs.Width = w
 	m.Flash.Width = w
-	m.Command.Width = w
 	m.Filter.Width = w
 	m.Table.Width = w
 	m.Table.Height = h
@@ -412,8 +395,8 @@ func (m *AppModel) updateSizes() {
 }
 
 func (m AppModel) contentHeight() int {
-	// 7 info rows + 1 title bar + 1 crumbs + 1 status = 10 chrome rows
-	h := m.Height - 10
+	// 5 info rows + 1 title bar + 1 crumbs + 1 status = 8 chrome rows
+	h := m.Height - 8
 	if h < 5 {
 		return 5
 	}
@@ -458,9 +441,7 @@ func (m AppModel) View() string {
 
 	// --- 4. Status bar ---
 	var statusView string
-	if m.inCommand {
-		statusView = m.Command.View()
-	} else if m.inFilter {
+	if m.inFilter {
 		statusView = m.Filter.View()
 	} else {
 		statusView = m.Flash.View()

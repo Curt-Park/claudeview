@@ -6,9 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -115,10 +113,6 @@ type rootModel struct {
 	// Static info (set once at startup)
 	userStr       string
 	claudeVersion string
-
-	// CPU tracking (sampled per tick via syscall.Getrusage)
-	lastCPUTime  time.Duration
-	lastCPUCheck time.Time
 }
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
@@ -145,9 +139,9 @@ func detectClaudeVersion() string {
 		return "--"
 	}
 	v := strings.TrimSpace(string(out))
-	// "claude X.Y.Z" → keep only the version number part
-	if parts := strings.Fields(v); len(parts) >= 2 {
-		return parts[len(parts)-1]
+	// "claude X.Y.Z" or "X.Y.Z (Claude Code)" → keep only the version number part
+	if parts := strings.Fields(v); len(parts) >= 1 {
+		return parts[0]
 	}
 	return v
 }
@@ -226,9 +220,8 @@ func (rm *rootModel) loadMCP() {
 }
 
 func (rm *rootModel) syncView() {
-	// Match AppModel.contentWidth/contentHeight: full width, Height-10 chrome rows.
 	w := rm.app.Width
-	h := rm.app.Height - 10
+	h := rm.app.Height - 8
 	if w <= 0 {
 		w = 120
 	}
@@ -236,8 +229,7 @@ func (rm *rootModel) syncView() {
 		h = 30
 	}
 
-	// Always recompute shortcuts after data changes
-	defer rm.computeParentShortcuts()
+	rm.updateInfo()
 
 	switch rm.app.Resource {
 	case model.ResourceProjects:
@@ -248,7 +240,6 @@ func (rm *rootModel) syncView() {
 		rm.projectsView.Table.Height = h
 		rm.projectsView.SetProjects(rm.projects)
 		rm.app.Table = rm.projectsView.Table
-		rm.updateInfo()
 	case model.ResourceSessions:
 		if rm.sessionsView == nil {
 			rm.sessionsView = view.NewSessionsView(w, h)
@@ -258,7 +249,6 @@ func (rm *rootModel) syncView() {
 		rm.sessionsView.FlatMode = rm.app.SelectedProjectHash == ""
 		rm.sessionsView.SetSessions(rm.sessions)
 		rm.app.Table = rm.sessionsView.Table
-		rm.updateInfo()
 	case model.ResourceAgents:
 		if rm.agentsView == nil {
 			rm.agentsView = view.NewAgentsView(w, h)
@@ -306,8 +296,8 @@ func (rm *rootModel) syncView() {
 }
 
 func (rm *rootModel) updateInfo() {
-	rm.app.Info.Project = rm.dp.CurrentProject()
-	sess := rm.dp.CurrentSession()
+	rm.app.Info.Project = rm.app.SelectedProjectHash
+	sess := rm.app.SelectedSessionID
 	if len(sess) > 8 {
 		sess = sess[:8]
 	}
@@ -317,155 +307,12 @@ func (rm *rootModel) updateInfo() {
 	rm.app.Info.AppVersion = AppVersion
 }
 
-// shortcutEntry is used to build parent shortcut lists.
-type shortcutEntry struct {
-	label  string
-	count  int
-	active bool
-}
-
-// sortShortcutEntries sorts entries: active first, then by count descending (in-place).
-func sortShortcutEntries(entries []shortcutEntry) {
-	for i := range entries {
-		for j := i + 1; j < len(entries); j++ {
-			ei, ej := entries[i], entries[j]
-			less := false
-			if ei.active && !ej.active {
-				less = true
-			} else if !ei.active && ej.active {
-				less = false
-			} else {
-				less = ei.count >= ej.count
-			}
-			if !less {
-				entries[i], entries[j] = entries[j], entries[i]
-			}
-		}
-	}
-}
-
-// computeParentShortcuts builds the numbered parent shortcut list for the info panel.
-// Active parents are sorted first, then by item count descending.
-func (rm *rootModel) computeParentShortcuts() {
-	rm.app.Info.ParentShortcuts = nil
-
-	var entries []shortcutEntry
-
-	switch rm.app.Resource {
-	case model.ResourceSessions:
-		// Parent = projects
-		entryMap := make(map[string]*shortcutEntry)
-		for _, s := range rm.sessions {
-			e, ok := entryMap[s.ProjectHash]
-			if !ok {
-				label := s.ProjectHash
-				if len(label) > 16 {
-					label = "…" + label[len(label)-15:]
-				}
-				entryMap[s.ProjectHash] = &shortcutEntry{label: label}
-				e = entryMap[s.ProjectHash]
-			}
-			e.count++
-			if s.Status == model.StatusActive {
-				e.active = true
-			}
-		}
-		for _, e := range entryMap {
-			entries = append(entries, *e)
-		}
-
-	case model.ResourceAgents:
-		// Parent = sessions
-		entryMap := make(map[string]*shortcutEntry)
-		for _, a := range rm.agents {
-			e, ok := entryMap[a.SessionID]
-			if !ok {
-				label := a.SessionID
-				if len(label) > 8 {
-					label = label[:8]
-				}
-				entryMap[a.SessionID] = &shortcutEntry{label: label}
-				e = entryMap[a.SessionID]
-			}
-			e.count++
-			if a.Status == model.StatusActive || a.Status == model.StatusThinking {
-				e.active = true
-			}
-		}
-		for _, e := range entryMap {
-			entries = append(entries, *e)
-		}
-
-	case model.ResourceTasks:
-		// Parent = sessions
-		entryMap := make(map[string]*shortcutEntry)
-		for _, t := range rm.tasks {
-			e, ok := entryMap[t.SessionID]
-			if !ok {
-				label := t.SessionID
-				if len(label) > 8 {
-					label = label[:8]
-				}
-				entryMap[t.SessionID] = &shortcutEntry{label: label}
-				e = entryMap[t.SessionID]
-			}
-			e.count++
-		}
-		for _, e := range entryMap {
-			entries = append(entries, *e)
-		}
-
-	default:
-		return
-	}
-
-	sortShortcutEntries(entries)
-	for i, e := range entries {
-		if i >= 9 {
-			break
-		}
-		rm.app.Info.ParentShortcuts = append(rm.app.Info.ParentShortcuts, ui.ParentShortcut{
-			Number: i + 1,
-			Label:  e.label,
-			Active: rm.app.ParentFilter == e.label,
-		})
-	}
-}
-
-func (rm *rootModel) updateSystemStats() {
-	// MEM: Go process system memory in MiB
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	rm.app.Info.MemMiB = ms.Sys / 1024 / 1024
-
-	// CPU: rusage delta between ticks
-	var ru syscall.Rusage
-	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru); err == nil {
-		userNs := ru.Utime.Sec*1e9 + int64(ru.Utime.Usec)*1e3
-		sysNs := ru.Stime.Sec*1e9 + int64(ru.Stime.Usec)*1e3
-		totalCPU := time.Duration(userNs + sysNs)
-		now := time.Now()
-		if !rm.lastCPUCheck.IsZero() {
-			elapsed := now.Sub(rm.lastCPUCheck).Seconds()
-			cpuDelta := (totalCPU - rm.lastCPUTime).Seconds()
-			if elapsed > 0 {
-				rm.app.Info.CPUPercent = cpuDelta / elapsed * 100
-			}
-		}
-		rm.lastCPUTime = totalCPU
-		rm.lastCPUCheck = now
-	}
-}
-
 func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		rm.app.Width = msg.Width
 		rm.app.Height = msg.Height
 		rm.syncView()
-
-	case ui.TickMsg:
-		rm.updateSystemStats()
 
 	case ui.RefreshMsg:
 		rm.loadData()

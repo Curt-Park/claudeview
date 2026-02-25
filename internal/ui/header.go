@@ -1,18 +1,10 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
-
-// ParentShortcut is a numbered parent context entry shown in the info panel right column.
-type ParentShortcut struct {
-	Number int    // 0-9 (0 = all)
-	Label  string // display name, e.g. "my-project"
-	Active bool   // true if this parent is currently selected
-}
 
 // InfoModel holds the top info panel data (k9s-style left column + right menu).
 type InfoModel struct {
@@ -21,19 +13,14 @@ type InfoModel struct {
 	User          string // OS username
 	ClaudeVersion string // Claude Code binary version
 	AppVersion    string // claudeview binary version
-	CPUPercent    float64
-	MemMiB        uint64
 	Width         int
-
-	// ParentShortcuts is the list of numbered parent shortcuts (1-9).
-	// Index 0 = shortcut 1, index 1 = shortcut 2, etc.
-	ParentShortcuts []ParentShortcut
 }
 
-// ViewWithMenu renders the 7-row info panel alongside key binding hints (3 columns).
+// ViewWithMenu renders the info panel alongside key binding hints.
+// Row 0 (Project) spans the full width. Rows 1-4 use the standard 3-column layout.
 func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 	const labelW = 14 // visible chars reserved for label column
-	const leftW = 46  // total visible chars for the left column (label + value)
+	const leftW = 46  // total visible chars for the left column (label + value) on rows 1-4
 
 	dim := StyleDim
 
@@ -44,35 +31,51 @@ func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 		return s
 	}
 
-	leftRows := []struct{ label, value string }{
-		{"Project:", truncateLeft(info.Project, leftW-labelW-1)},
+	// --- Row 0: Project — full width ---
+	projectLabel := StyleKey.Render("Project:")
+	projectLabelVis := lipgloss.Width(projectLabel)
+	projectLabelPad := strings.Repeat(" ", max(labelW-projectLabelVis, 1))
+	availW := max(info.Width-labelW-1, 10)
+	projectLine := projectLabel + projectLabelPad + truncateLeft(info.Project, availW)
+
+	// --- Rows 1-4: standard 3-column layout ---
+	otherRows := []struct{ label, value string }{
 		{"Session:", val(info.Session)},
 		{"User:", val(info.User)},
 		{"Claude Code:", val(info.ClaudeVersion)},
 		{"claudeview:", val(info.AppVersion)},
-		{"CPU:", fmt.Sprintf("%.0f%%", info.CPUPercent)},
-		{"MEM:", fmt.Sprintf("%d MiB", info.MemMiB)},
 	}
 
-	// Build shortcut entries: row 0 is always "0: all", rows 1+ are ParentShortcuts
-	shortcuts := make([]string, len(leftRows))
-	shortcuts[0] = StyleKey.Render("<0>") + StyleKeyDesc.Render(" all")
-	for i, sc := range info.ParentShortcuts {
-		row := i + 1
-		if row >= len(shortcuts) {
-			break
+	// Right column: t/p/m shortcuts (fixed to rows 1-3)
+	jumpHints := []string{
+		StyleKey.Render("<t>") + StyleKeyDesc.Render(" tasks"),
+		StyleKey.Render("<p>") + StyleKeyDesc.Render(" plugins"),
+		StyleKey.Render("<m>") + StyleKeyDesc.Render(" mcps"),
+		StyleKey.Render("<?>") + StyleKeyDesc.Render(" help"),
+	}
+	// Compute the widest hint so all hints start at the same column.
+	rightColW := 0
+	for _, h := range jumpHints {
+		if w := lipgloss.Width(h); w > rightColW {
+			rightColW = w
 		}
-		label := sc.Label
-		if sc.Active {
-			label = StyleActive.Render(label)
-		} else {
-			label = StyleKeyDesc.Render(label)
+	}
+	// Compute widest center item to avoid overlap.
+	maxCenterW := 0
+	for _, item := range items {
+		w := lipgloss.Width(StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc))
+		if w > maxCenterW {
+			maxCenterW = w
 		}
-		shortcuts[row] = StyleKey.Render(fmt.Sprintf("<%d>", sc.Number)) + " " + label
+	}
+	// Place right column at leftW*2 so column-start spacing mirrors the left→center gap.
+	rightColStart := max(leftW*2, leftW+maxCenterW+2)
+	if rightColStart+rightColW > info.Width {
+		rightColStart = info.Width - rightColW - 1
 	}
 
-	var lines []string
-	for i, row := range leftRows {
+	lines := []string{projectLine}
+	for i, row := range otherRows {
 		styledLabel := StyleKey.Render(row.label)
 		labelVis := lipgloss.Width(styledLabel)
 		labelPad := strings.Repeat(" ", max(labelW-labelVis, 1))
@@ -88,16 +91,15 @@ func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 			center = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
 		}
 
-		// Right column: parent shortcut
-		right := ""
-		if i < len(shortcuts) && shortcuts[i] != "" {
-			centerVis := lipgloss.Width(center)
-			const centerW = 22
-			centerPad := strings.Repeat(" ", max(centerW-centerVis, 2))
-			right = centerPad + shortcuts[i]
+		// Right column: t/p/m hint (rows 0-2 of otherRows), left-aligned at rightColStart
+		if i < len(jumpHints) {
+			used := lipgloss.Width(leftPart) + len(leftPadding) + lipgloss.Width(center)
+			pad := strings.Repeat(" ", max(rightColStart-used, 1))
+			lines = append(lines, leftPart+leftPadding+center+pad+jumpHints[i])
+			continue
 		}
 
-		lines = append(lines, leftPart+leftPadding+center+right)
+		lines = append(lines, leftPart+leftPadding+center)
 	}
 
 	return strings.Join(lines, "\n")

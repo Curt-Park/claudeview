@@ -19,13 +19,13 @@ func TestInfoPanelAtProjectsLevelShowsDashes(t *testing.T) {
 	})
 }
 
-func TestInfoPanelShortcutZeroAlwaysPresent(t *testing.T) {
+func TestInfoPanelMenuShownForSessions(t *testing.T) {
 	dp := &mockDP{}
 	tm := newTestModel(t, model.ResourceSessions, dp, sessionRows(2))
 	t.Cleanup(func() { _ = tm.Quit() })
 
-	// <0> all shortcut should always be shown in info panel right column
+	// Sessions view should show enter/logs/detail menu items
 	waitForOutput(t, tm, func(bts []byte) bool {
-		return containsStr("<0>")(bts) && containsStr("all")(bts)
+		return containsStr("<enter>")(bts) && containsStr("<l>")(bts) && containsStr("<d>")(bts)
 	})
 }
