@@ -42,14 +42,6 @@ func (l *LogView) SetLines(lines []LogLine) {
 	}
 }
 
-// AppendLines adds lines to the log.
-func (l *LogView) AppendLine(line LogLine) {
-	l.Lines = append(l.Lines, line)
-	if l.Follow {
-		l.ScrollToBottom()
-	}
-}
-
 // ScrollToBottom scrolls to the last line.
 func (l *LogView) ScrollToBottom() {
 	if len(l.Lines) > l.Height {

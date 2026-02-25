@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -242,6 +241,12 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 			cell = row.Cells[i]
 		}
 		padded := padRight(cell, widths[i])
+		if selected {
+			// Strip ANSI codes so the selection style renders uniformly across the whole row.
+			// Pre-rendered cells contain reset sequences (\x1b[0m) that would cut off the
+			// selection background mid-row.
+			padded = ansi.Strip(padded)
+		}
 		parts = append(parts, padded)
 	}
 	line := strings.Join(parts, " ")
@@ -253,7 +258,7 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 
 func padRight(s string, n int) string {
 	visible := lipgloss.Width(s)
-	if visible >= n {
+	if visible > n {
 		if n > 1 {
 			return ansi.Truncate(s, n-1, "…")
 		}
@@ -262,15 +267,7 @@ func padRight(s string, n int) string {
 	return s + strings.Repeat(" ", n-visible)
 }
 
-// RowCount returns the number of rows.
-func (t *TableView) RowCount() int {
-	return len(t.Rows)
-}
-
-// StatusLine returns a status string like "1/10".
-func (t *TableView) StatusLine() string {
-	if len(t.Rows) == 0 {
-		return "0/0"
-	}
-	return fmt.Sprintf("%d/%d", t.Selected+1, len(t.Rows))
+// FilteredCount returns the number of rows after applying the current filter.
+func (t TableView) FilteredCount() int {
+	return len(t.filteredRows())
 }

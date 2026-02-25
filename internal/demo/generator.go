@@ -76,10 +76,10 @@ func GenerateProjects() []*model.Project {
 
 func generateAgents(sessionID string) []*model.Agent {
 	now := time.Now()
-	tools1 := generateToolCalls("main", 12)
-	tools2 := generateToolCalls("sub1", 5)
-	tools3 := generateToolCalls("sub2", 3)
-	tools4 := generateToolCalls("sub3", 2)
+	tools1 := generateToolCalls(sessionID, "main", 12)
+	tools2 := generateToolCalls(sessionID, "sub1", 5)
+	tools3 := generateToolCalls(sessionID, "sub2", 3)
+	tools4 := generateToolCalls(sessionID, "sub3", 2)
 
 	return []*model.Agent{
 		{
@@ -125,7 +125,7 @@ func generateAgents(sessionID string) []*model.Agent {
 	}
 }
 
-func generateToolCalls(agentID string, count int) []*model.ToolCall {
+func generateToolCalls(sessionID, agentID string, count int) []*model.ToolCall {
 	tools := []struct {
 		name   string
 		input  string
@@ -147,6 +147,7 @@ func generateToolCalls(agentID string, count int) []*model.ToolCall {
 		tc := tools[i%len(tools)]
 		calls = append(calls, &model.ToolCall{
 			ID:        fmt.Sprintf("%s-tool-%d", agentID, i),
+			SessionID: sessionID,
 			AgentID:   agentID,
 			Name:      tc.name,
 			Input:     []byte(tc.input),
@@ -161,10 +162,10 @@ func generateToolCalls(agentID string, count int) []*model.ToolCall {
 // GenerateTasks creates synthetic demo tasks.
 func GenerateTasks(sessionID string) []*model.Task {
 	return []*model.Task{
-		{ID: "1", SessionID: sessionID, Subject: "Explore project context", Status: "completed"},
-		{ID: "2", SessionID: sessionID, Subject: "Ask clarifying questions", Status: "completed", BlockedBy: []string{"1"}},
-		{ID: "3", SessionID: sessionID, Subject: "Propose approaches", Status: "in_progress", BlockedBy: []string{"2"}},
-		{ID: "4", SessionID: sessionID, Subject: "Present design", Status: "pending", BlockedBy: []string{"3"}},
+		{ID: "1", SessionID: sessionID, Subject: "Explore project context", Status: model.StatusCompleted},
+		{ID: "2", SessionID: sessionID, Subject: "Ask clarifying questions", Status: model.StatusCompleted, BlockedBy: []string{"1"}},
+		{ID: "3", SessionID: sessionID, Subject: "Propose approaches", Status: model.StatusInProgress, BlockedBy: []string{"2"}},
+		{ID: "4", SessionID: sessionID, Subject: "Present design", Status: model.StatusPending, BlockedBy: []string{"3"}},
 	}
 }
 

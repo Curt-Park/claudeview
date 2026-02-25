@@ -138,14 +138,31 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			pendingAssistantTurn = &turn
 
 		case "system":
-			var msg SystemMessage
-			if err := json.Unmarshal(entry.Message, &msg); err != nil {
-				continue
-			}
-			if msg.Subtype == "turn_duration" {
-				result.TotalCost = msg.TotalCostUSD
-				result.DurationMS += msg.DurationMS
-				result.NumTurns = msg.NumTurns
+			// Two formats in the wild:
+			//   Old: system fields inside a "message" object, duration_ms snake_case.
+			//   New: system fields at top level, durationMs camelCase (no cost/turns).
+			if len(entry.Message) > 0 {
+				// Old format
+				var msg struct {
+					Subtype      string  `json:"subtype"`
+					DurationMS   int64   `json:"duration_ms"`
+					NumTurns     int     `json:"num_turns"`
+					TotalCostUSD float64 `json:"total_cost_usd"`
+				}
+				if err := json.Unmarshal(entry.Message, &msg); err == nil && msg.Subtype == "turn_duration" {
+					result.TotalCost = msg.TotalCostUSD
+					result.DurationMS += msg.DurationMS
+					result.NumTurns = msg.NumTurns
+				}
+			} else {
+				// New format: fields at top level
+				var msg struct {
+					Subtype    string `json:"subtype"`
+					DurationMS int64  `json:"durationMs"`
+				}
+				if err := json.Unmarshal(line, &msg); err == nil && msg.Subtype == "turn_duration" {
+					result.DurationMS += msg.DurationMS
+				}
 			}
 		}
 	}

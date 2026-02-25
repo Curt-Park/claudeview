@@ -15,16 +15,6 @@ type CommandModel struct {
 	Width      int
 }
 
-// Toggle activates or deactivates command mode.
-func (c *CommandModel) Toggle() {
-	c.Active = !c.Active
-	if c.Active {
-		c.Input = ""
-		c.Error = ""
-		c.Suggestion = ""
-	}
-}
-
 // Activate starts command mode.
 func (c *CommandModel) Activate() {
 	c.Active = true

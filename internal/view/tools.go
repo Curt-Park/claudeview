@@ -11,9 +11,20 @@ import (
 type ToolsView struct {
 	ToolCalls []*model.ToolCall
 	Table     ui.TableView
+	FlatMode  bool // when true, SESSION+AGENT columns are shown (flat :command access)
 }
 
-var toolColumns = []ui.Column{
+var toolColumnsBase = []ui.Column{
+	{Title: "TIME", Width: 10},
+	{Title: "TOOL", Width: 10},
+	{Title: "INPUT SUMMARY", Width: 30, Flex: true},
+	{Title: "RESULT", Width: 16},
+	{Title: "DURATION", Width: 10},
+}
+
+var toolColumnsFlat = []ui.Column{
+	{Title: "SESSION", Width: 10},
+	{Title: "AGENT", Width: 10},
 	{Title: "TIME", Width: 10},
 	{Title: "TOOL", Width: 10},
 	{Title: "INPUT SUMMARY", Width: 30, Flex: true},
@@ -24,13 +35,18 @@ var toolColumns = []ui.Column{
 // NewToolsView creates a tools view.
 func NewToolsView(width, height int) *ToolsView {
 	return &ToolsView{
-		Table: ui.NewTableView(toolColumns, width, height),
+		Table: ui.NewTableView(toolColumnsBase, width, height),
 	}
 }
 
 // SetToolCalls updates the tool calls list.
 func (v *ToolsView) SetToolCalls(calls []*model.ToolCall) {
 	v.ToolCalls = calls
+	if v.FlatMode {
+		v.Table.Columns = toolColumnsFlat
+	} else {
+		v.Table.Columns = toolColumnsBase
+	}
 	rows := make([]ui.Row, len(calls))
 	for i, tc := range calls {
 		timeStr := ""
@@ -41,16 +57,28 @@ func (v *ToolsView) SetToolCalls(calls []*model.ToolCall) {
 		if tc.IsError {
 			resultStr = ui.StyleError.Render("error")
 		}
-		rows[i] = ui.Row{
-			Cells: []string{
-				timeStr,
-				tc.Name,
-				tc.InputSummary(),
-				resultStr,
-				tc.DurationString(),
-			},
-			Data: tc,
+		var cells []string
+		if v.FlatMode {
+			sessionID := tc.SessionID
+			if len(sessionID) > 8 {
+				sessionID = sessionID[:8]
+			}
+			agentID := tc.AgentID
+			if agentID == "" {
+				agentID = "main"
+			} else if len(agentID) > 8 {
+				agentID = agentID[:8]
+			}
+			cells = append(cells, sessionID, agentID)
 		}
+		cells = append(cells,
+			timeStr,
+			tc.Name,
+			tc.InputSummary(),
+			resultStr,
+			tc.DurationString(),
+		)
+		rows[i] = ui.Row{Cells: cells, Data: tc}
 	}
 	v.Table.SetRows(rows)
 }

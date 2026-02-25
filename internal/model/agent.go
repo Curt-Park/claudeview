@@ -14,7 +14,6 @@ const (
 	AgentTypePlan    AgentType = "Plan"
 	AgentTypeBash    AgentType = "Bash"
 	AgentTypeGeneral AgentType = "general-purpose"
-	AgentTypeCustom  AgentType = "custom"
 )
 
 // Agent represents a Claude Code agent (main or subagent).

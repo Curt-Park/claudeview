@@ -19,6 +19,7 @@ const (
 	ModeLog             // l key
 	ModeDetail          // d key
 	ModeYAML            // y key — JSON dump of selected row
+	ModeHelp            // ? key — full-screen help overlay
 )
 
 // TickMsg is sent on each timer tick for animations.
@@ -43,7 +44,7 @@ type AppModel struct {
 	Height int
 
 	// Chrome components
-	Header  HeaderModel
+	Info    InfoModel
 	Menu    MenuModel
 	Crumbs  CrumbsModel
 	Flash   FlashModel
@@ -56,11 +57,15 @@ type AppModel struct {
 	Table    TableView
 	Log      LogView
 	Detail   DetailView
+	Help     HelpView
 
 	// Navigation context (set on drill-down)
 	SelectedProjectHash string
 	SelectedSessionID   string
 	SelectedAgentID     string
+
+	// ParentFilter is the label of the currently selected parent shortcut (0=all means "").
+	ParentFilter string
 
 	// Data providers (injected from outside)
 	DataProvider DataProvider
@@ -85,7 +90,6 @@ type DataProvider interface {
 	// Navigation context
 	CurrentProject() string
 	CurrentSession() string
-	CurrentAgent() string
 }
 
 // NewAppModel creates a new application model.
@@ -94,7 +98,7 @@ func NewAppModel(dp DataProvider, initialResource model.ResourceType) AppModel {
 		DataProvider: dp,
 		Resource:     initialResource,
 	}
-	m.Header = HeaderModel{}
+	m.Info = InfoModel{}
 	m.Menu = MenuModel{Items: TableMenuItems()}
 	m.Crumbs = CrumbsModel{Items: []string{string(initialResource)}}
 	m.Flash = FlashModel{}
@@ -132,10 +136,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Flash.IsExpired() // lazy expiry check
 		return m, tick()
 
-	case RefreshMsg:
-		m.refreshCurrentView()
-		return m, nil
-
 	case tea.KeyMsg:
 		// Ctrl+C always quits
 		if msg.String() == "ctrl+c" {
@@ -163,7 +163,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Filter.Activate()
 			return m, nil
 		case "?":
-			m.showHelp()
+			m.ViewMode = ModeHelp
+			m.Help = NewHelpView(m.contentWidth(), m.contentHeight())
 			return m, nil
 		}
 
@@ -175,6 +176,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLog(msg)
 		case ModeDetail, ModeYAML:
 			return m.updateDetail(msg)
+		case ModeHelp:
+			return m.updateHelp(msg)
 		}
 	}
 
@@ -253,6 +256,20 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Menu.Items = DetailMenuItems()
 		m.refreshDetail()
 		return m, func() tea.Msg { return YAMLRequestMsg{} }
+	case "0":
+		// Clear parent filter — show all
+		m.Table.Filter = ""
+		m.Filter.Input = ""
+		m.ParentFilter = ""
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		idx := int(msg.Runes[0] - '1')
+		if idx < len(m.Info.ParentShortcuts) {
+			sc := m.Info.ParentShortcuts[idx]
+			m.ParentFilter = sc.Label
+			// Apply as table filter so rows are filtered by parent label
+			m.Table.Filter = sc.Label
+			m.Filter.Input = sc.Label
+		}
 	default:
 		m.Table.Update(msg)
 	}
@@ -279,15 +296,30 @@ func (m AppModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m AppModel) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "esc" || msg.String() == "q" || msg.String() == "?" {
+		m.ViewMode = ModeTable
+		m.Menu.Items = TableMenuItems()
+		return m, nil
+	}
+	m.Help.Update(msg)
+	return m, nil
+}
+
 func (m *AppModel) switchResource(rt model.ResourceType) {
 	m.Resource = rt
+	// Reset navigation context for flat (unfiltered) access via :command
+	m.SelectedProjectHash = ""
+	m.SelectedSessionID = ""
+	m.SelectedAgentID = ""
+	m.ParentFilter = ""
 	m.ViewMode = ModeTable
 	m.Menu.Items = TableMenuItems()
 	m.Crumbs.Reset(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
 	m.Flash.Set(fmt.Sprintf("switched to %s", rt), FlashInfo, 2*time.Second)
-	m.refreshCurrentView()
+
 }
 
 func (m *AppModel) navigateBack() {
@@ -296,6 +328,7 @@ func (m *AppModel) navigateBack() {
 		m.Menu.Items = TableMenuItems()
 		return
 	}
+	m.ParentFilter = ""
 	// Navigate up the resource hierarchy
 	switch m.Resource {
 	case model.ResourceTools:
@@ -353,7 +386,6 @@ func (m *AppModel) drillInto(rt model.ResourceType) {
 }
 
 func (m *AppModel) refreshLog() {
-	// Log view is populated by view layer
 	m.Log = NewLogView(string(m.Resource), m.contentWidth(), m.contentHeight())
 }
 
@@ -361,32 +393,27 @@ func (m *AppModel) refreshDetail() {
 	m.Detail = NewDetailView(string(m.Resource), m.contentWidth(), m.contentHeight())
 }
 
-func (m *AppModel) refreshCurrentView() {
-	// Trigger data refresh — actual implementation in cmd layer
-}
-
-func (m *AppModel) showHelp() {
-	m.Flash.Set("?: help  q: quit  j/k: nav  enter: drill  l: logs  d: detail  :: command  /: filter", FlashInfo, 10*time.Second)
-}
-
 func (m *AppModel) updateSizes() {
-	m.Header.Width = m.Width
-	m.Menu.Width = m.Width
-	m.Crumbs.Width = m.Width
-	m.Flash.Width = m.Width
-	m.Command.Width = m.Width
-	m.Filter.Width = m.Width
-	m.Table.Width = m.Width
-	m.Table.Height = m.contentHeight()
-	m.Log.Width = m.contentWidth()
-	m.Log.Height = m.contentHeight()
-	m.Detail.Width = m.contentWidth()
-	m.Detail.Height = m.contentHeight()
+	w := m.contentWidth()
+	h := m.contentHeight()
+	m.Info.Width = w
+	m.Crumbs.Width = w
+	m.Flash.Width = w
+	m.Command.Width = w
+	m.Filter.Width = w
+	m.Table.Width = w
+	m.Table.Height = h
+	m.Log.Width = w
+	m.Log.Height = h
+	m.Detail.Width = w
+	m.Detail.Height = h
+	m.Help.Width = w
+	m.Help.Height = h
 }
 
 func (m AppModel) contentHeight() int {
-	// header(1) + menu(1) + crumbs(1) + flash(1) = 4 chrome rows
-	h := m.Height - 4
+	// 7 info rows + 1 title bar + 1 crumbs + 1 status = 10 chrome rows
+	h := m.Height - 10
 	if h < 5 {
 		return 5
 	}
@@ -394,44 +421,87 @@ func (m AppModel) contentHeight() int {
 }
 
 func (m AppModel) contentWidth() int {
+	if m.Width < 10 {
+		return 10
+	}
 	return m.Width
 }
 
-// View renders the full UI.
+// View renders the full UI in k9s-style: info panel + title bar + content + status.
 func (m AppModel) View() string {
 	if m.Width == 0 {
 		return "Loading..."
 	}
 
-	var sections []string
+	// --- 1. Info panel (7 lines) ---
+	infoStr := m.Info.ViewWithMenu(m.Menu.Items)
 
-	sections = append(sections, m.Header.View())
-	sections = append(sections, m.Menu.View())
+	// --- 2. Resource title bar ---
+	titleStr := m.renderTitleBar()
 
-	// Content area
-	var content string
+	// --- 3. Content ---
+	var contentStr string
 	switch m.ViewMode {
 	case ModeTable:
-		content = m.Table.View()
+		contentStr = m.Table.View()
 	case ModeLog:
-		content = m.Log.View()
+		contentStr = m.Log.View()
 	case ModeDetail, ModeYAML:
-		content = m.Detail.View()
+		contentStr = m.Detail.View()
+	case ModeHelp:
+		contentStr = m.Help.View()
 	}
-	sections = append(sections, content)
+	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
+	if limit := m.contentHeight(); len(rawLines) > limit {
+		rawLines = rawLines[:limit]
+	}
 
-	sections = append(sections, m.Crumbs.View())
-
-	// Bottom bar: flash or command or filter
+	// --- 4. Status bar ---
+	var statusView string
 	if m.inCommand {
-		sections = append(sections, m.Command.View())
+		statusView = m.Command.View()
 	} else if m.inFilter {
-		sections = append(sections, m.Filter.View())
+		statusView = m.Filter.View()
 	} else {
-		sections = append(sections, m.Flash.View())
+		statusView = m.Flash.View()
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		strings.Join(sections, "\n"),
-	)
+	// --- Assemble ---
+	var sb strings.Builder
+	sb.WriteString(infoStr + "\n")
+	sb.WriteString(titleStr + "\n")
+	for _, line := range rawLines {
+		sb.WriteString(line + "\n")
+	}
+	sb.WriteString(m.Crumbs.View() + "\n")
+	sb.WriteString(statusView)
+
+	return sb.String()
+}
+
+// renderTitleBar renders the centered resource title line, e.g. "─── Sessions(all)[3] ───".
+func (m AppModel) renderTitleBar() string {
+	res := string(m.Resource)
+	if len(res) > 0 {
+		res = strings.ToUpper(res[:1]) + res[1:]
+	}
+
+	filter := "all"
+	if m.Table.Filter != "" {
+		filter = m.Table.Filter
+	}
+
+	count := m.Table.FilteredCount()
+	title := fmt.Sprintf("%s(%s)[%d]", res, filter, count)
+	titleStyled := StyleTitle.Render(title)
+	titleVis := lipgloss.Width(titleStyled)
+
+	gray := lipgloss.NewStyle().Foreground(colorGray)
+	inner := max(
+		// 2 for the spaces around title
+		m.Width-titleVis-2, 0)
+	leftDash := inner / 2
+	rightDash := inner - leftDash
+
+	return gray.Render(strings.Repeat("─", leftDash)+" ") + titleStyled + gray.Render(" "+strings.Repeat("─", rightDash))
 }
