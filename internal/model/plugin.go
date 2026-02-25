@@ -13,15 +13,9 @@ type Plugin struct {
 	Enabled      bool
 	InstalledAt  string
 	CacheDir     string
-	MCPServers   []*MCPServer
 	SkillCount   int
 	CommandCount int
 	HookCount    int
-}
-
-// HasMCP returns true if this plugin provides any MCP servers.
-func (p *Plugin) HasMCP() bool {
-	return len(p.MCPServers) > 0
 }
 
 // CountSkills counts .md files in the plugin's skills/ directory.

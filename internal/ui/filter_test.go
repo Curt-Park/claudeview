@@ -43,19 +43,6 @@ func TestFilterAddCharAndBackspace(t *testing.T) {
 	}
 }
 
-func TestFilterClear(t *testing.T) {
-	f := ui.FilterModel{}
-	f.Activate()
-	f.AddChar('x')
-	f.Clear()
-	if f.Input != "" {
-		t.Errorf("Input after Clear = %q, want %q", f.Input, "")
-	}
-	if !f.Active {
-		t.Error("expected Active=true after Clear()")
-	}
-}
-
 func TestFilterMatches(t *testing.T) {
 	f := ui.FilterModel{}
 

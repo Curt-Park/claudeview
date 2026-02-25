@@ -2,9 +2,9 @@ package model
 
 const (
 	// StatusCompleted is used for completed tasks.
-	StatusCompleted = "completed"
+	StatusCompleted Status = "completed"
 	// StatusInProgress is used for in-progress tasks.
-	StatusInProgress = "in_progress"
+	StatusInProgress Status = "in_progress"
 )
 
 // Task represents a Claude Code task from ~/.claude/tasks/<session>/.

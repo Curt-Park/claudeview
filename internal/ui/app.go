@@ -88,16 +88,13 @@ type jumpFromState struct {
 
 // DataProvider is the interface for fetching resource data.
 type DataProvider interface {
-	GetProjects() any
-	GetSessions(projectHash string) any
-	GetAgents(sessionID string) any
-	GetTools(agentID string) any
-	GetTasks(sessionID string) any
-	GetPlugins() any
-	GetMCPServers() any
-	// Navigation context
-	CurrentProject() string
-	CurrentSession() string
+	GetProjects() []*model.Project
+	GetSessions(projectHash string) []*model.Session
+	GetAgents(sessionID string) []*model.Agent
+	GetTools(agentID string) []*model.ToolCall
+	GetTasks(sessionID string) []*model.Task
+	GetPlugins() []*model.Plugin
+	GetMCPServers() []*model.MCPServer
 }
 
 // NewAppModel creates a new application model.

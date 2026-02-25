@@ -38,7 +38,7 @@ func TestSessionAge(t *testing.T) {
 	}
 	// Should be "5m" approximately
 	if age != "5m" {
-		t.Logf("Age() = %q (expected ~5m)", age)
+		t.Errorf("Age() = %q, expected ~5m", age)
 	}
 }
 

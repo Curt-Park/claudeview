@@ -10,17 +10,12 @@ import (
 )
 
 func TestParentColumnsSessionsInFlatMode(t *testing.T) {
-	// In flat mode (SelectedProjectHash=""), sessions view should have PROJECT column
-	sv := ui.NewTableView(nil, 120, 30)
-	_ = sv
+	// In flat mode (SelectedProjectHash=""), sessions are shown across all projects.
+	dp := &mockDP{}
+	tm := newTestModel(t, model.ResourceSessions, dp, sessionRows(2))
+	t.Cleanup(func() { _ = tm.Quit() })
 
-	// Create sessions view with FlatMode
-	sessions := []*model.Session{
-		{ID: "sess1234567890", ProjectHash: "proj-hash-abc", Status: model.StatusDone},
-	}
-	_ = sessions
-	// This verifies the column count changes based on flat mode
-	// (detailed verification done in view-level unit tests)
+	waitForOutput(t, tm, containsStr("Sessions(all)[2]"))
 }
 
 func TestParentColumnsSessionsInDrillMode(t *testing.T) {

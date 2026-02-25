@@ -93,7 +93,6 @@ func PluginDetailLines(p *model.Plugin) []string {
 		fmt.Sprintf("  Skills     : %d", p.SkillCount),
 		fmt.Sprintf("  Commands   : %d", p.CommandCount),
 		fmt.Sprintf("  Hooks      : %d", p.HookCount),
-		fmt.Sprintf("  MCP Servers: %d", len(p.MCPServers)),
 		fmt.Sprintf("  Installed  : %s", p.InstalledAt),
 		fmt.Sprintf("  Cache Dir  : %s", p.CacheDir),
 	}

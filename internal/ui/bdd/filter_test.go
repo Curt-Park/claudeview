@@ -19,8 +19,8 @@ func TestFilterActivate(t *testing.T) {
 
 	sendKey(tm, "/")
 
-	// Filter input should appear
-	waitForOutput(t, tm, containsStr("/"))
+	// Filter bar renders "/█" (block cursor) when active — more specific than just "/"
+	waitForOutput(t, tm, containsStr("/█"))
 }
 
 func TestFilterTypingUpdatesTitle(t *testing.T) {

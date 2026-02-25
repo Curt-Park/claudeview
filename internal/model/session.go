@@ -12,8 +12,6 @@ const (
 	StatusActive    Status = "active"
 	StatusThinking  Status = "thinking"
 	StatusReading   Status = "reading"
-	StatusWriting   Status = "writing"
-	StatusSearching Status = "searching"
 	StatusExecuting Status = "executing"
 	StatusDone      Status = "done"
 	StatusEnded     Status = "ended"
@@ -48,7 +46,7 @@ func (s *Session) Age() string {
 	if !s.EndTime.IsZero() {
 		t = s.EndTime
 	}
-	return formatAge(time.Since(t))
+	return FormatAge(time.Since(t))
 }
 
 // TotalTokens returns combined input+output token count.
@@ -93,7 +91,8 @@ func (s *Session) ToolCount() int {
 	return count
 }
 
-func formatAge(d time.Duration) string {
+// FormatAge converts a duration into a human-friendly string (e.g. "5m", "2h", "3d").
+func FormatAge(d time.Duration) string {
 	switch {
 	case d < time.Minute:
 		return fmt.Sprintf("%ds", int(d.Seconds()))

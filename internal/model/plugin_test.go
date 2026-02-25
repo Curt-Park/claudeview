@@ -8,22 +8,6 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
-func TestPluginHasMCP(t *testing.T) {
-	t.Run("empty MCPServers returns false", func(t *testing.T) {
-		p := &model.Plugin{MCPServers: nil}
-		if p.HasMCP() {
-			t.Error("HasMCP() = true, want false for empty MCPServers")
-		}
-	})
-
-	t.Run("one server returns true", func(t *testing.T) {
-		p := &model.Plugin{MCPServers: []*model.MCPServer{{Name: "fs"}}}
-		if !p.HasMCP() {
-			t.Error("HasMCP() = false, want true for one MCPServer")
-		}
-	})
-}
-
 func makeTempDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "plugin-test-*")

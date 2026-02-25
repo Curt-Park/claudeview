@@ -18,18 +18,6 @@ type FlashModel struct {
 	Width     int
 }
 
-// Set sets a flash message with a duration.
-func (f *FlashModel) Set(msg string, level FlashLevel, d time.Duration) {
-	f.Message = msg
-	f.Level = level
-	f.ExpiresAt = time.Now().Add(d)
-}
-
-// Clear clears the flash message.
-func (f *FlashModel) Clear() {
-	f.Message = ""
-}
-
 // IsExpired returns true if the message has expired.
 func (f *FlashModel) IsExpired() bool {
 	if f.Message == "" {

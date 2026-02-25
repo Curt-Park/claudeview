@@ -101,14 +101,14 @@ type rootModel struct {
 	plugins    []*model.Plugin
 	mcpServers []*model.MCPServer
 
-	// Resource views
-	projectsView *view.ProjectsView
-	sessionsView *view.SessionsView
-	agentsView   *view.AgentsView
-	toolsView    *view.ToolsView
-	tasksView    *view.TasksView
-	pluginsView  *view.PluginsView
-	mcpView      *view.MCPView
+	// Resource views (eagerly initialized in newRootModel)
+	projectsView *view.ResourceView[*model.Project]
+	sessionsView *view.ResourceView[*model.Session]
+	agentsView   *view.ResourceView[*model.Agent]
+	toolsView    *view.ResourceView[*model.ToolCall]
+	tasksView    *view.ResourceView[*model.Task]
+	pluginsView  *view.ResourceView[*model.Plugin]
+	mcpView      *view.ResourceView[*model.MCPServer]
 
 	// Static info (set once at startup)
 	userStr       string
@@ -121,6 +121,13 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		dp:            dp,
 		userStr:       currentUser(),
 		claudeVersion: detectClaudeVersion(),
+		projectsView:  view.NewProjectsView(0, 0),
+		sessionsView:  view.NewSessionsView(0, 0),
+		agentsView:    view.NewAgentsView(0, 0),
+		toolsView:     view.NewToolsView(0, 0),
+		tasksView:     view.NewTasksView(0, 0),
+		pluginsView:   view.NewPluginsView(0, 0),
+		mcpView:       view.NewMCPView(0, 0),
 	}
 	rm.loadData()
 	return rm
@@ -153,70 +160,21 @@ func (rm *rootModel) Init() tea.Cmd {
 func (rm *rootModel) loadData() {
 	switch rm.app.Resource {
 	case model.ResourceProjects:
-		rm.loadProjects()
+		rm.projects = rm.dp.GetProjects()
 	case model.ResourceSessions:
-		rm.loadSessions(rm.app.SelectedProjectHash)
+		rm.sessions = rm.dp.GetSessions(rm.app.SelectedProjectHash)
 	case model.ResourceAgents:
-		rm.loadAgents(rm.app.SelectedSessionID)
+		rm.agents = rm.dp.GetAgents(rm.app.SelectedSessionID)
 	case model.ResourceTools:
-		rm.loadTools(rm.app.SelectedAgentID)
+		rm.toolCalls = rm.dp.GetTools(rm.app.SelectedAgentID)
 	case model.ResourceTasks:
-		rm.loadTasks(rm.app.SelectedSessionID)
+		rm.tasks = rm.dp.GetTasks(rm.app.SelectedSessionID)
 	case model.ResourcePlugins:
-		rm.loadPlugins()
+		rm.plugins = rm.dp.GetPlugins()
 	case model.ResourceMCP:
-		rm.loadMCP()
+		rm.mcpServers = rm.dp.GetMCPServers()
 	}
 	rm.syncView()
-}
-
-func (rm *rootModel) loadProjects() {
-	raw := rm.dp.GetProjects()
-	if projects, ok := raw.([]*model.Project); ok {
-		rm.projects = projects
-	}
-}
-
-func (rm *rootModel) loadSessions(projectHash string) {
-	raw := rm.dp.GetSessions(projectHash)
-	if sessions, ok := raw.([]*model.Session); ok {
-		rm.sessions = sessions
-	}
-}
-
-func (rm *rootModel) loadAgents(sessionID string) {
-	raw := rm.dp.GetAgents(sessionID)
-	if agents, ok := raw.([]*model.Agent); ok {
-		rm.agents = agents
-	}
-}
-
-func (rm *rootModel) loadTools(agentID string) {
-	raw := rm.dp.GetTools(agentID)
-	if tools, ok := raw.([]*model.ToolCall); ok {
-		rm.toolCalls = tools
-	}
-}
-
-func (rm *rootModel) loadTasks(sessionID string) {
-	raw := rm.dp.GetTasks(sessionID)
-	if tasks, ok := raw.([]*model.Task); ok {
-		rm.tasks = tasks
-	}
-}
-
-func (rm *rootModel) loadPlugins() {
-	raw := rm.dp.GetPlugins()
-	if plugins, ok := raw.([]*model.Plugin); ok {
-		rm.plugins = plugins
-	}
-}
-
-func (rm *rootModel) loadMCP() {
-	raw := rm.dp.GetMCPServers()
-	if servers, ok := raw.([]*model.MCPServer); ok {
-		rm.mcpServers = servers
-	}
 }
 
 func (rm *rootModel) syncView() {
@@ -231,67 +189,27 @@ func (rm *rootModel) syncView() {
 
 	rm.updateInfo()
 
+	// Preserve the user's cursor/scroll/filter state across rebuilds so that
+	// RefreshMsg and WindowSizeMsg don't reset the selection to row 0.
+	sel := rm.app.Table.Selected
+	off := rm.app.Table.Offset
+	flt := rm.app.Table.Filter
+
 	switch rm.app.Resource {
 	case model.ResourceProjects:
-		if rm.projectsView == nil {
-			rm.projectsView = view.NewProjectsView(w, h)
-		}
-		rm.projectsView.Table.Width = w
-		rm.projectsView.Table.Height = h
-		rm.projectsView.SetProjects(rm.projects)
-		rm.app.Table = rm.projectsView.Table
+		rm.app.Table = rm.projectsView.Sync(rm.projects, w, h, sel, off, flt, false)
 	case model.ResourceSessions:
-		if rm.sessionsView == nil {
-			rm.sessionsView = view.NewSessionsView(w, h)
-		}
-		rm.sessionsView.Table.Width = w
-		rm.sessionsView.Table.Height = h
-		rm.sessionsView.FlatMode = rm.app.SelectedProjectHash == ""
-		rm.sessionsView.SetSessions(rm.sessions)
-		rm.app.Table = rm.sessionsView.Table
+		rm.app.Table = rm.sessionsView.Sync(rm.sessions, w, h, sel, off, flt, rm.app.SelectedProjectHash == "")
 	case model.ResourceAgents:
-		if rm.agentsView == nil {
-			rm.agentsView = view.NewAgentsView(w, h)
-		}
-		rm.agentsView.Table.Width = w
-		rm.agentsView.Table.Height = h
-		rm.agentsView.FlatMode = rm.app.SelectedSessionID == ""
-		rm.agentsView.SetAgents(rm.agents)
-		rm.app.Table = rm.agentsView.Table
+		rm.app.Table = rm.agentsView.Sync(rm.agents, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
 	case model.ResourceTools:
-		if rm.toolsView == nil {
-			rm.toolsView = view.NewToolsView(w, h)
-		}
-		rm.toolsView.Table.Width = w
-		rm.toolsView.Table.Height = h
-		rm.toolsView.FlatMode = rm.app.SelectedAgentID == ""
-		rm.toolsView.SetToolCalls(rm.toolCalls)
-		rm.app.Table = rm.toolsView.Table
+		rm.app.Table = rm.toolsView.Sync(rm.toolCalls, w, h, sel, off, flt, rm.app.SelectedAgentID == "")
 	case model.ResourceTasks:
-		if rm.tasksView == nil {
-			rm.tasksView = view.NewTasksView(w, h)
-		}
-		rm.tasksView.Table.Width = w
-		rm.tasksView.Table.Height = h
-		rm.tasksView.FlatMode = rm.app.SelectedSessionID == ""
-		rm.tasksView.SetTasks(rm.tasks)
-		rm.app.Table = rm.tasksView.Table
+		rm.app.Table = rm.tasksView.Sync(rm.tasks, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
 	case model.ResourcePlugins:
-		if rm.pluginsView == nil {
-			rm.pluginsView = view.NewPluginsView(w, h)
-		}
-		rm.pluginsView.Table.Width = w
-		rm.pluginsView.Table.Height = h
-		rm.pluginsView.SetPlugins(rm.plugins)
-		rm.app.Table = rm.pluginsView.Table
+		rm.app.Table = rm.pluginsView.Sync(rm.plugins, w, h, sel, off, flt, false)
 	case model.ResourceMCP:
-		if rm.mcpView == nil {
-			rm.mcpView = view.NewMCPView(w, h)
-		}
-		rm.mcpView.Table.Width = w
-		rm.mcpView.Table.Height = h
-		rm.mcpView.SetServers(rm.mcpServers)
-		rm.app.Table = rm.mcpView.Table
+		rm.app.Table = rm.mcpView.Sync(rm.mcpServers, w, h, sel, off, flt, false)
 	}
 }
 
@@ -485,8 +403,8 @@ func newDemoProvider() ui.DataProvider {
 	}
 }
 
-func (d *demoDataProvider) GetProjects() any { return d.projects }
-func (d *demoDataProvider) GetSessions(projectHash string) any {
+func (d *demoDataProvider) GetProjects() []*model.Project { return d.projects }
+func (d *demoDataProvider) GetSessions(projectHash string) []*model.Session {
 	for _, p := range d.projects {
 		if projectHash == "" || p.Hash == projectHash {
 			return p.Sessions
@@ -497,7 +415,7 @@ func (d *demoDataProvider) GetSessions(projectHash string) any {
 	}
 	return []*model.Session{}
 }
-func (d *demoDataProvider) GetAgents(sessionID string) any {
+func (d *demoDataProvider) GetAgents(sessionID string) []*model.Agent {
 	if sessionID == "" {
 		var all []*model.Agent
 		for _, p := range d.projects {
@@ -516,7 +434,7 @@ func (d *demoDataProvider) GetAgents(sessionID string) any {
 	}
 	return []*model.Agent{}
 }
-func (d *demoDataProvider) GetTools(agentID string) any {
+func (d *demoDataProvider) GetTools(agentID string) []*model.ToolCall {
 	if agentID == "" {
 		var all []*model.ToolCall
 		for _, p := range d.projects {
@@ -539,7 +457,7 @@ func (d *demoDataProvider) GetTools(agentID string) any {
 	}
 	return []*model.ToolCall{}
 }
-func (d *demoDataProvider) GetTasks(sessionID string) any {
+func (d *demoDataProvider) GetTasks(sessionID string) []*model.Task {
 	if len(d.projects) > 0 && len(d.projects[0].Sessions) > 0 {
 		sid := d.projects[0].Sessions[0].ID
 		if sessionID != "" {
@@ -549,15 +467,8 @@ func (d *demoDataProvider) GetTasks(sessionID string) any {
 	}
 	return []*model.Task{}
 }
-func (d *demoDataProvider) GetPlugins() any    { return d.plugins }
-func (d *demoDataProvider) GetMCPServers() any { return d.mcpServers }
-func (d *demoDataProvider) CurrentProject() string {
-	if len(d.projects) > 0 {
-		return "my-awesome-app (demo)"
-	}
-	return ""
-}
-func (d *demoDataProvider) CurrentSession() string { return "" }
+func (d *demoDataProvider) GetPlugins() []*model.Plugin       { return d.plugins }
+func (d *demoDataProvider) GetMCPServers() []*model.MCPServer { return d.mcpServers }
 
 // --- Live Data Provider ---
 
@@ -566,7 +477,6 @@ type liveDataProvider struct {
 	projectFilter  string
 	currentProject string
 	currentSession string
-	currentAgent   string
 }
 
 func newLiveProvider(claudeDir, projectFilter string) ui.DataProvider {
@@ -576,7 +486,7 @@ func newLiveProvider(claudeDir, projectFilter string) ui.DataProvider {
 	}
 }
 
-func (l *liveDataProvider) GetProjects() any {
+func (l *liveDataProvider) GetProjects() []*model.Project {
 	infos, err := transcript.ScanProjects(l.claudeDir)
 	if err != nil {
 		return []*model.Project{}
@@ -591,7 +501,6 @@ func (l *liveDataProvider) GetProjects() any {
 			Path:     info.Path,
 			LastSeen: info.LastSeen,
 		}
-		// Load sessions
 		for _, si := range info.Sessions {
 			s := sessionFromInfo(si)
 			p.Sessions = append(p.Sessions, s)
@@ -601,7 +510,7 @@ func (l *liveDataProvider) GetProjects() any {
 	return projects
 }
 
-func (l *liveDataProvider) GetSessions(projectHash string) any {
+func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
 	if projectHash != "" {
 		l.currentProject = projectHash
 	}
@@ -628,13 +537,12 @@ func (l *liveDataProvider) GetSessions(projectHash string) any {
 	return sessions
 }
 
-func (l *liveDataProvider) GetAgents(sessionID string) any {
+func (l *liveDataProvider) GetAgents(sessionID string) []*model.Agent {
 	if sessionID != "" {
 		l.currentSession = sessionID
 	}
-	sessions := l.GetSessions(l.currentProject).([]*model.Session)
+	sessions := l.GetSessions(l.currentProject)
 	if sessionID == "" {
-		// Flat mode: return all agents from all sessions
 		var all []*model.Agent
 		for _, s := range sessions {
 			all = append(all, parseAgentsFromSession(s)...)
@@ -649,13 +557,9 @@ func (l *liveDataProvider) GetAgents(sessionID string) any {
 	return []*model.Agent{}
 }
 
-func (l *liveDataProvider) GetTools(agentID string) any {
-	if agentID != "" {
-		l.currentAgent = agentID
-	}
-	agents := l.GetAgents(l.currentSession).([]*model.Agent)
+func (l *liveDataProvider) GetTools(agentID string) []*model.ToolCall {
+	agents := l.GetAgents(l.currentSession)
 	if agentID == "" {
-		// Flat mode: return all tool calls from all agents
 		var all []*model.ToolCall
 		for _, a := range agents {
 			all = append(all, a.ToolCalls...)
@@ -670,7 +574,7 @@ func (l *liveDataProvider) GetTools(agentID string) any {
 	return []*model.ToolCall{}
 }
 
-func (l *liveDataProvider) GetTasks(sessionID string) any {
+func (l *liveDataProvider) GetTasks(sessionID string) []*model.Task {
 	if sessionID == "" {
 		sessionID = l.currentSession
 	}
@@ -695,7 +599,7 @@ func (l *liveDataProvider) GetTasks(sessionID string) any {
 	return tasks
 }
 
-func (l *liveDataProvider) GetPlugins() any {
+func (l *liveDataProvider) GetPlugins() []*model.Plugin {
 	installed, err := config.LoadInstalledPlugins(l.claudeDir)
 	if err != nil {
 		return []*model.Plugin{}
@@ -724,7 +628,7 @@ func (l *liveDataProvider) GetPlugins() any {
 	return plugins
 }
 
-func (l *liveDataProvider) GetMCPServers() any {
+func (l *liveDataProvider) GetMCPServers() []*model.MCPServer {
 	settings, err := config.LoadSettings(l.claudeDir)
 	if err != nil {
 		return []*model.MCPServer{}
@@ -746,9 +650,6 @@ func (l *liveDataProvider) GetMCPServers() any {
 	}
 	return servers
 }
-
-func (l *liveDataProvider) CurrentProject() string { return l.currentProject }
-func (l *liveDataProvider) CurrentSession() string { return l.currentSession }
 
 // sessionFromInfo creates a Session model from a transcript SessionInfo.
 func sessionFromInfo(si transcript.SessionInfo) *model.Session {
@@ -790,6 +691,28 @@ func sessionFromInfo(si transcript.SessionInfo) *model.Session {
 	return s
 }
 
+// populateToolCalls fills agent.ToolCalls from a parsed transcript.
+func populateToolCalls(agent *model.Agent, sessionID string, parsed *transcript.ParsedTranscript) {
+	for _, turn := range parsed.Turns {
+		for _, tc := range turn.ToolCalls {
+			agent.ToolCalls = append(agent.ToolCalls, &model.ToolCall{
+				ID:        tc.ID,
+				SessionID: sessionID,
+				AgentID:   agent.ID,
+				Name:      tc.Name,
+				Input:     tc.Input,
+				Result:    tc.Result,
+				IsError:   tc.IsError,
+				Timestamp: turn.Timestamp,
+			})
+		}
+	}
+	if len(agent.ToolCalls) > 0 {
+		last := agent.ToolCalls[len(agent.ToolCalls)-1]
+		agent.LastActivity = last.Name + " " + last.InputSummary()
+	}
+}
+
 // parseAgentsFromSession loads transcript and extracts agents.
 func parseAgentsFromSession(s *model.Session) []*model.Agent {
 	mainAgent := &model.Agent{
@@ -802,26 +725,8 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 	}
 
 	// Parse main transcript tool calls
-	parsed, err := transcript.ParseFile(s.FilePath)
-	if err == nil {
-		for _, turn := range parsed.Turns {
-			for _, tc := range turn.ToolCalls {
-				mainAgent.ToolCalls = append(mainAgent.ToolCalls, &model.ToolCall{
-					ID:        tc.ID,
-					SessionID: s.ID,
-					AgentID:   "",
-					Name:      tc.Name,
-					Input:     tc.Input,
-					Result:    tc.Result,
-					IsError:   tc.IsError,
-					Timestamp: turn.Timestamp,
-				})
-			}
-			if len(mainAgent.ToolCalls) > 0 {
-				last := mainAgent.ToolCalls[len(mainAgent.ToolCalls)-1]
-				mainAgent.LastActivity = last.Name + " " + last.InputSummary()
-			}
-		}
+	if parsed, err := transcript.ParseFile(s.FilePath); err == nil {
+		populateToolCalls(mainAgent, s.ID, parsed)
 	}
 
 	agents := []*model.Agent{mainAgent}
@@ -841,27 +746,8 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 					StartTime:  si.ModTime,
 				}
 				// Parse subagent transcript
-				subParsed, err := transcript.ParseFile(si.FilePath)
-				if err == nil {
-					for _, turn := range subParsed.Turns {
-						for _, tc := range turn.ToolCalls {
-							sub.ToolCalls = append(sub.ToolCalls, &model.ToolCall{
-								ID:        tc.ID,
-								SessionID: s.ID,
-								AgentID:   si.ID,
-								Name:      tc.Name,
-								Input:     tc.Input,
-								Result:    tc.Result,
-								IsError:   tc.IsError,
-								Timestamp: turn.Timestamp,
-							})
-						}
-					}
-					if len(sub.ToolCalls) > 0 {
-						last := sub.ToolCalls[len(sub.ToolCalls)-1]
-						sub.LastActivity = last.Name + " " + last.InputSummary()
-					}
-					// Detect agent type from subtype string in filename
+				if subParsed, err := transcript.ParseFile(si.FilePath); err == nil {
+					populateToolCalls(sub, s.ID, subParsed)
 					sub.Type = detectAgentType(si.ID)
 				}
 				agents = append(agents, sub)

@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 )
 
@@ -18,18 +17,11 @@ type InstalledPlugin struct {
 // LoadInstalledPlugins reads ~/.claude/plugins/installed_plugins.json.
 func LoadInstalledPlugins(claudeDir string) ([]InstalledPlugin, error) {
 	path := filepath.Join(claudeDir, "plugins", "installed_plugins.json")
-	data, err := os.ReadFile(path)
+	plugins, err := loadJSON[[]InstalledPlugin](path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var plugins []InstalledPlugin
-	if err := json.Unmarshal(data, &plugins); err != nil {
 		// Try map format
-		var m map[string]InstalledPlugin
-		if err2 := json.Unmarshal(data, &m); err2 != nil {
+		m, err2 := loadJSON[map[string]InstalledPlugin](path)
+		if err2 != nil {
 			return nil, err
 		}
 		for name, p := range m {
@@ -47,19 +39,8 @@ func PluginCacheDir(claudeDir, marketplace, name, version string) string {
 
 // EnabledPlugins reads the list of enabled plugin names from settings.
 func EnabledPlugins(claudeDir string) (map[string]bool, error) {
-	settings, err := LoadSettings(claudeDir)
+	raw, err := loadJSON[map[string]json.RawMessage](filepath.Join(claudeDir, "settings.json"))
 	if err != nil {
-		return nil, err
-	}
-	// settings may include enabledPlugins field
-	path := filepath.Join(claudeDir, "settings.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, nil
-	}
-	_ = settings
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, nil
 	}
 	enabled := make(map[string]bool)

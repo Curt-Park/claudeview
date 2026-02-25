@@ -48,6 +48,18 @@ func ParseFile(path string) (*ParsedTranscript, error) {
 	return Parse(f)
 }
 
+// flushPendingTurn matches tool results into the pending turn and appends it.
+func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[string]json.RawMessage, toolErrors map[string]bool) {
+	for i := range turn.ToolCalls {
+		tc := &turn.ToolCalls[i]
+		if res, ok := toolResults[tc.ID]; ok {
+			tc.Result = res
+			tc.IsError = toolErrors[tc.ID]
+		}
+	}
+	result.Turns = append(result.Turns, *turn)
+}
+
 // Parse reads from an io.Reader and parses JSONL transcript entries.
 func Parse(r io.Reader) (*ParsedTranscript, error) {
 	scanner := bufio.NewScanner(r)
@@ -88,14 +100,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			}
 			// Flush pending assistant turn with matched results
 			if pendingAssistantTurn != nil {
-				for i := range pendingAssistantTurn.ToolCalls {
-					tc := &pendingAssistantTurn.ToolCalls[i]
-					if res, ok := toolResults[tc.ID]; ok {
-						tc.Result = res
-						tc.IsError = toolErrors[tc.ID]
-					}
-				}
-				result.Turns = append(result.Turns, *pendingAssistantTurn)
+				flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors)
 				pendingAssistantTurn = nil
 			}
 			// Add user text turns
@@ -169,14 +174,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 
 	// Flush any remaining pending turn
 	if pendingAssistantTurn != nil {
-		for i := range pendingAssistantTurn.ToolCalls {
-			tc := &pendingAssistantTurn.ToolCalls[i]
-			if res, ok := toolResults[tc.ID]; ok {
-				tc.Result = res
-				tc.IsError = toolErrors[tc.ID]
-			}
-		}
-		result.Turns = append(result.Turns, *pendingAssistantTurn)
+		flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors)
 	}
 
 	return result, scanner.Err()

@@ -33,16 +33,6 @@ var (
 	StyleRunning   = lipgloss.NewStyle().Foreground(colorGreen)
 
 	// Layout styles
-	StyleHeader = lipgloss.NewStyle().
-			Background(colorBgHeader).
-			Foreground(colorWhite).
-			Padding(0, 1)
-
-	StyleMenu = lipgloss.NewStyle().
-			Background(colorDimGray).
-			Foreground(colorWhite).
-			Padding(0, 1)
-
 	StyleCrumbs = lipgloss.NewStyle().
 			Background(colorDimGray).
 			Foreground(colorCyan).

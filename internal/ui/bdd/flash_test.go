@@ -22,6 +22,6 @@ func TestFlashShownOnCommandSwitch(t *testing.T) {
 	}
 	tm.Type("\r")
 
-	// Flash message "switched to sessions" should appear
+	// After switch, the projects title bar is no longer shown
 	waitForOutput(t, tm, notContainsStr("Projects(all)"))
 }

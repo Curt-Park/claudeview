@@ -47,18 +47,3 @@ type UserMessage struct {
 	Role    string           `json:"role"`
 	Content []MessageContent `json:"content"`
 }
-
-// SystemMessage is parsed from a top-level system JSONL entry (fields are at entry root, not in "message").
-type SystemMessage struct {
-	Subtype      string  `json:"subtype"`
-	DurationMS   int64   `json:"durationMs"` // Claude Code uses camelCase
-	NumTurns     int     `json:"num_turns"`
-	TotalCostUSD float64 `json:"total_cost_usd"`
-}
-
-// ProgressMessage is the message field when type=="progress".
-type ProgressMessage struct {
-	Subtype   string          `json:"subtype"`
-	ToolUseID string          `json:"tool_use_id"`
-	Content   json.RawMessage `json:"content"`
-}
