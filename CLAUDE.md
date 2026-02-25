@@ -26,6 +26,7 @@ go test -race ./...   # run tests with race detector
 ```bash
 make build   # go build -ldflags "..." -o bin/claudeview .
 make test    # go test -race -count=1 ./...
+make bdd     # go test -race -count=1 ./internal/ui/bdd/...
 make lint    # golangci-lint run ./...
 make demo    # build + run --demo mode
 ```
@@ -57,7 +58,7 @@ internal/
 - **Spec document**: `docs/ui-spec.md` — all UI changes must be kept in sync with this document
 - **BDD tests**: `internal/ui/bdd/` — teatest-based integration tests covering all spec behaviors
 - **Test IDs**: each spec section references a test function (e.g. `TEST-NAV-001`)
-- **Run BDD tests**: `go test -race ./internal/ui/bdd/...`
+- **Run BDD tests**: `make bdd`
 
 ## Development Setup
 
