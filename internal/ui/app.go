@@ -43,7 +43,7 @@ type AppModel struct {
 	Height int
 
 	// Chrome components
-	Header  HeaderModel
+	Info    InfoModel
 	Menu    MenuModel
 	Crumbs  CrumbsModel
 	Flash   FlashModel
@@ -94,7 +94,7 @@ func NewAppModel(dp DataProvider, initialResource model.ResourceType) AppModel {
 		DataProvider: dp,
 		Resource:     initialResource,
 	}
-	m.Header = HeaderModel{}
+	m.Info = InfoModel{}
 	m.Menu = MenuModel{Items: TableMenuItems()}
 	m.Crumbs = CrumbsModel{Items: []string{string(initialResource)}}
 	m.Flash = FlashModel{}
@@ -353,7 +353,6 @@ func (m *AppModel) drillInto(rt model.ResourceType) {
 }
 
 func (m *AppModel) refreshLog() {
-	// Log view is populated by view layer
 	m.Log = NewLogView(string(m.Resource), m.contentWidth(), m.contentHeight())
 }
 
@@ -370,24 +369,24 @@ func (m *AppModel) showHelp() {
 }
 
 func (m *AppModel) updateSizes() {
-	inner := m.contentWidth() // Width - 4 for bordered layout
-	m.Header.Width = inner
-	m.Menu.Width = inner
-	m.Crumbs.Width = inner
-	m.Flash.Width = inner
-	m.Command.Width = inner
-	m.Filter.Width = inner
-	m.Table.Width = inner
-	m.Table.Height = m.contentHeight()
-	m.Log.Width = inner
-	m.Log.Height = m.contentHeight()
-	m.Detail.Width = inner
-	m.Detail.Height = m.contentHeight()
+	w := m.contentWidth()
+	h := m.contentHeight()
+	m.Info.Width = w
+	m.Crumbs.Width = w
+	m.Flash.Width = w
+	m.Command.Width = w
+	m.Filter.Width = w
+	m.Table.Width = w
+	m.Table.Height = h
+	m.Log.Width = w
+	m.Log.Height = h
+	m.Detail.Width = w
+	m.Detail.Height = h
 }
 
 func (m AppModel) contentHeight() int {
-	// top-border(1) + menu(1) + sep(1) + sep(1) + crumbs(1) + status(1) + bottom(1) = 7 chrome rows
-	h := m.Height - 7
+	// 7 info rows + 1 title bar + 1 crumbs + 1 status = 10 chrome rows
+	h := m.Height - 10
 	if h < 5 {
 		return 5
 	}
@@ -395,53 +394,25 @@ func (m AppModel) contentHeight() int {
 }
 
 func (m AppModel) contentWidth() int {
-	// subtract 4 for "│ " on the left and " │" on the right
-	w := m.Width - 4
-	if w < 10 {
+	if m.Width < 10 {
 		return 10
 	}
-	return w
+	return m.Width
 }
 
-// View renders the full UI with a bordered box layout.
+// View renders the full UI in k9s-style: info panel + title bar + content + status.
 func (m AppModel) View() string {
 	if m.Width == 0 {
 		return "Loading..."
 	}
 
-	bc := lipgloss.NewStyle().Foreground(colorGray)
-	titleStyle := lipgloss.NewStyle().Foreground(colorWhite).Bold(true)
-	innerW := m.contentWidth()
+	// --- 1. Info panel (7 lines) ---
+	infoStr := m.Info.ViewWithMenu(m.Menu.Items)
 
-	// wrapLine adds "│ " prefix and " │" suffix around a pre-rendered inner line.
-	wrapLine := func(s string) string {
-		// Ensure inner content is exactly innerW visible chars.
-		w := lipgloss.Width(s)
-		if w < innerW {
-			s += strings.Repeat(" ", innerW-w)
-		}
-		return bc.Render("│") + " " + s + " " + bc.Render("│")
-	}
+	// --- 2. Resource title bar ---
+	titleStr := m.renderTitleBar()
 
-	hbar := func(left, right string) string {
-		return bc.Render(left + strings.Repeat("─", m.Width-2) + right)
-	}
-
-	// --- Top border with header text integrated ---
-	headerText := m.Header.ContentText()
-	prefix := "┌─ "
-	suffix := " ─┐"
-	fillLen := max(0, m.Width-len([]rune(prefix))-lipgloss.Width(headerText)-len([]rune(suffix)))
-	topBorder := bc.Render(prefix) + titleStyle.Render(headerText) +
-		bc.Render(" "+strings.Repeat("─", fillLen)+"─┐")
-
-	// --- Menu row ---
-	menuLine := wrapLine(m.Menu.View())
-
-	// --- Separator ---
-	sep := hbar("├", "┤")
-
-	// --- Content lines ---
+	// --- 3. Content ---
 	var contentStr string
 	switch m.ViewMode {
 	case ModeTable:
@@ -452,21 +423,11 @@ func (m AppModel) View() string {
 		contentStr = m.Detail.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
-	// Clip to the exact content height so the total view fits the terminal.
-	// The table View() produces contentHeight+1 lines (col header + data rows);
-	// clamping here prevents the top border from being scrolled off screen.
 	if limit := m.contentHeight(); len(rawLines) > limit {
 		rawLines = rawLines[:limit]
 	}
-	wrappedContent := make([]string, len(rawLines))
-	for i, line := range rawLines {
-		wrappedContent[i] = wrapLine(line)
-	}
 
-	// --- Bottom separator + crumbs + status ---
-	botSep := hbar("├", "┤")
-	crumbsLine := wrapLine(m.Crumbs.View())
-
+	// --- 4. Status bar ---
 	var statusView string
 	if m.inCommand {
 		statusView = m.Command.View()
@@ -475,22 +436,44 @@ func (m AppModel) View() string {
 	} else {
 		statusView = m.Flash.View()
 	}
-	statusLine := wrapLine(statusView)
-
-	botBorder := hbar("└", "┘")
 
 	// --- Assemble ---
 	var sb strings.Builder
-	sb.WriteString(topBorder + "\n")
-	sb.WriteString(menuLine + "\n")
-	sb.WriteString(sep + "\n")
-	for _, cl := range wrappedContent {
-		sb.WriteString(cl + "\n")
+	sb.WriteString(infoStr + "\n")
+	sb.WriteString(titleStr + "\n")
+	for _, line := range rawLines {
+		sb.WriteString(line + "\n")
 	}
-	sb.WriteString(botSep + "\n")
-	sb.WriteString(crumbsLine + "\n")
-	sb.WriteString(statusLine + "\n")
-	sb.WriteString(botBorder)
+	sb.WriteString(m.Crumbs.View() + "\n")
+	sb.WriteString(statusView)
 
 	return sb.String()
+}
+
+// renderTitleBar renders the centered resource title line, e.g. "─── Sessions(all)[3] ───".
+func (m AppModel) renderTitleBar() string {
+	res := string(m.Resource)
+	if len(res) > 0 {
+		res = strings.ToUpper(res[:1]) + res[1:]
+	}
+
+	filter := "all"
+	if m.Table.Filter != "" {
+		filter = m.Table.Filter
+	}
+
+	count := m.Table.FilteredCount()
+	title := fmt.Sprintf("%s(%s)[%d]", res, filter, count)
+	titleStyled := StyleTitle.Render(title)
+	titleVis := lipgloss.Width(titleStyled)
+
+	gray := lipgloss.NewStyle().Foreground(colorGray)
+	inner := m.Width - titleVis - 2 // 2 for the spaces around title
+	if inner < 0 {
+		inner = 0
+	}
+	leftDash := inner / 2
+	rightDash := inner - leftDash
+
+	return gray.Render(strings.Repeat("─", leftDash)+" ") + titleStyled + gray.Render(" "+strings.Repeat("─", rightDash))
 }

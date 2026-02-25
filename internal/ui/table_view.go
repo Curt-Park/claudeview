@@ -273,6 +273,11 @@ func (t *TableView) RowCount() int {
 	return len(t.Rows)
 }
 
+// FilteredCount returns the number of rows after applying the current filter.
+func (t TableView) FilteredCount() int {
+	return len(t.filteredRows())
+}
+
 // StatusLine returns a status string like "1/10".
 func (t *TableView) StatusLine() string {
 	if len(t.Rows) == 0 {

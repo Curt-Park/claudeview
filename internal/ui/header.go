@@ -7,55 +7,72 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// HeaderModel holds state for the header bar.
-type HeaderModel struct {
-	ProjectName string
-	Model       string
-	MCPCount    int
-	Mode        string // normal, plan, auto, etc.
-	Width       int
+// InfoModel holds the top info panel data (k9s-style left column + right menu).
+type InfoModel struct {
+	Project       string // active project display name / path
+	Session       string // active session short ID
+	User          string // OS username
+	ClaudeVersion string // Claude Code binary version
+	AppVersion    string // claudeview binary version
+	CPUPercent    float64
+	MemMiB        uint64
+	Width         int
 }
 
-// ContentText returns the header content as plain text (no styling or padding).
-// Used to embed the header in the top border line.
-func (h HeaderModel) ContentText() string {
-	text := "claudeview"
-	if h.ProjectName != "" {
-		text += "  │  " + h.ProjectName
+// ViewWithMenu renders the 7-row info panel alongside key binding hints.
+func (info InfoModel) ViewWithMenu(items []MenuItem) string {
+	const labelW = 14 // visible chars reserved for label column
+	const leftW = 46  // total visible chars for the left column (label + value)
+
+	dim := StyleDim
+
+	val := func(s string) string {
+		if s == "" {
+			return dim.Render("--")
+		}
+		return s
 	}
-	if h.Model != "" {
-		text += "  │  " + h.Model
+
+	leftRows := []struct{ label, value string }{
+		{"Project:", truncateLeft(info.Project, leftW-labelW-1)},
+		{"Session:", val(info.Session)},
+		{"User:", val(info.User)},
+		{"Claude Code:", val(info.ClaudeVersion)},
+		{"claudeview:", val(info.AppVersion)},
+		{"CPU:", fmt.Sprintf("%.0f%%", info.CPUPercent)},
+		{"MEM:", fmt.Sprintf("%d MiB", info.MemMiB)},
 	}
-	if h.MCPCount > 0 {
-		text += fmt.Sprintf("  │  MCP: %d", h.MCPCount)
+
+	var lines []string
+	for i, row := range leftRows {
+		styledLabel := StyleKey.Render(row.label)
+		labelVis := lipgloss.Width(styledLabel)
+		labelPad := strings.Repeat(" ", max(labelW-labelVis, 1))
+
+		leftPart := styledLabel + labelPad + row.value
+		leftVis := lipgloss.Width(leftPart)
+		leftPadding := strings.Repeat(" ", max(leftW-leftVis, 2))
+
+		right := ""
+		if i < len(items) {
+			item := items[i]
+			right = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
+		}
+
+		lines = append(lines, leftPart+leftPadding+right)
 	}
-	if h.Mode != "" {
-		text += "  │  " + h.Mode
-	}
-	return text
+
+	return strings.Join(lines, "\n")
 }
 
-// View renders the header bar.
-func (h HeaderModel) View() string {
-	left := " claudeview"
-	if h.ProjectName != "" {
-		left += fmt.Sprintf("  |  Project: %s", h.ProjectName)
+// truncateLeft returns at most maxW runes, prefixing "…" if truncated.
+func truncateLeft(s string, maxW int) string {
+	if s == "" {
+		return StyleDim.Render("--")
 	}
-	if h.Model != "" {
-		left += fmt.Sprintf("  |  Model: %s", h.Model)
+	runes := []rune(s)
+	if len(runes) <= maxW {
+		return s
 	}
-	if h.MCPCount > 0 {
-		left += fmt.Sprintf("  |  MCP: %d", h.MCPCount)
-	}
-
-	right := ""
-	if h.Mode != "" {
-		right = fmt.Sprintf("Mode: %s ", h.Mode)
-	}
-
-	// Pad between left and right
-	padding := max(h.Width-lipgloss.Width(left)-lipgloss.Width(right), 0)
-
-	line := left + strings.Repeat(" ", padding) + right
-	return StyleHeader.Width(h.Width).Render(line)
+	return "…" + string(runes[len(runes)-maxW+1:])
 }

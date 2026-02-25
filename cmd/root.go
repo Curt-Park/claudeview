@@ -4,8 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +22,9 @@ import (
 	"github.com/Curt-Park/claudeview/internal/ui"
 	"github.com/Curt-Park/claudeview/internal/view"
 )
+
+// AppVersion is set from main.go via the build-time Version variable.
+var AppVersion string
 
 var (
 	demoMode     bool
@@ -105,15 +112,45 @@ type rootModel struct {
 	tasksView    *view.TasksView
 	pluginsView  *view.PluginsView
 	mcpView      *view.MCPView
+
+	// Static info (set once at startup)
+	userStr       string
+	claudeVersion string
+
+	// CPU tracking (sampled per tick via syscall.Getrusage)
+	lastCPUTime  time.Duration
+	lastCPUCheck time.Time
 }
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 	rm := &rootModel{
-		app: app,
-		dp:  dp,
+		app:           app,
+		dp:            dp,
+		userStr:       currentUser(),
+		claudeVersion: detectClaudeVersion(),
 	}
 	rm.loadData()
 	return rm
+}
+
+func currentUser() string {
+	if u, err := user.Current(); err == nil {
+		return u.Username
+	}
+	return os.Getenv("USER")
+}
+
+func detectClaudeVersion() string {
+	out, err := exec.Command("claude", "--version").Output()
+	if err != nil {
+		return "--"
+	}
+	v := strings.TrimSpace(string(out))
+	// "claude X.Y.Z" → keep only the version number part
+	if parts := strings.Fields(v); len(parts) >= 2 {
+		return parts[len(parts)-1]
+	}
+	return v
 }
 
 func (rm *rootModel) Init() tea.Cmd {
@@ -204,11 +241,11 @@ func (rm *rootModel) loadMCP() {
 }
 
 func (rm *rootModel) syncView() {
-	// Use inner dimensions matching AppModel.contentWidth/contentHeight.
-	w := rm.app.Width - 4
-	h := rm.app.Height - 7
+	// Match AppModel.contentWidth/contentHeight: full width, Height-10 chrome rows.
+	w := rm.app.Width
+	h := rm.app.Height - 10
 	if w <= 0 {
-		w = 116 // fallback inner width for 120-col terminal
+		w = 120
 	}
 	if h <= 0 {
 		h = 30
@@ -223,7 +260,7 @@ func (rm *rootModel) syncView() {
 		rm.projectsView.Table.Height = h
 		rm.projectsView.SetProjects(rm.projects)
 		rm.app.Table = rm.projectsView.Table
-		rm.updateHeader()
+		rm.updateInfo()
 	case model.ResourceSessions:
 		if rm.sessionsView == nil {
 			rm.sessionsView = view.NewSessionsView(w, h)
@@ -232,7 +269,7 @@ func (rm *rootModel) syncView() {
 		rm.sessionsView.Table.Height = h
 		rm.sessionsView.SetSessions(rm.sessions)
 		rm.app.Table = rm.sessionsView.Table
-		rm.updateHeader()
+		rm.updateInfo()
 	case model.ResourceAgents:
 		if rm.agentsView == nil {
 			rm.agentsView = view.NewAgentsView(w, h)
@@ -276,15 +313,40 @@ func (rm *rootModel) syncView() {
 	}
 }
 
-func (rm *rootModel) updateHeader() {
-	project := rm.dp.CurrentProject()
-	rm.app.Header.ProjectName = project
-	if lp, ok := rm.dp.(*liveDataProvider); ok {
-		settings, _ := lp.getSettings()
-		if settings != nil {
-			rm.app.Header.Model = settings.Model
-			rm.app.Header.MCPCount = len(settings.MCPServers)
+func (rm *rootModel) updateInfo() {
+	rm.app.Info.Project = rm.dp.CurrentProject()
+	sess := rm.dp.CurrentSession()
+	if len(sess) > 8 {
+		sess = sess[:8]
+	}
+	rm.app.Info.Session = sess
+	rm.app.Info.User = rm.userStr
+	rm.app.Info.ClaudeVersion = rm.claudeVersion
+	rm.app.Info.AppVersion = AppVersion
+}
+
+func (rm *rootModel) updateSystemStats() {
+	// MEM: Go process system memory in MiB
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	rm.app.Info.MemMiB = ms.Sys / 1024 / 1024
+
+	// CPU: rusage delta between ticks
+	var ru syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru); err == nil {
+		userNs := ru.Utime.Sec*1e9 + int64(ru.Utime.Usec)*1e3
+		sysNs := ru.Stime.Sec*1e9 + int64(ru.Stime.Usec)*1e3
+		totalCPU := time.Duration(userNs + sysNs)
+		now := time.Now()
+		if !rm.lastCPUCheck.IsZero() {
+			elapsed := now.Sub(rm.lastCPUCheck).Seconds()
+			cpuDelta := (totalCPU - rm.lastCPUTime).Seconds()
+			if elapsed > 0 {
+				rm.app.Info.CPUPercent = cpuDelta / elapsed * 100
+			}
 		}
+		rm.lastCPUTime = totalCPU
+		rm.lastCPUCheck = now
 	}
 }
 
@@ -294,6 +356,9 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.app.Width = msg.Width
 		rm.app.Height = msg.Height
 		rm.syncView()
+
+	case ui.TickMsg:
+		rm.updateSystemStats()
 
 	case ui.RefreshMsg:
 		rm.loadData()
