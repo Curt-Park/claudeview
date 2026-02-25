@@ -189,17 +189,28 @@ func (t TableView) View() string {
 		offset = max(0, len(rows)-1)
 	}
 
+	// Pre-render the expanded (selected) row so we know its line count.
+	// If it doesn't fit at the current scroll position, nudge offset up
+	// so the full expansion is visible — without mutating t.Offset.
+	var expandedLines []string
+	if selected >= offset && selected < len(rows) {
+		expandedLines = strings.Split(t.renderExpandedRow(rows[selected], cols), "\n")
+		linesBeforeSel := selected - offset
+		if linesBeforeSel+len(expandedLines) > visible {
+			offset = max(0, selected-(visible-len(expandedLines)))
+		}
+	}
+
 	linesUsed := 0
 	for i := offset; i < len(rows) && linesUsed < visible; i++ {
 		row := rows[i]
 		if i == selected {
-			expanded := t.renderExpandedRow(row, cols)
-			expandedLines := strings.Split(expanded, "\n")
 			remaining := visible - linesUsed
-			if len(expandedLines) > remaining {
-				expandedLines = expandedLines[:remaining]
+			lines := expandedLines
+			if len(lines) > remaining {
+				lines = lines[:remaining]
 			}
-			for _, l := range expandedLines {
+			for _, l := range lines {
 				sb.WriteString(l)
 				sb.WriteString("\n")
 				linesUsed++
