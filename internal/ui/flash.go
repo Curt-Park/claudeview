@@ -38,6 +38,9 @@ func (f *FlashModel) IsExpired() bool {
 	return time.Now().After(f.ExpiresAt)
 }
 
+// Height returns the number of terminal lines rendered by View.
+func (f FlashModel) Height() int { return 1 }
+
 // View renders the flash bar.
 func (f FlashModel) View() string {
 	if f.Message == "" || f.IsExpired() {

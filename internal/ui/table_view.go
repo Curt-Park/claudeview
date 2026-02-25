@@ -10,9 +10,10 @@ import (
 
 // Column defines a column in the table.
 type Column struct {
-	Title string
-	Width int
-	Flex  bool // if true, grows to fill remaining space
+	Title      string
+	Width      int     // fixed width, or minimum width when Flex=true
+	Flex       bool    // if true, grows to fill remaining space
+	MaxPercent float64 // if Flex and > 0, caps expansion at this fraction of terminal width (0–1)
 }
 
 // Row is a single row in the table (slice of cell strings + raw data).
@@ -41,23 +42,27 @@ func NewTableView(cols []Column, width, height int) TableView {
 	}
 }
 
-// SetRows sets the table rows.
+// SetRows sets the table rows and clamps Selected to the filtered set.
 func (t *TableView) SetRows(rows []Row) {
 	t.Rows = rows
-	if t.Selected >= len(rows) {
-		t.Selected = max(0, len(rows)-1)
+	n := t.FilteredCount()
+	if n == 0 {
+		t.Selected = 0
+	} else if t.Selected >= n {
+		t.Selected = n - 1
 	}
 }
 
-// SelectedRow returns the currently selected row data.
+// SelectedRow returns the currently selected row (from the filtered set).
 func (t *TableView) SelectedRow() *Row {
-	if len(t.Rows) == 0 || t.Selected >= len(t.Rows) {
+	rows := t.filteredRows()
+	if len(rows) == 0 || t.Selected >= len(rows) {
 		return nil
 	}
-	return &t.Rows[t.Selected]
+	return &rows[t.Selected]
 }
 
-// MoveUp moves the selection up.
+// MoveUp moves the selection up within the filtered set.
 func (t *TableView) MoveUp() {
 	if t.Selected > 0 {
 		t.Selected--
@@ -65,49 +70,56 @@ func (t *TableView) MoveUp() {
 	t.ensureVisible()
 }
 
-// MoveDown moves the selection down.
+// MoveDown moves the selection down within the filtered set.
 func (t *TableView) MoveDown() {
-	if t.Selected < len(t.Rows)-1 {
+	if t.Selected < t.FilteredCount()-1 {
 		t.Selected++
 	}
 	t.ensureVisible()
 }
 
-// GotoTop moves to the first row.
+// GotoTop moves to the first row of the filtered set.
 func (t *TableView) GotoTop() {
 	t.Selected = 0
 	t.Offset = 0
 }
 
-// GotoBottom moves to the last row.
+// GotoBottom moves to the last row of the filtered set.
 func (t *TableView) GotoBottom() {
-	if len(t.Rows) == 0 {
+	n := t.FilteredCount()
+	if n == 0 {
 		return
 	}
-	t.Selected = len(t.Rows) - 1
+	t.Selected = n - 1
 	t.ensureVisible()
+}
+
+// dataRows returns the number of visible data rows (total height minus the header line).
+func (t *TableView) dataRows() int {
+	return max(t.Height-1, 1)
 }
 
 // PageUp moves up by half a page.
 func (t *TableView) PageUp() {
-	half := max(1, t.Height/2)
+	half := max(1, t.dataRows()/2)
 	t.Selected = max(0, t.Selected-half)
 	t.ensureVisible()
 }
 
-// PageDown moves down by half a page.
+// PageDown moves down by half a page within the filtered set.
 func (t *TableView) PageDown() {
-	half := max(1, t.Height/2)
-	t.Selected = min(len(t.Rows)-1, t.Selected+half)
+	half := max(1, t.dataRows()/2)
+	t.Selected = min(t.FilteredCount()-1, t.Selected+half)
 	t.ensureVisible()
 }
 
 func (t *TableView) ensureVisible() {
+	dr := t.dataRows()
 	if t.Selected < t.Offset {
 		t.Offset = t.Selected
 	}
-	if t.Selected >= t.Offset+t.Height {
-		t.Offset = t.Selected - t.Height + 1
+	if t.Selected >= t.Offset+dr {
+		t.Offset = t.Selected - dr + 1
 	}
 }
 
@@ -173,31 +185,61 @@ func (t TableView) View() string {
 	sb.WriteString(t.renderHeader(cols))
 	sb.WriteString("\n")
 
-	// Rows
-	visible := t.Height
-	if visible <= 0 {
-		visible = 20
-	}
+	visible := t.dataRows()
 
 	// Clamp offset/selected against filtered set
 	offset := t.Offset
 	selected := t.Selected
-	if offset >= len(rows) {
-		offset = max(0, len(rows)-1)
+	if len(rows) == 0 {
+		offset = 0
+		selected = -1
+	} else {
+		if offset >= len(rows) {
+			offset = len(rows) - 1
+		}
+		if selected >= len(rows) {
+			selected = len(rows) - 1
+		}
 	}
 
-	for i := offset; i < len(rows) && i < offset+visible; i++ {
+	// Pre-render the expanded (selected) row so we know its line count.
+	// If it doesn't fit at the current scroll position, nudge offset up
+	// so the full expansion is visible — without mutating t.Offset.
+	var expandedLines []string
+	if selected >= offset && selected < len(rows) {
+		expandedLines = strings.Split(t.renderExpandedRow(rows[selected], cols), "\n")
+		linesBeforeSel := selected - offset
+		if linesBeforeSel+len(expandedLines) > visible {
+			offset = min(selected, max(0, selected-(visible-len(expandedLines))))
+		}
+	}
+
+	linesUsed := 0
+	for i := offset; i < len(rows) && linesUsed < visible; i++ {
 		row := rows[i]
-		line := t.renderRow(row, cols, i == selected)
-		sb.WriteString(line)
-		sb.WriteString("\n")
+		if i == selected {
+			remaining := visible - linesUsed
+			lines := expandedLines
+			if len(lines) > remaining {
+				lines = lines[:remaining]
+			}
+			for _, l := range lines {
+				sb.WriteString(l)
+				sb.WriteString("\n")
+				linesUsed++
+			}
+		} else {
+			sb.WriteString(t.renderRow(row, cols, false))
+			sb.WriteString("\n")
+			linesUsed++
+		}
 	}
 
-	// Fill empty rows
-	rendered := min(len(rows)-offset, visible)
-	for i := rendered; i < visible; i++ {
+	// Fill empty lines
+	for linesUsed < visible {
 		sb.WriteString(strings.Repeat(" ", t.Width))
 		sb.WriteString("\n")
+		linesUsed++
 	}
 
 	return sb.String()
@@ -205,22 +247,82 @@ func (t TableView) View() string {
 
 func (t TableView) calculateWidths() []int {
 	widths := make([]int, len(t.Columns))
-	total := 0
-	flexIdx := -1
+	spacing := len(t.Columns) - 1
 
+	// Pass 1: assign fixed columns and sum their widths.
+	fixedTotal := 0
 	for i, col := range t.Columns {
-		if col.Flex {
-			flexIdx = i
-		} else {
+		if !col.Flex {
 			widths[i] = col.Width
-			total += col.Width + 1 // +1 for spacing
+			fixedTotal += col.Width
 		}
 	}
+	avail := max(0, t.Width-fixedTotal-spacing)
 
-	if flexIdx >= 0 {
-		widths[flexIdx] = max(10, t.Width-total-1)
+	// Pass 2: collect flex columns and compute their desired widths.
+	// Fixed columns always take priority; flex columns share whatever remains.
+	// Flex column minimum widths (col.Width) are treated as soft hints — they
+	// will NOT cause the table to overflow the terminal.
+	type fInfo struct {
+		idx     int
+		desired int
+		pct     float64 // MaxPercent, or 0 if uncapped
+	}
+	var fCols []fInfo
+	for i, col := range t.Columns {
+		if !col.Flex {
+			continue
+		}
+		desired := avail
+		pct := col.MaxPercent
+		if pct > 0 {
+			if capped := int(float64(t.Width) * pct); capped < desired {
+				desired = capped
+			}
+		}
+		// Do NOT enforce col.Width here: that would cause overflow on narrow terminals.
+		fCols = append(fCols, fInfo{i, desired, pct})
+	}
+	if len(fCols) == 0 {
+		return widths
 	}
 
+	// If the sum of desired widths fits within avail, use them directly.
+	totalDesired := 0
+	for _, f := range fCols {
+		totalDesired += f.desired
+	}
+	if totalDesired <= avail {
+		for _, f := range fCols {
+			widths[f.idx] = f.desired
+		}
+		return widths
+	}
+
+	// Otherwise scale down proportionally using MaxPercent as weights.
+	totalPct := 0.0
+	for _, f := range fCols {
+		totalPct += f.pct
+	}
+	if totalPct == 0 {
+		// No MaxPercent set: distribute equally.
+		share := avail / len(fCols)
+		for _, f := range fCols {
+			widths[f.idx] = max(0, share)
+		}
+		return widths
+	}
+	remaining := avail
+	for j, f := range fCols {
+		var w int
+		if j == len(fCols)-1 {
+			w = remaining
+		} else {
+			w = int(float64(avail) * f.pct / totalPct)
+			remaining -= w
+		}
+		widths[f.idx] = max(0, w)
+	}
 	return widths
 }
 
@@ -256,11 +358,82 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 	return line
 }
 
+// renderExpandedRow renders the selected row as multiple lines, wrapping each
+// cell's full content within its column width so nothing is truncated.
+func (t TableView) renderExpandedRow(row Row, widths []int) string {
+	colLines := make([][]string, len(t.Columns))
+	maxLines := 1
+	for i := range t.Columns {
+		cell := ""
+		if i < len(row.Cells) {
+			cell = ansi.Strip(row.Cells[i])
+		}
+		wrapped := wrapText(cell, widths[i])
+		colLines[i] = wrapped
+		if len(wrapped) > maxLines {
+			maxLines = len(wrapped)
+		}
+	}
+
+	var sb strings.Builder
+	for lineIdx := 0; lineIdx < maxLines; lineIdx++ {
+		var parts []string
+		for i := range t.Columns {
+			cell := ""
+			if lineIdx < len(colLines[i]) {
+				cell = colLines[i][lineIdx]
+			}
+			parts = append(parts, padRight(cell, widths[i]))
+		}
+		line := strings.Join(parts, " ")
+		if lineIdx > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(StyleSelected.Width(t.Width).Render(line))
+	}
+	return sb.String()
+}
+
+// wrapText splits s into lines of at most width visible characters.
+// It works correctly with multibyte and wide (CJK) characters.
+func wrapText(s string, width int) []string {
+	if width <= 0 || s == "" {
+		return []string{""}
+	}
+	runes := []rune(s)
+	var lines []string
+	for len(runes) > 0 {
+		if lipgloss.Width(string(runes)) <= width {
+			lines = append(lines, string(runes))
+			break
+		}
+		// Greedily consume runes up to width visible chars.
+		lineW := 0
+		end := 0
+		for _, r := range runes {
+			rw := lipgloss.Width(string(r))
+			if lineW+rw > width {
+				break
+			}
+			lineW += rw
+			end++
+		}
+		if end == 0 {
+			end = 1 // force-include at least one rune to avoid infinite loop
+		}
+		lines = append(lines, string(runes[:end]))
+		runes = runes[end:]
+	}
+	return lines
+}
+
 func padRight(s string, n int) string {
 	visible := lipgloss.Width(s)
 	if visible > n {
 		if n > 1 {
-			return ansi.Truncate(s, n-1, "…")
+			truncated := ansi.Truncate(s, n-1, "…")
+			tw := lipgloss.Width(truncated)
+			return truncated + strings.Repeat(" ", max(n-tw, 0))
 		}
 		return ansi.Truncate(s, n, "")
 	}

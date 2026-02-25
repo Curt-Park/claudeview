@@ -27,6 +27,9 @@ func (c *CrumbsModel) Reset(items ...string) {
 	c.Items = items
 }
 
+// Height returns the number of terminal lines rendered by View.
+func (c CrumbsModel) Height() int { return 1 }
+
 // View renders the breadcrumb bar.
 func (c CrumbsModel) View() string {
 	if len(c.Items) == 0 {

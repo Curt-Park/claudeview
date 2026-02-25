@@ -95,11 +95,6 @@ func sendEsc(tm *teatest.TestModel) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 }
 
-// sendEnter sends the Enter key.
-func sendEnter(tm *teatest.TestModel) {
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-}
-
 // waitForOutput polls the test model output until condition is true or timeout.
 func waitForOutput(t *testing.T, tm *teatest.TestModel, condition func([]byte) bool) {
 	t.Helper()

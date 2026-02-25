@@ -17,7 +17,7 @@ type ToolsView struct {
 var toolColumnsBase = []ui.Column{
 	{Title: "TIME", Width: 10},
 	{Title: "TOOL", Width: 10},
-	{Title: "INPUT SUMMARY", Width: 30, Flex: true},
+	{Title: "INPUT SUMMARY", Width: 10, Flex: true, MaxPercent: 0.40},
 	{Title: "RESULT", Width: 16},
 	{Title: "DURATION", Width: 10},
 }
@@ -27,7 +27,7 @@ var toolColumnsFlat = []ui.Column{
 	{Title: "AGENT", Width: 10},
 	{Title: "TIME", Width: 10},
 	{Title: "TOOL", Width: 10},
-	{Title: "INPUT SUMMARY", Width: 30, Flex: true},
+	{Title: "INPUT SUMMARY", Width: 10, Flex: true, MaxPercent: 0.40},
 	{Title: "RESULT", Width: 16},
 	{Title: "DURATION", Width: 10},
 }

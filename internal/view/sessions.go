@@ -16,7 +16,7 @@ type SessionsView struct {
 
 var sessionColumnsBase = []ui.Column{
 	{Title: "NAME", Width: 10},
-	{Title: "MODEL", Width: 16, Flex: true},
+	{Title: "MODEL", Width: 16, Flex: true, MaxPercent: 0.30},
 	{Title: "STATUS", Width: 12},
 	{Title: "AGENTS", Width: 6},
 	{Title: "TOOLS", Width: 6},
@@ -28,7 +28,7 @@ var sessionColumnsBase = []ui.Column{
 var sessionColumnsFlat = []ui.Column{
 	{Title: "PROJECT", Width: 20},
 	{Title: "NAME", Width: 10},
-	{Title: "MODEL", Width: 16, Flex: true},
+	{Title: "MODEL", Width: 16, Flex: true, MaxPercent: 0.30},
 	{Title: "STATUS", Width: 12},
 	{Title: "AGENTS", Width: 6},
 	{Title: "TOOLS", Width: 6},

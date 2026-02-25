@@ -34,13 +34,13 @@ func TestInitialInfoPanelDashes(t *testing.T) {
 	})
 }
 
-func TestInitialShortcutZeroAlwaysShown(t *testing.T) {
+func TestInitialMenuShown(t *testing.T) {
 	dp := &mockDP{}
 	tm := newTestModel(t, model.ResourceProjects, dp, projectRows(2))
 	t.Cleanup(func() { _ = tm.Quit() })
 
 	waitForOutput(t, tm, func(bts []byte) bool {
 		out := string(bts)
-		return strings.Contains(out, "<0>") && strings.Contains(out, "all")
+		return strings.Contains(out, "<enter>") && strings.Contains(out, "<d>")
 	})
 }

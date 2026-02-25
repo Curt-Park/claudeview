@@ -10,77 +10,67 @@ claudeview is a k9s-style terminal dashboard for Claude Code sessions. The UI co
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ INFO PANEL (7 rows)                                                          │
-│  left column (info)     │  center column (keybindings)  │  right (shortcuts) │
+│ INFO PANEL (5 rows min)                                                      │
+│  col0: info   │  col1: nav cmds   │  col2: util cmds  │  col3: shortcuts    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ TITLE BAR (1 row): ──── Projects(all)[3] ────                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  CONTENT AREA  (Height - 10 rows)                                           │
-│  [ Table | Log | Detail | YAML | Help ]                                     │
+│  CONTENT AREA  (dynamic height)                                             │
+│  [ Table | Log | Detail | YAML ]                                            │
 │                                                                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ BREADCRUMBS (1 row): projects > sessions > agents                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ STATUS BAR (1 row): [flash | command | filter]                              │
+│ STATUS BAR (1 row): [flash | filter]                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Chrome rows**: 7 (info) + 1 (title) + 1 (crumbs) + 1 (status) = **10 rows**
-**Content height**: `terminal_height - 10` (min 5)
+**Chrome rows**: 5+ (info) + 1 (title) + 1 (crumbs) + 1 (status) = **8+ rows**
+**Content height**: `terminal_height - chrome` (min 5), computed dynamically
 
 ---
 
-## Info Panel (3 Columns)
+## Info Panel (4 Columns)
 
-The info panel occupies 7 rows and renders three columns side-by-side:
+The info panel occupies 5+ rows and renders four columns side-by-side:
 
 ```
-Project:      <value>          <enter> view      <0> all
-Session:      <value>          <l> logs          <1> project-alpha
-User:         <value>          <d> detail        <2> project-beta
-Claude Code:  <value>          </> filter        <3> project-gamma
-claudeview:   <value>          <:> cmd
-CPU:          <value>%         <?> help
-MEM:          <value> MiB      <q> quit
+Project:      <full-width path value>
+Session:      <value>   <j/k> up/down    </> filter    <t> tasks
+User:         <value>   <g/G> top/bot    <l> logs      <p> plugins
+Claude Code:  <value>   <ctrl+u/d> page  <d> detail    <m> mcps
+claudeview:   <value>   <enter> drill    <esc> back
 ```
+
+(Exact items depend on the current view mode and resource type.)
 
 ### Column Widths
-- **Left (info)**: 46 visible chars (14 label + 32 value)
-- **Center (keybindings)**: items from current `MenuItem` list (TableMenuItems by default)
-- **Right (shortcuts)**: `0-9` parent shortcuts, one per row (max 7 shown, matching info rows)
+- **Col 0 (info)**: 46 visible chars (14 label + 32 value)
+- **Col 1 (nav cmds)**: navigation commands (j/k, g/G, ctrl+u/d, enter)
+- **Col 2 (util cmds)**: utility commands (filter, follow, detail, logs, back)
+- **Col 3 (shortcuts)**: fixed jump shortcuts (t/p/m)
+
+The panel height expands dynamically: `max(5, 1 + max(navCount, utilCount))`.
 
 ### Context-Dependent Values
-
-Values in the left column follow context rules based on navigation depth:
 
 | Field        | Projects level | Sessions level       | Agents+ level          |
 |--------------|----------------|----------------------|------------------------|
 | Project      | `--`           | selected project     | selected project       |
 | Session      | `--`           | `--`                 | selected session (8ch) |
-| User         | `--`           | OS username          | OS username            |
-| Claude Code  | `--`           | Claude CLI version   | Claude CLI version     |
+| User         | OS username    | OS username          | OS username            |
+| Claude Code  | CLI version    | CLI version          | CLI version            |
 | claudeview   | app version    | app version          | app version            |
-| CPU          | `0%`           | session process CPU  | session process CPU    |
-| MEM          | `0 MiB`        | session process MEM  | session process MEM    |
 
-**Rule**: At the `projects` top level, Project/Session/User/Claude Code all show `--`. Values are progressively filled as the user drills down into the hierarchy.
+**Rule**: Project shows `--` at projects level; Session shows `--` until agents level.
 
-### Parent Shortcuts (Column 3)
+### Jump Shortcuts (Col 3)
 
-```
-<0>  all          — clear filter, show all items
-<1>  project-alpha — (active) filter by this parent
-<2>  project-beta  — filter by this parent
-...
-<9>  last-parent   — filter by 9th parent
-```
-
-- **`0`** always means "all" (clear filter)
-- **`1-9`** select from `ParentShortcuts` list
-- Active parents are sorted first, then by item count descending
-- Only shown when current resource has a meaningful parent context (sessions→project, agents→session, tools→session+agent, tasks→session)
-- At most 9 shortcuts displayed (rows 1-7 in panel, overflow not shown)
+Fixed shortcuts always visible in the right column:
+- `<t>` tasks — jump to tasks view
+- `<p>` plugins — jump to plugins view
+- `<m>` mcps — jump to MCP servers view
 
 ---
 
@@ -177,7 +167,7 @@ Values in the left column follow context rules based on navigation depth:
 
 ## View Modes
 
-The content area renders one of five modes:
+The content area renders one of four modes:
 
 ### 1. Table (default)
 - Scrollable table with column headers
@@ -186,34 +176,26 @@ The content area renders one of five modes:
 - `ctrl+u/d` or `pgup/pgdn`: page up/down
 - `enter`: drill down
 - Filter applied: rows filtered by substring match (case-insensitive, all cells)
+- Selected row expands to show full multi-line content; collapses when cursor moves away
 
 ### 2. Log (`l` key)
 - Scrollable transcript log view for sessions/agents
 - Shows turns with role, timestamp, thinking, text, tool calls
-- `h/j/k/l`: scroll (horizontal/vertical)
-- `g/G`: top/bottom
+- `j/k`: scroll up/down; `g/G`: top/bottom; `ctrl+u/d`: page up/down
 - `f`: toggle follow mode (auto-scroll to newest)
-- `/`: search within log
+- `/`: filter log lines
 - `esc`: return to Table
 
 ### 3. Detail (`d` key)
 - Resource-specific detail panel
 - Scrollable multi-line text
-- `h/j/k/l`: scroll
-- `g/G`: top/bottom
+- `j/k`: scroll; `g/G`: top/bottom; `ctrl+u/d`: page up/down
 - `esc`: return to Table
 
 ### 4. YAML (`y` key)
 - JSON dump of selected row's data object
 - Same navigation as Detail
 - `esc`: return to Table
-
-### 5. Help (`?` key) — Full Screen
-- Full-screen help overlay replacing content area
-- Shows complete keybinding reference
-- Shows info panel context rules
-- Scrollable with `j/k`
-- `esc`: return to previous mode (Table)
 
 ---
 
@@ -223,9 +205,10 @@ The content area renders one of five modes:
 | Key      | Action                            |
 |----------|-----------------------------------|
 | `ctrl+c` | quit immediately                  |
-| `:`      | enter command mode                |
 | `/`      | enter filter mode                 |
-| `?`      | show full-screen help             |
+| `t`      | jump to tasks                     |
+| `p`      | jump to plugins                   |
+| `m`      | jump to MCPs                      |
 
 ### Table Mode
 | Key            | Action                                  |
@@ -245,38 +228,30 @@ The content area renders one of five modes:
 | `esc` / `q`    | navigate back (or back to projects)     |
 
 ### Log Mode
-| Key       | Action              |
-|-----------|---------------------|
-| `j` / `↓` | scroll down         |
-| `k` / `↑` | scroll up           |
-| `h` / `←` | scroll left         |
-| `l` / `→` | scroll right        |
-| `g`       | go to top           |
-| `G`       | go to bottom        |
-| `f`       | toggle follow mode  |
-| `/`       | search within log   |
-| `esc`     | return to table     |
+| Key              | Action              |
+|------------------|---------------------|
+| `j` / `↓`        | scroll down         |
+| `k` / `↑`        | scroll up           |
+| `h` / `←`        | scroll left         |
+| `l` / `→`        | scroll right        |
+| `g`              | go to top           |
+| `G`              | go to bottom        |
+| `ctrl+u` / `pgup`| page up             |
+| `ctrl+d` / `pgdn`| page down           |
+| `f`              | toggle follow mode  |
+| `/`              | filter log lines    |
+| `esc`            | return to table     |
 
 ### Detail / YAML Mode
-| Key       | Action              |
-|-----------|---------------------|
-| `j` / `↓` | scroll down         |
-| `k` / `↑` | scroll up           |
-| `h` / `←` | scroll left         |
-| `l` / `→` | scroll right        |
-| `g`       | go to top           |
-| `G`       | go to bottom        |
-| `esc`     | return to table     |
-
-### Command Mode (`:`)
-| Key        | Action                            |
-|------------|-----------------------------------|
-| typing     | input resource name               |
-| `tab`      | accept autocomplete suggestion    |
-| `enter`    | execute command (switch resource) |
-| `esc`      | cancel                            |
-
-Available resources: `projects`, `sessions`, `agents`, `tools`, `tasks`, `plugins`, `mcp`
+| Key              | Action              |
+|------------------|---------------------|
+| `j` / `↓`        | scroll down         |
+| `k` / `↑`        | scroll up           |
+| `g`              | go to top           |
+| `G`              | go to bottom        |
+| `ctrl+u` / `pgup`| page up             |
+| `ctrl+d` / `pgdn`| page down           |
+| `esc`            | return to table     |
 
 ### Filter Mode (`/`)
 | Key        | Action                            |
@@ -359,7 +334,6 @@ Each behavior maps to a BDD test in `internal/ui/bdd/`:
 | `:command` resource switch         | `command_test.go`      | `TestCommand`        |
 | `/` filter                         | `filter_test.go`       | `TestFilter`         |
 | d/l/y/esc view mode switch         | `viewmode_test.go`     | `TestViewMode`       |
-| `?` full-screen help               | `help_test.go`         | `TestHelp`           |
 | 0-9 number shortcuts               | `shortcuts_test.go`    | `TestShortcut`       |
 | Info panel context values          | `info_context_test.go` | `TestInfoContext`    |
 | Parent columns (flat access)       | `parent_columns_test.go` | `TestParentCols`   |

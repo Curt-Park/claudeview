@@ -45,6 +45,9 @@ func (f *FilterModel) Matches(s string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(f.Input))
 }
 
+// Height returns the number of terminal lines rendered by View.
+func (f FilterModel) Height() int { return 1 }
+
 // View renders the filter bar.
 func (f FilterModel) View() string {
 	if !f.Active {

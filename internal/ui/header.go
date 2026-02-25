@@ -1,18 +1,10 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
-
-// ParentShortcut is a numbered parent context entry shown in the info panel right column.
-type ParentShortcut struct {
-	Number int    // 0-9 (0 = all)
-	Label  string // display name, e.g. "my-project"
-	Active bool   // true if this parent is currently selected
-}
 
 // InfoModel holds the top info panel data (k9s-style left column + right menu).
 type InfoModel struct {
@@ -21,19 +13,27 @@ type InfoModel struct {
 	User          string // OS username
 	ClaudeVersion string // Claude Code binary version
 	AppVersion    string // claudeview binary version
-	CPUPercent    float64
-	MemMiB        uint64
 	Width         int
-
-	// ParentShortcuts is the list of numbered parent shortcuts (1-9).
-	// Index 0 = shortcut 1, index 1 = shortcut 2, etc.
-	ParentShortcuts []ParentShortcut
 }
 
-// ViewWithMenu renders the 7-row info panel alongside key binding hints (3 columns).
-func (info InfoModel) ViewWithMenu(items []MenuItem) string {
+// Height returns the number of terminal lines rendered by ViewWithMenu.
+// navCount and utilCount are the number of items in each menu column.
+// Minimum is 5 (1 project row + 4 data rows); expands if more items are needed.
+func (info InfoModel) Height(navCount, utilCount int) int {
+	return max(5, 1+max(navCount, utilCount))
+}
+
+// ViewWithMenu renders the info panel with a 4-column layout:
+//
+//	Col 0 (leftW chars):    info labels + values
+//	Col 1 (menuColW chars): nav menu items (movement commands)
+//	Col 2 (menuColW chars): util menu items (filter/follow/detail/back)
+//	Col 3 (rightW chars):   t/p/m jump shortcuts
+//
+// Row 0 (Project) spans the full width. Remaining rows use the 4-column layout.
+func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 	const labelW = 14 // visible chars reserved for label column
-	const leftW = 46  // total visible chars for the left column (label + value)
+	const leftW = 32  // total visible chars for the left info column
 
 	dim := StyleDim
 
@@ -44,60 +44,113 @@ func (info InfoModel) ViewWithMenu(items []MenuItem) string {
 		return s
 	}
 
-	leftRows := []struct{ label, value string }{
-		{"Project:", truncateLeft(info.Project, leftW-labelW-1)},
+	// --- Row 0: Project — full width ---
+	projectLabel := StyleKey.Render("Project:")
+	projectLabelVis := lipgloss.Width(projectLabel)
+	projectLabelPad := strings.Repeat(" ", max(labelW-projectLabelVis, 1))
+	availW := max(info.Width-labelW-1, 10)
+	projectLine := projectLabel + projectLabelPad + truncateLeft(info.Project, availW)
+
+	// --- Data rows ---
+	otherRows := []struct{ label, value string }{
 		{"Session:", val(info.Session)},
 		{"User:", val(info.User)},
 		{"Claude Code:", val(info.ClaudeVersion)},
 		{"claudeview:", val(info.AppVersion)},
-		{"CPU:", fmt.Sprintf("%.0f%%", info.CPUPercent)},
-		{"MEM:", fmt.Sprintf("%d MiB", info.MemMiB)},
 	}
 
-	// Build shortcut entries: row 0 is always "0: all", rows 1+ are ParentShortcuts
-	shortcuts := make([]string, len(leftRows))
-	shortcuts[0] = StyleKey.Render("<0>") + StyleKeyDesc.Render(" all")
-	for i, sc := range info.ParentShortcuts {
-		row := i + 1
-		if row >= len(shortcuts) {
-			break
+	// Within each column, pad keys to the column's max key width so descriptions align.
+	maxNavKeyW := 0
+	for _, item := range navItems {
+		if w := lipgloss.Width(StyleKey.Render("<" + item.Key + ">")); w > maxNavKeyW {
+			maxNavKeyW = w
 		}
-		label := sc.Label
-		if sc.Active {
-			label = StyleActive.Render(label)
+	}
+	maxUtilKeyW := 0
+	for _, item := range utilItems {
+		if w := lipgloss.Width(StyleKey.Render("<" + item.Key + ">")); w > maxUtilKeyW {
+			maxUtilKeyW = w
+		}
+	}
+
+	// menuColW = max aligned item width across both columns, plus trailing gap.
+	menuColW := 0
+	for _, item := range navItems {
+		w := maxNavKeyW + 1 + lipgloss.Width(StyleKeyDesc.Render(item.Desc))
+		if w > menuColW {
+			menuColW = w
+		}
+	}
+	for _, item := range utilItems {
+		w := maxUtilKeyW + 1 + lipgloss.Width(StyleKeyDesc.Render(item.Desc))
+		if w > menuColW {
+			menuColW = w
+		}
+	}
+	menuColW += 2 // trailing gap between menu columns
+
+	// Right column: t/p/m shortcuts.
+	jumpHints := []string{
+		StyleKey.Render("<t>") + StyleKeyDesc.Render(" tasks"),
+		StyleKey.Render("<p>") + StyleKeyDesc.Render(" plugins"),
+		StyleKey.Render("<m>") + StyleKeyDesc.Render(" mcps"),
+	}
+	rightColW := 0
+	for _, h := range jumpHints {
+		if w := lipgloss.Width(h); w > rightColW {
+			rightColW = w
+		}
+	}
+
+	// Total rows to render (at least len(otherRows)).
+	totalRows := max(len(otherRows), max(len(navItems), len(utilItems)))
+
+	lines := []string{projectLine}
+	for i := range totalRows {
+		var leftPart, leftPadding string
+		if i < len(otherRows) {
+			row := otherRows[i]
+			styledLabel := StyleKey.Render(row.label)
+			labelVis := lipgloss.Width(styledLabel)
+			labelPad := strings.Repeat(" ", max(labelW-labelVis, 1))
+			leftPart = styledLabel + labelPad + row.value
+			leftVis := lipgloss.Width(leftPart)
+			// Always place nav at column leftW+2 so all rows align.
+			leftPadding = strings.Repeat(" ", max(leftW+2-leftVis, 1))
 		} else {
-			label = StyleKeyDesc.Render(label)
-		}
-		shortcuts[row] = StyleKey.Render(fmt.Sprintf("<%d>", sc.Number)) + " " + label
-	}
-
-	var lines []string
-	for i, row := range leftRows {
-		styledLabel := StyleKey.Render(row.label)
-		labelVis := lipgloss.Width(styledLabel)
-		labelPad := strings.Repeat(" ", max(labelW-labelVis, 1))
-
-		leftPart := styledLabel + labelPad + row.value
-		leftVis := lipgloss.Width(leftPart)
-		leftPadding := strings.Repeat(" ", max(leftW-leftVis, 2))
-
-		// Center column: keybinding hint
-		center := ""
-		if i < len(items) {
-			item := items[i]
-			center = StyleKey.Render("<"+item.Key+">") + StyleKeyDesc.Render(" "+item.Desc)
+			leftPart = ""
+			leftPadding = strings.Repeat(" ", leftW+2)
 		}
 
-		// Right column: parent shortcut
+		// Nav column (col 1) — key padded to maxNavKeyW so descriptions align.
+		nav := ""
+		if i < len(navItems) {
+			item := navItems[i]
+			keyStr := StyleKey.Render("<" + item.Key + ">")
+			keyPad := strings.Repeat(" ", max(maxNavKeyW-lipgloss.Width(keyStr), 0))
+			nav = keyStr + keyPad + " " + StyleKeyDesc.Render(item.Desc)
+		}
+		navVis := lipgloss.Width(nav)
+		navPad := strings.Repeat(" ", max(menuColW-navVis, 2))
+
+		// Util column (col 2) — key padded to maxUtilKeyW so descriptions align.
+		util := ""
+		if i < len(utilItems) {
+			item := utilItems[i]
+			keyStr := StyleKey.Render("<" + item.Key + ">")
+			keyPad := strings.Repeat(" ", max(maxUtilKeyW-lipgloss.Width(keyStr), 0))
+			util = keyStr + keyPad + " " + StyleKeyDesc.Render(item.Desc)
+		}
+		utilVis := lipgloss.Width(util)
+		utilPad := strings.Repeat(" ", max(menuColW-utilVis, 2))
+
+		// Right column (col 3): jump hints
 		right := ""
-		if i < len(shortcuts) && shortcuts[i] != "" {
-			centerVis := lipgloss.Width(center)
-			const centerW = 22
-			centerPad := strings.Repeat(" ", max(centerW-centerVis, 2))
-			right = centerPad + shortcuts[i]
+		if i < len(jumpHints) {
+			right = jumpHints[i]
 		}
 
-		lines = append(lines, leftPart+leftPadding+center+right)
+		lines = append(lines, leftPart+leftPadding+nav+navPad+util+utilPad+right)
 	}
 
 	return strings.Join(lines, "\n")

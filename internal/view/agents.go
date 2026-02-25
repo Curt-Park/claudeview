@@ -15,20 +15,20 @@ type AgentsView struct {
 }
 
 var agentColumnsBase = []ui.Column{
-	{Title: "NAME", Width: 26, Flex: true},
-	{Title: "TYPE", Width: 12},
-	{Title: "STATUS", Width: 14},
+	{Title: "NAME", Width: 10, Flex: true, MaxPercent: 0.20},
+	{Title: "TYPE", Width: 16},
+	{Title: "STATUS", Width: 10},
 	{Title: "TOOLS", Width: 6},
-	{Title: "LAST ACTIVITY", Width: 30},
+	{Title: "LAST ACTIVITY", Width: 20, Flex: true, MaxPercent: 0.35},
 }
 
 var agentColumnsFlat = []ui.Column{
 	{Title: "SESSION", Width: 12},
-	{Title: "NAME", Width: 26, Flex: true},
-	{Title: "TYPE", Width: 12},
-	{Title: "STATUS", Width: 14},
+	{Title: "NAME", Width: 10, Flex: true, MaxPercent: 0.20},
+	{Title: "TYPE", Width: 16},
+	{Title: "STATUS", Width: 10},
 	{Title: "TOOLS", Width: 6},
-	{Title: "LAST ACTIVITY", Width: 30},
+	{Title: "LAST ACTIVITY", Width: 20, Flex: true, MaxPercent: 0.35},
 }
 
 // NewAgentsView creates an agents view.
