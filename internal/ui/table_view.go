@@ -187,18 +187,33 @@ func (t TableView) View() string {
 		offset = max(0, len(rows)-1)
 	}
 
-	for i := offset; i < len(rows) && i < offset+visible; i++ {
+	linesUsed := 0
+	for i := offset; i < len(rows) && linesUsed < visible; i++ {
 		row := rows[i]
-		line := t.renderRow(row, cols, i == selected)
-		sb.WriteString(line)
-		sb.WriteString("\n")
+		if i == selected {
+			expanded := t.renderExpandedRow(row, cols)
+			expandedLines := strings.Split(expanded, "\n")
+			remaining := visible - linesUsed
+			if len(expandedLines) > remaining {
+				expandedLines = expandedLines[:remaining]
+			}
+			for _, l := range expandedLines {
+				sb.WriteString(l)
+				sb.WriteString("\n")
+				linesUsed++
+			}
+		} else {
+			sb.WriteString(t.renderRow(row, cols, false))
+			sb.WriteString("\n")
+			linesUsed++
+		}
 	}
 
-	// Fill empty rows
-	rendered := min(len(rows)-offset, visible)
-	for i := rendered; i < visible; i++ {
+	// Fill empty lines
+	for linesUsed < visible {
 		sb.WriteString(strings.Repeat(" ", t.Width))
 		sb.WriteString("\n")
+		linesUsed++
 	}
 
 	return sb.String()
@@ -315,6 +330,75 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 		return StyleSelected.Width(t.Width).Render(line)
 	}
 	return line
+}
+
+// renderExpandedRow renders the selected row as multiple lines, wrapping each
+// cell's full content within its column width so nothing is truncated.
+func (t TableView) renderExpandedRow(row Row, widths []int) string {
+	colLines := make([][]string, len(t.Columns))
+	maxLines := 1
+	for i := range t.Columns {
+		cell := ""
+		if i < len(row.Cells) {
+			cell = ansi.Strip(row.Cells[i])
+		}
+		wrapped := wrapText(cell, widths[i])
+		colLines[i] = wrapped
+		if len(wrapped) > maxLines {
+			maxLines = len(wrapped)
+		}
+	}
+
+	var sb strings.Builder
+	for lineIdx := 0; lineIdx < maxLines; lineIdx++ {
+		var parts []string
+		for i := range t.Columns {
+			cell := ""
+			if lineIdx < len(colLines[i]) {
+				cell = colLines[i][lineIdx]
+			}
+			parts = append(parts, padRight(cell, widths[i]))
+		}
+		line := strings.Join(parts, " ")
+		if lineIdx > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(StyleSelected.Width(t.Width).Render(line))
+	}
+	return sb.String()
+}
+
+// wrapText splits s into lines of at most width visible characters.
+// It works correctly with multibyte and wide (CJK) characters.
+func wrapText(s string, width int) []string {
+	if width <= 0 || s == "" {
+		return []string{""}
+	}
+	runes := []rune(s)
+	var lines []string
+	for len(runes) > 0 {
+		if lipgloss.Width(string(runes)) <= width {
+			lines = append(lines, string(runes))
+			break
+		}
+		// Greedily consume runes up to width visible chars.
+		lineW := 0
+		end := 0
+		for _, r := range runes {
+			rw := lipgloss.Width(string(r))
+			if lineW+rw > width {
+				break
+			}
+			lineW += rw
+			end++
+		}
+		if end == 0 {
+			end = 1 // force-include at least one rune to avoid infinite loop
+		}
+		lines = append(lines, string(runes[:end]))
+		runes = runes[end:]
+	}
+	return lines
 }
 
 func padRight(s string, n int) string {
