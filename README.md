@@ -8,10 +8,8 @@ Terminal dashboard for Claude Code. Browse sessions, agents, tool calls, tasks, 
 - **Full session hierarchy** — projects, sessions, agents, tool calls, tasks, plugins, and MCP servers in a single view
 - **Live updates** — transcripts stream in as Claude writes them; no polling delay
 - **Agent tree** — main agent and subagents rendered as a navigable tree with type, status, and last activity
-- **Tool call history** — every Read, Write, Bash, and MCP call with timestamp, input summary, result, and duration
 - **In-place log view** — read the raw transcript of any session or agent without leaving the dashboard
 - **Detail and YAML views** — inspect any row's full data as structured text or raw JSON
-- **Flat and drill-down modes** — navigate hierarchically (projects → sessions → agents → tools) or jump directly to any resource type across all projects
 
 For the full UI specification, keybindings, and column definitions see [`docs/ui-spec.md`](docs/ui-spec.md).
 
@@ -32,10 +30,8 @@ make install
 ## Usage
 
 ```bash
-claudeview                        # Start on projects view
-claudeview --demo                 # Run with synthetic demo data
-claudeview --resource sessions    # Start on sessions view
-claudeview --project <hash>       # Filter to a specific project
+claudeview         # Start on projects view
+claudeview --demo  # Run with synthetic demo data
 ```
 
 ## Data Sources

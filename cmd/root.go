@@ -24,10 +24,8 @@ import (
 var AppVersion string
 
 var (
-	demoMode     bool
-	projectFlag  string
-	resourceFlag string
-	renderOnce   bool
+	demoMode   bool
+	renderOnce bool
 )
 
 // Execute runs the root command.
@@ -51,26 +49,18 @@ Use : to switch resource types (sessions, agents, tools, tasks, plugins, mcp).`,
 
 func init() {
 	rootCmd.Flags().BoolVar(&demoMode, "demo", false, "Run with synthetic demo data")
-	rootCmd.Flags().StringVar(&projectFlag, "project", "", "Filter to a specific project hash")
-	rootCmd.Flags().StringVar(&resourceFlag, "resource", "projects", "Initial resource to display (projects|sessions|agents|tools|tasks|plugins|mcp)")
 	rootCmd.Flags().BoolVar(&renderOnce, "render-once", false, "Render one frame to stdout and exit (for debugging)")
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	initialResource := model.ResourceType(resourceFlag)
-	if _, ok := model.ResolveResource(resourceFlag); !ok {
-		initialResource = model.ResourceProjects
-	}
-
 	var dp ui.DataProvider
 	if demoMode {
 		dp = newDemoProvider()
 	} else {
-		claudeDir := config.ClaudeDir()
-		dp = newLiveProvider(claudeDir, projectFlag)
+		dp = newLiveProvider(config.ClaudeDir())
 	}
 
-	appModel := ui.NewAppModel(dp, initialResource)
+	appModel := ui.NewAppModel(dp, model.ResourceProjects)
 
 	// Create top-level model that wraps AppModel with actual view data
 	root := newRootModel(appModel, dp)
@@ -474,16 +464,12 @@ func (d *demoDataProvider) GetMCPServers() []*model.MCPServer { return d.mcpServ
 
 type liveDataProvider struct {
 	claudeDir      string
-	projectFilter  string
 	currentProject string
 	currentSession string
 }
 
-func newLiveProvider(claudeDir, projectFilter string) ui.DataProvider {
-	return &liveDataProvider{
-		claudeDir:     claudeDir,
-		projectFilter: projectFilter,
-	}
+func newLiveProvider(claudeDir string) ui.DataProvider {
+	return &liveDataProvider{claudeDir: claudeDir}
 }
 
 func (l *liveDataProvider) GetProjects() []*model.Project {
@@ -493,9 +479,6 @@ func (l *liveDataProvider) GetProjects() []*model.Project {
 	}
 	var projects []*model.Project
 	for _, info := range infos {
-		if l.projectFilter != "" && !strings.Contains(info.Hash, l.projectFilter) {
-			continue
-		}
 		p := &model.Project{
 			Hash:     info.Hash,
 			Path:     info.Path,
@@ -522,9 +505,6 @@ func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
 
 	var sessions []*model.Session
 	for _, info := range infos {
-		if l.projectFilter != "" && !strings.Contains(info.Hash, l.projectFilter) {
-			continue
-		}
 		if l.currentProject != "" && info.Hash != l.currentProject {
 			continue
 		}
