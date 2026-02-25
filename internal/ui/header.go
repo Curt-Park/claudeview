@@ -16,6 +16,13 @@ type InfoModel struct {
 	Width         int
 }
 
+// Height returns the number of terminal lines rendered by ViewWithMenu.
+// This must stay in sync with the number of lines returned by ViewWithMenu.
+func (info InfoModel) Height() int {
+	// 1 project row + 4 data rows (Session, User, Claude Code, claudeview)
+	return 5
+}
+
 // ViewWithMenu renders the info panel alongside key binding hints.
 // Row 0 (Project) spans the full width. Rows 1-4 use the standard 3-column layout.
 func (info InfoModel) ViewWithMenu(items []MenuItem) string {

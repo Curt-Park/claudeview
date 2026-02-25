@@ -404,8 +404,13 @@ func (m *AppModel) updateSizes() {
 }
 
 func (m AppModel) contentHeight() int {
-	// 5 info rows + 1 title bar + 1 crumbs + 1 status = 8 chrome rows
-	h := m.Height - 8
+	// Sum chrome heights dynamically so adding/removing UI rows only
+	// requires updating the relevant component's Height() method.
+	chrome := m.Info.Height() + // info panel (top)
+		1 + // title bar (renderTitleBar → always 1 line)
+		m.Crumbs.Height() + // breadcrumb bar
+		m.Flash.Height() // status bar (Flash and Filter render the same 1 line)
+	h := m.Height - chrome
 	if h < 5 {
 		return 5
 	}
