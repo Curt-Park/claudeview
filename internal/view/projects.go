@@ -12,7 +12,7 @@ var projectColumns = []ui.Column{
 	{Title: "NAME", Width: 20, Flex: true, MaxPercent: 0.55},
 	{Title: "SESSIONS", Width: 8},
 	{Title: "ACTIVE", Width: 6},
-	{Title: "LAST SEEN", Width: 10},
+	{Title: "LAST ACTIVE", Width: 11},
 }
 
 // NewProjectsView creates a projects view.
