@@ -24,13 +24,14 @@ type Row struct {
 
 // TableView is a generic scrollable table component.
 type TableView struct {
-	Columns  []Column
-	Rows     []Row
-	Selected int
-	Offset   int // scroll offset
-	Width    int
-	Height   int
-	Filter   string
+	Columns      []Column
+	Rows         []Row
+	Selected     int
+	Offset       int // scroll offset
+	ExpandOffset int // lines of expanded selected row scrolled off the top
+	Width        int
+	Height       int
+	Filter       string
 }
 
 // NewTableView creates a new table view.
@@ -45,6 +46,7 @@ func NewTableView(cols []Column, width, height int) TableView {
 // SetRows sets the table rows and clamps Selected to the filtered set.
 func (t *TableView) SetRows(rows []Row) {
 	t.Rows = rows
+	t.ExpandOffset = 0
 	n := t.FilteredCount()
 	if n == 0 {
 		t.Selected = 0
@@ -63,7 +65,13 @@ func (t *TableView) SelectedRow() *Row {
 }
 
 // MoveUp moves the selection up within the filtered set.
+// If the selected row's expanded content is partially scrolled (ExpandOffset > 0),
+// it scrolls back up within the expansion before moving to the previous row.
 func (t *TableView) MoveUp() {
+	if t.ExpandOffset > 0 {
+		t.ExpandOffset--
+		return
+	}
 	if t.Selected > 0 {
 		t.Selected--
 	}
@@ -71,7 +79,19 @@ func (t *TableView) MoveUp() {
 }
 
 // MoveDown moves the selection down within the filtered set.
+// If the selected row's expanded content overflows the viewport, it scrolls
+// through the hidden lines one by one before advancing to the next row.
 func (t *TableView) MoveDown() {
+	rows := t.filteredRows()
+	if t.Selected < len(rows) {
+		cols := t.calculateWidths()
+		allLines := strings.Split(t.renderExpandedRow(rows[t.Selected], cols), "\n")
+		if t.ExpandOffset < max(0, len(allLines)-t.dataRows()) {
+			t.ExpandOffset++
+			return
+		}
+	}
+	t.ExpandOffset = 0
 	if t.Selected < t.FilteredCount()-1 {
 		t.Selected++
 	}
@@ -82,6 +102,7 @@ func (t *TableView) MoveDown() {
 func (t *TableView) GotoTop() {
 	t.Selected = 0
 	t.Offset = 0
+	t.ExpandOffset = 0
 }
 
 // GotoBottom moves to the last row of the filtered set.
@@ -91,6 +112,7 @@ func (t *TableView) GotoBottom() {
 		return
 	}
 	t.Selected = n - 1
+	t.ExpandOffset = 0
 	t.ensureVisible()
 }
 
@@ -103,6 +125,7 @@ func (t *TableView) dataRows() int {
 func (t *TableView) PageUp() {
 	half := max(1, t.dataRows()/2)
 	t.Selected = max(0, t.Selected-half)
+	t.ExpandOffset = 0
 	t.ensureVisible()
 }
 
@@ -110,6 +133,7 @@ func (t *TableView) PageUp() {
 func (t *TableView) PageDown() {
 	half := max(1, t.dataRows()/2)
 	t.Selected = min(t.FilteredCount()-1, t.Selected+half)
+	t.ExpandOffset = 0
 	t.ensureVisible()
 }
 
@@ -203,15 +227,17 @@ func (t TableView) View() string {
 	}
 
 	// Pre-render the expanded (selected) row so we know its line count.
-	// If it doesn't fit at the current scroll position, nudge offset up
-	// so the full expansion is visible — without mutating t.Offset.
+	// Nudge offset up to maximise space for the expansion, then apply
+	// ExpandOffset to slide the visible window within the expanded content.
 	var expandedLines []string
 	if selected >= offset && selected < len(rows) {
-		expandedLines = strings.Split(t.renderExpandedRow(rows[selected], cols), "\n")
+		allExpLines := strings.Split(t.renderExpandedRow(rows[selected], cols), "\n")
 		linesBeforeSel := selected - offset
-		if linesBeforeSel+len(expandedLines) > visible {
-			offset = min(selected, max(0, selected-(visible-len(expandedLines))))
+		if linesBeforeSel+len(allExpLines) > visible {
+			offset = min(selected, max(0, selected-(visible-len(allExpLines))))
 		}
+		start := min(t.ExpandOffset, len(allExpLines))
+		expandedLines = allExpLines[start:]
 	}
 
 	linesUsed := 0

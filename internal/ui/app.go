@@ -200,12 +200,14 @@ func (m AppModel) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Filter.Backspace()
 		m.Table.Filter = m.Filter.Input
 		m.Table.Selected = 0
+		m.Table.ExpandOffset = 0
 		m.Log.Filter = m.Filter.Input
 	default:
 		if len(msg.Runes) == 1 {
 			m.Filter.AddChar(msg.Runes[0])
 			m.Table.Filter = m.Filter.Input
 			m.Table.Selected = 0
+			m.Table.ExpandOffset = 0
 			m.Log.Filter = m.Filter.Input
 		}
 	}
