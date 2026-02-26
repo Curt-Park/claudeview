@@ -53,9 +53,22 @@ func (d *DetailView) visibleLines() int {
 	return v
 }
 
+// getDisplayLines returns the content lines wrapped to the current width.
+func (d DetailView) getDisplayLines() []string {
+	if d.Width <= 0 {
+		return d.Lines
+	}
+	var out []string
+	for _, line := range d.Lines {
+		out = append(out, wrapText(line, d.Width)...)
+	}
+	return out
+}
+
 // ScrollDown scrolls down.
 func (d *DetailView) ScrollDown() {
-	maxOff := max(0, len(d.Lines)-d.visibleLines())
+	dl := d.getDisplayLines()
+	maxOff := max(0, len(dl)-d.visibleLines())
 	if d.Offset < maxOff {
 		d.Offset++
 	}
@@ -68,7 +81,8 @@ func (d *DetailView) GotoTop() {
 
 // GotoBottom scrolls to bottom.
 func (d *DetailView) GotoBottom() {
-	d.Offset = max(0, len(d.Lines)-d.visibleLines())
+	dl := d.getDisplayLines()
+	d.Offset = max(0, len(dl)-d.visibleLines())
 }
 
 // PageUp scrolls up by half a page.
@@ -80,7 +94,8 @@ func (d *DetailView) PageUp() {
 // PageDown scrolls down by half a page.
 func (d *DetailView) PageDown() {
 	half := max(1, d.visibleLines()/2)
-	maxOff := max(0, len(d.Lines)-d.visibleLines())
+	dl := d.getDisplayLines()
+	maxOff := max(0, len(dl)-d.visibleLines())
 	d.Offset = min(maxOff, d.Offset+half)
 }
 
@@ -120,23 +135,20 @@ func (d DetailView) View() string {
 	sb.WriteString(StyleTitle.Render(title))
 	sb.WriteString("\n")
 
+	displayLines := d.getDisplayLines()
 	visible := d.visibleLines()
 
-	for i := d.Offset; i < len(d.Lines) && i < d.Offset+visible; i++ {
-		line := d.Lines[i]
-		if len(line) > d.Width {
-			line = line[:d.Width-1] + "…"
-		}
-		sb.WriteString(line)
+	for i := d.Offset; i < len(displayLines) && i < d.Offset+visible; i++ {
+		sb.WriteString(displayLines[i])
 		sb.WriteString("\n")
 	}
 
-	rendered := min(len(d.Lines)-d.Offset, visible)
+	rendered := min(len(displayLines)-d.Offset, visible)
 	for i := rendered; i < visible; i++ {
 		sb.WriteString("\n")
 	}
 
-	status := fmt.Sprintf("%d/%d lines", min(d.Offset+visible, len(d.Lines)), len(d.Lines))
+	status := fmt.Sprintf("%d/%d lines", min(d.Offset+visible, len(displayLines)), len(displayLines))
 	sb.WriteString(StyleDim.Render(status))
 
 	return sb.String()

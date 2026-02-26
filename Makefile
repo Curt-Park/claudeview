@@ -22,6 +22,10 @@ test:
 bdd:
 	go test -race -count=1 ./internal/ui/bdd/...
 
+## fmt: run formatting
+fmt:
+	go fmt ./...
+
 ## lint: run golangci-lint
 lint:
 	golangci-lint run ./...

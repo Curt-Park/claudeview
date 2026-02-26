@@ -4,18 +4,17 @@ import "github.com/charmbracelet/lipgloss"
 
 var (
 	// Colors
-	colorYellow   = lipgloss.Color("214")
-	colorBlue     = lipgloss.Color("33")
-	colorGreen    = lipgloss.Color("82")
-	colorPurple   = lipgloss.Color("135")
-	colorOrange   = lipgloss.Color("208")
-	colorGray     = lipgloss.Color("243")
-	colorRed      = lipgloss.Color("196")
-	colorWhite    = lipgloss.Color("255")
-	colorDimGray  = lipgloss.Color("238")
-	colorCyan     = lipgloss.Color("51")
-	colorBgSel    = lipgloss.Color("237")
-	colorBgHeader = lipgloss.Color("234")
+	colorYellow  = lipgloss.Color("214")
+	colorBlue    = lipgloss.Color("33")
+	colorGreen   = lipgloss.Color("82")
+	colorPurple  = lipgloss.Color("135")
+	colorOrange  = lipgloss.Color("208")
+	colorGray    = lipgloss.Color("243")
+	colorRed     = lipgloss.Color("196")
+	colorWhite   = lipgloss.Color("255")
+	colorDimGray = lipgloss.Color("238")
+	colorCyan    = lipgloss.Color("51")
+	colorBgSel   = lipgloss.Color("237")
 
 	// Base styles
 	StyleNormal = lipgloss.NewStyle()

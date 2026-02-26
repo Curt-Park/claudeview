@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // LogLine is a single line in the log view.
@@ -18,7 +19,6 @@ type LogView struct {
 	Title  string
 	Lines  []LogLine
 	Offset int
-	ColOff int // horizontal scroll
 	Follow bool
 	Width  int
 	Height int
@@ -74,18 +74,6 @@ func (l *LogView) ScrollDown() {
 	}
 }
 
-// ScrollLeft scrolls left.
-func (l *LogView) ScrollLeft() {
-	if l.ColOff > 0 {
-		l.ColOff -= 4
-	}
-}
-
-// ScrollRight scrolls right.
-func (l *LogView) ScrollRight() {
-	l.ColOff += 4
-}
-
 // PageUp scrolls up by half a page.
 func (l *LogView) PageUp() {
 	half := max(1, l.visibleLines()/2)
@@ -127,12 +115,6 @@ func (l *LogView) Update(msg tea.Msg) bool {
 			return true
 		case "j", "down":
 			l.ScrollDown()
-			return true
-		case "h", "left":
-			l.ScrollLeft()
-			return true
-		case "l", "right":
-			l.ScrollRight()
 			return true
 		case "g":
 			l.GotoTop()
@@ -187,14 +169,7 @@ func (l LogView) View() string {
 	for i := l.Offset; i < len(lines) && i < l.Offset+visible; i++ {
 		line := lines[i]
 		rendered := l.renderLine(line)
-		// Horizontal scroll
-		if l.ColOff > 0 && len(rendered) > l.ColOff {
-			rendered = rendered[l.ColOff:]
-		}
-		// Truncate to width
-		if len(rendered) > l.Width {
-			rendered = rendered[:l.Width]
-		}
+		rendered = ansi.Truncate(rendered, l.Width, "")
 		sb.WriteString(rendered)
 		sb.WriteString("\n")
 	}
