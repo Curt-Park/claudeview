@@ -39,7 +39,8 @@ func TestParseFile(t *testing.T) {
 		}
 	}
 
-	// Verify topic is set from first user message
+	// Verify topic is set from most recent user message
+	// sample_transcript.jsonl has only one user text message
 	wantTopic := "Hello! Can you help me explore this codebase?"
 	if result.Topic != wantTopic {
 		t.Errorf("expected topic %q, got %q", wantTopic, result.Topic)
@@ -95,7 +96,7 @@ func TestTopicSkipsSkillPrefix(t *testing.T) {
 	}
 	defer func() { _ = os.Remove(f.Name()) }()
 
-	// Write: skill prefix first, then real user message
+	// Skill prefix first, then real user message — skill prefix must be skipped
 	content := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"Base directory for this skill: /some/path"}]}}` + "\n" +
 		`{"type":"user","timestamp":"2025-01-01T10:00:01Z","message":{"role":"user","content":[{"type":"text","text":"How do I implement OAuth?"}]}}` + "\n"
 	if _, err := f.WriteString(content); err != nil {
@@ -110,6 +111,31 @@ func TestTopicSkipsSkillPrefix(t *testing.T) {
 	want := "How do I implement OAuth?"
 	if result.Topic != want {
 		t.Errorf("expected topic %q, got %q", want, result.Topic)
+	}
+}
+
+func TestTopicUsesLastUserMessage(t *testing.T) {
+	f, err := os.CreateTemp("", "lasttopic-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	content := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"How do I implement OAuth?"}]}}` + "\n" +
+		`{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"Here is how..."}],"model":"claude-sonnet-4-6","usage":{"input_tokens":10,"output_tokens":5}}}` + "\n" +
+		`{"type":"user","timestamp":"2025-01-01T10:00:02Z","message":{"role":"user","content":[{"type":"text","text":"Now refactor the token refresh logic"}]}}` + "\n"
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	result, err := transcript.ParseFile(f.Name())
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	want := "Now refactor the token refresh logic"
+	if result.Topic != want {
+		t.Errorf("expected last user message as topic, got %q", result.Topic)
 	}
 }
 

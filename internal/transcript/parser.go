@@ -124,8 +124,8 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 				}
 			}
 			if turn.Text != "" {
-				// Set topic from first real user message (skip skill prefix lines)
-				if result.Topic == "" && !strings.HasPrefix(turn.Text, "Base directory for this skill:") {
+				// Track the most recent real user message as topic (skip skill prefix lines)
+				if !strings.HasPrefix(turn.Text, "Base directory for this skill:") {
 					result.Topic = turn.Text
 				}
 				result.Turns = append(result.Turns, turn)
@@ -245,18 +245,15 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 
 		switch entry.Type {
 		case "user":
-			if agg.Topic != "" {
-				break
-			}
 			var msg UserMessage
 			if err := json.Unmarshal(entry.Message, &msg); err != nil {
 				break
 			}
+			// Track the most recent real user message as topic (skip skill prefix lines)
 			for _, c := range msg.Content {
 				if c.Type == "text" && c.Text != "" {
 					if !strings.HasPrefix(c.Text, "Base directory for this skill:") {
 						agg.Topic = c.Text
-						break
 					}
 				}
 			}
