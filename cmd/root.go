@@ -567,6 +567,9 @@ func (l *liveDataProvider) GetProjects() []*model.Project {
 		}
 		for _, si := range info.Sessions {
 			s := l.sessionFromInfo(si)
+			if s.Topic == "" {
+				continue // skip empty sessions (no user messages yet)
+			}
 			p.Sessions = append(p.Sessions, s)
 		}
 		projects = append(projects, p)
@@ -591,6 +594,9 @@ func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
 		}
 		for _, si := range info.Sessions {
 			s := l.sessionFromInfo(si)
+			if s.Topic == "" {
+				continue // skip empty sessions (no user messages yet)
+			}
 			s.ProjectHash = info.Hash
 			sessions = append(sessions, s)
 		}
@@ -737,8 +743,12 @@ func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Ses
 	s.NumTurns = agg.NumTurns
 	s.DurationMS = agg.DurationMS
 	s.Topic = agg.Topic
+	s.Branch = agg.Branch
 	s.ToolCallCount = agg.TotalToolCalls
 	s.AgentCount = 1 + transcript.CountSubagents(si.SubagentDir)
+	if info, err := os.Stat(si.FilePath); err == nil {
+		s.FileSize = info.Size()
+	}
 
 	s.TokensByModel = make(map[string]model.TokenCount, len(agg.TokensByModel))
 	for m, u := range agg.TokensByModel {

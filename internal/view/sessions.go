@@ -39,11 +39,11 @@ func sessionRow(items []*model.Session, i int, flatMode bool) ui.Row {
 	}
 	cells = append(cells,
 		s.ShortID(),
-		s.TopicShort(35),
+		s.TopicShort(120),
 		fmt.Sprintf("%d", s.AgentCount),
 		fmt.Sprintf("%d", s.ToolCallCount),
 		s.TokenString(),
 		s.LastActive(),
 	)
-	return ui.Row{Cells: cells, Data: s}
+	return ui.Row{Cells: cells, Subtitle: s.MetaLine(), Data: s}
 }

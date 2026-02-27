@@ -67,7 +67,7 @@ func TestSessionTopicShort(t *testing.T) {
 	}{
 		{"empty topic", "", 20, "-"},
 		{"short topic", "Hello world", 20, "Hello world"},
-		{"multiline topic", "First line\nSecond line", 20, "First line"},
+		{"multiline topic", "First line\nSecond line", 20, "First line Second l…"},
 		{"truncated topic", "This is a very long topic text", 15, "This is a very…"},
 	}
 	for _, tc := range tests {

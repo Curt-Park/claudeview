@@ -194,6 +194,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 // SessionAggregates holds cached session-level metrics for incremental parsing.
 type SessionAggregates struct {
 	Topic          string
+	Branch         string
 	TokensByModel  map[string]Usage
 	TotalToolCalls int
 	DurationMS     int64
@@ -235,6 +236,11 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 		var entry Entry
 		if err := json.Unmarshal(line, &entry); err != nil {
 			continue
+		}
+
+		// Capture git branch from first entry that has it
+		if agg.Branch == "" && entry.GitBranch != "" {
+			agg.Branch = entry.GitBranch
 		}
 
 		switch entry.Type {

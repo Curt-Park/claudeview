@@ -17,9 +17,19 @@ type Column struct {
 }
 
 // Row is a single row in the table (slice of cell strings + raw data).
+// If Subtitle is non-empty it is rendered as a second dimmed line below the row.
 type Row struct {
-	Cells []string
-	Data  any // original data object
+	Cells    []string
+	Subtitle string // optional second line shown in dimmed style
+	Data     any    // original data object
+}
+
+// rowLineCount returns the number of display lines this row occupies.
+func rowLineCount(row Row) int {
+	if row.Subtitle != "" {
+		return 2
+	}
+	return 1
 }
 
 // TableView is a generic scrollable table component.
@@ -138,12 +148,21 @@ func (t *TableView) PageDown() {
 }
 
 func (t *TableView) ensureVisible() {
+	rows := t.filteredRows()
 	dr := t.dataRows()
 	if t.Selected < t.Offset {
 		t.Offset = t.Selected
+		return
 	}
-	if t.Selected >= t.Offset+dr {
-		t.Offset = t.Selected - dr + 1
+	// Count display lines from offset to selected (inclusive).
+	lines := 0
+	for i := t.Offset; i <= t.Selected && i < len(rows); i++ {
+		lines += rowLineCount(rows[i])
+	}
+	// Advance offset until selected row fits within the viewport.
+	for lines > dr && t.Offset < t.Selected {
+		lines -= rowLineCount(rows[t.Offset])
+		t.Offset++
 	}
 }
 
@@ -232,7 +251,15 @@ func (t TableView) View() string {
 	var expandedLines []string
 	if selected >= offset && selected < len(rows) {
 		allExpLines := strings.Split(t.renderExpandedRow(rows[selected], cols), "\n")
-		linesBeforeSel := selected - offset
+		// Include subtitle as the last line of the expanded view.
+		if rows[selected].Subtitle != "" {
+			allExpLines = append(allExpLines, t.renderSubtitleLine(rows[selected].Subtitle))
+		}
+		// Count display lines from rows before the selected row.
+		linesBeforeSel := 0
+		for i := offset; i < selected; i++ {
+			linesBeforeSel += rowLineCount(rows[i])
+		}
 		if linesBeforeSel+len(allExpLines) > visible {
 			offset = min(selected, max(0, selected-(visible-len(allExpLines))))
 		}
@@ -258,6 +285,11 @@ func (t TableView) View() string {
 			sb.WriteString(t.renderRow(row, cols, false))
 			sb.WriteString("\n")
 			linesUsed++
+			if row.Subtitle != "" && linesUsed < visible {
+				sb.WriteString(t.renderSubtitleLine(row.Subtitle))
+				sb.WriteString("\n")
+				linesUsed++
+			}
 		}
 	}
 
@@ -382,6 +414,13 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 		return StyleSelected.Width(t.Width).Render(line)
 	}
 	return line
+}
+
+// renderSubtitleLine renders the subtitle string as a full-width dimmed line.
+func (t TableView) renderSubtitleLine(subtitle string) string {
+	text := "  " + subtitle
+	padded := padRight(text, t.Width)
+	return StyleRowSubtitle.Render(padded)
 }
 
 // renderExpandedRow renders the selected row as multiple lines, wrapping each

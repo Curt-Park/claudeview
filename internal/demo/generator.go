@@ -15,7 +15,9 @@ func GenerateProjects() []*model.Project {
 		{
 			ID:            "abc12345-demo-0001-0000-000000000001",
 			ProjectHash:   "demo-project-1",
-			Topic:         "Refactor authentication module",
+			Topic:         "Refactor authentication module to use OAuth2",
+			Branch:        "feat/auth-refactor",
+			FileSize:      1363149,
 			TokensByModel: map[string]model.TokenCount{"claude-opus-4-6": {InputTokens: 120000, OutputTokens: 25200}},
 			AgentCount:    4,
 			ToolCallCount: 18,
@@ -27,7 +29,9 @@ func GenerateProjects() []*model.Project {
 		{
 			ID:            "def45678-demo-0002-0000-000000000002",
 			ProjectHash:   "demo-project-1",
-			Topic:         "Fix login redirect bug",
+			Topic:         "Fix login redirect bug after password reset",
+			Branch:        "fix/login-redirect",
+			FileSize:      510054,
 			TokensByModel: map[string]model.TokenCount{"claude-sonnet-4-6": {InputTokens: 20000, OutputTokens: 3100}},
 			AgentCount:    4,
 			ToolCallCount: 18,
@@ -43,7 +47,9 @@ func GenerateProjects() []*model.Project {
 		{
 			ID:            "ghi78901-demo-0003-0000-000000000003",
 			ProjectHash:   "demo-project-2",
-			Topic:         "Update test coverage",
+			Topic:         "Update test coverage for API endpoints",
+			Branch:        "main",
+			FileSize:      2662400,
 			TokensByModel: map[string]model.TokenCount{"claude-haiku-4-5": {InputTokens: 5000, OutputTokens: 800}},
 			AgentCount:    4,
 			ToolCallCount: 18,

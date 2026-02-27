@@ -8,6 +8,7 @@ type Entry struct {
 	Timestamp string          `json:"timestamp"`
 	UUID      string          `json:"uuid"`
 	SessionID string          `json:"sessionId"`
+	GitBranch string          `json:"gitBranch"`
 	Message   json.RawMessage `json:"message"`
 }
 

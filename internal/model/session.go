@@ -35,6 +35,8 @@ type Session struct {
 	ProjectHash   string
 	FilePath      string
 	SubagentDir   string
+	Branch        string
+	FileSize      int64
 	Topic         string
 	TokensByModel map[string]TokenCount
 	AgentCount    int
@@ -72,16 +74,44 @@ func (s *Session) TokenString() string {
 	return strings.Join(parts, " ")
 }
 
-// TopicShort returns a truncated single-line topic string.
+// TopicShort returns a normalized, truncated topic string.
+// Newlines are replaced with spaces (matching claude -r style) so the full
+// content is visible on a single line.
 func (s *Session) TopicShort(maxLen int) string {
 	if s.Topic == "" {
 		return "-"
 	}
-	topic := strings.SplitN(s.Topic, "\n", 2)[0]
-	if len(topic) > maxLen {
-		return topic[:maxLen-1] + "…"
+	topic := strings.ReplaceAll(s.Topic, "\n", " ")
+	runes := []rune(topic)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen-1]) + "…"
 	}
 	return topic
+}
+
+// MetaLine returns a compact metadata string: "branch · size".
+func (s *Session) MetaLine() string {
+	size := formatFileSize(s.FileSize)
+	if s.Branch == "" {
+		return size
+	}
+	return s.Branch + " · " + size
+}
+
+// formatFileSize formats a byte count as a human-readable size string.
+func formatFileSize(b int64) string {
+	const (
+		kb = 1024
+		mb = 1024 * kb
+	)
+	switch {
+	case b >= mb:
+		return fmt.Sprintf("%.1fMB", float64(b)/mb)
+	case b >= kb:
+		return fmt.Sprintf("%.1fKB", float64(b)/kb)
+	default:
+		return fmt.Sprintf("%d bytes", b)
+	}
 }
 
 // ShortID returns the first 8 chars of the session ID.
