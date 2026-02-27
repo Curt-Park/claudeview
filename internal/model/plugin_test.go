@@ -32,30 +32,23 @@ func TestCountSkills(t *testing.T) {
 		}
 	})
 
-	t.Run("dir with md files counts them", func(t *testing.T) {
+	t.Run("counts skill subdirectories", func(t *testing.T) {
 		base := makeTempDir(t)
 		dir := filepath.Join(base, "skills")
 		if err := os.Mkdir(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		writeFile(t, filepath.Join(dir, "skill1.md"))
-		writeFile(t, filepath.Join(dir, "skill2.md"))
+		// Create subdirectories (each skill is a subdir)
+		if err := os.Mkdir(filepath.Join(dir, "skill1"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(filepath.Join(dir, "skill2"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// Files should not be counted
+		writeFile(t, filepath.Join(dir, "README.md"))
 		if got := model.CountSkills(base); got != 2 {
-			t.Errorf("CountSkills() = %d, want 2", got)
-		}
-	})
-
-	t.Run("mixed extensions counts only md files", func(t *testing.T) {
-		base := makeTempDir(t)
-		dir := filepath.Join(base, "skills")
-		if err := os.Mkdir(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		writeFile(t, filepath.Join(dir, "skill1.md"))
-		writeFile(t, filepath.Join(dir, "skill2.txt"))
-		writeFile(t, filepath.Join(dir, "skill3.sh"))
-		if got := model.CountSkills(base); got != 1 {
-			t.Errorf("CountSkills() = %d, want 1 (only .md)", got)
+			t.Errorf("CountSkills() = %d, want 2 (only subdirs)", got)
 		}
 	})
 }
@@ -113,6 +106,102 @@ func TestCountHooks(t *testing.T) {
 		writeFile(t, filepath.Join(dir, "hook3.py"))
 		if got := model.CountHooks(base); got != 3 {
 			t.Errorf("CountHooks() = %d, want 3", got)
+		}
+	})
+}
+
+func TestContentDirFallback(t *testing.T) {
+	base := makeTempDir(t)
+	// No "plugin/" subdir — should return base itself
+	skills := filepath.Join(base, "skills")
+	if err := os.Mkdir(skills, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(skills, "my-skill"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := model.CountSkills(base); got != 1 {
+		t.Errorf("CountSkills() = %d, want 1 (from root)", got)
+	}
+}
+
+func TestContentDirWithPluginSubdir(t *testing.T) {
+	base := makeTempDir(t)
+	// Create "plugin/" subdir with its own skills/
+	pluginSub := filepath.Join(base, "plugin")
+	if err := os.Mkdir(pluginSub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	subSkills := filepath.Join(pluginSub, "skills")
+	if err := os.Mkdir(subSkills, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(subSkills, "skill-a"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(subSkills, "skill-b"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Root-level skills/ should be ignored when plugin/ exists
+	rootSkills := filepath.Join(base, "skills")
+	if err := os.Mkdir(rootSkills, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(rootSkills, "decoy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := model.CountSkills(base); got != 2 {
+		t.Errorf("CountSkills() = %d, want 2 (from plugin/ subdir)", got)
+	}
+}
+
+func TestCountSkillsCountsSubdirs(t *testing.T) {
+	base := makeTempDir(t)
+	skills := filepath.Join(base, "skills")
+	if err := os.Mkdir(skills, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 3 skill directories
+	for _, name := range []string{"brainstorming", "debugging", "tdd"} {
+		if err := os.Mkdir(filepath.Join(skills, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Files should not count
+	writeFile(t, filepath.Join(skills, "index.md"))
+
+	if got := model.CountSkills(base); got != 3 {
+		t.Errorf("CountSkills() = %d, want 3 subdirs", got)
+	}
+}
+
+func TestCountMCPs(t *testing.T) {
+	t.Run("missing file returns 0", func(t *testing.T) {
+		if got := model.CountMCPs("/nonexistent/path"); got != 0 {
+			t.Errorf("CountMCPs() = %d, want 0", got)
+		}
+	})
+
+	t.Run("parses mcpServers count", func(t *testing.T) {
+		base := makeTempDir(t)
+		content := `{"mcpServers":{"server1":{},"server2":{},"server3":{}}}`
+		if err := os.WriteFile(filepath.Join(base, ".mcp.json"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := model.CountMCPs(base); got != 3 {
+			t.Errorf("CountMCPs() = %d, want 3", got)
+		}
+	})
+
+	t.Run("empty mcpServers returns 0", func(t *testing.T) {
+		base := makeTempDir(t)
+		content := `{"mcpServers":{}}`
+		if err := os.WriteFile(filepath.Join(base, ".mcp.json"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := model.CountMCPs(base); got != 0 {
+			t.Errorf("CountMCPs() = %d, want 0", got)
 		}
 	})
 }

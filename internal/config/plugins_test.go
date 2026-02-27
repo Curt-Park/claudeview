@@ -15,8 +15,8 @@ func TestLoadInstalledPlugins_ArrayFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := `[
-		{"name":"superpowers","version":"4.3.1","marketplace":"official","enabled":true,"installedAt":"2025-12-15"},
-		{"name":"Notion","version":"1.2.0","marketplace":"official","enabled":false,"installedAt":"2025-11-20"}
+		{"name":"superpowers","version":"4.3.1","marketplace":"official","installedAt":"2025-12-15"},
+		{"name":"Notion","version":"1.2.0","marketplace":"official","installedAt":"2025-11-20"}
 	]`
 	if err := os.WriteFile(filepath.Join(pluginsDir, "installed_plugins.json"), []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -32,8 +32,76 @@ func TestLoadInstalledPlugins_ArrayFormat(t *testing.T) {
 	if plugins[0].Name != "superpowers" {
 		t.Errorf("Name = %q, want %q", plugins[0].Name, "superpowers")
 	}
-	if !plugins[0].Enabled {
-		t.Error("expected plugins[0].Enabled = true")
+}
+
+func TestLoadInstalledPluginsV2(t *testing.T) {
+	dir := t.TempDir()
+	pluginsDir := filepath.Join(dir, "plugins")
+	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	content := `{
+		"version": 2,
+		"plugins": {
+			"superpowers@claude-plugins-official": [
+				{
+					"scope": "user",
+					"installPath": "/home/user/.claude/plugins/cache/claude-plugins-official/superpowers/4.3.1",
+					"version": "4.3.1",
+					"installedAt": "2025-12-15T00:00:00Z"
+				}
+			],
+			"Notion@claude-plugins-official": [
+				{
+					"scope": "project",
+					"installPath": "/home/user/.claude/plugins/cache/claude-plugins-official/Notion/1.2.0",
+					"version": "1.2.0",
+					"installedAt": "2025-11-20T00:00:00Z"
+				}
+			]
+		}
+	}`
+	if err := os.WriteFile(filepath.Join(pluginsDir, "installed_plugins.json"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	plugins, err := config.LoadInstalledPlugins(dir)
+	if err != nil {
+		t.Fatalf("LoadInstalledPlugins v2: %v", err)
+	}
+	if len(plugins) != 2 {
+		t.Fatalf("len = %d, want 2", len(plugins))
+	}
+
+	byName := make(map[string]config.InstalledPlugin, len(plugins))
+	for _, p := range plugins {
+		byName[p.Name] = p
+	}
+
+	sp, ok := byName["superpowers"]
+	if !ok {
+		t.Fatal("superpowers not found in parsed plugins")
+	}
+	if sp.Marketplace != "claude-plugins-official" {
+		t.Errorf("Marketplace = %q, want %q", sp.Marketplace, "claude-plugins-official")
+	}
+	if sp.Scope != "user" {
+		t.Errorf("Scope = %q, want %q", sp.Scope, "user")
+	}
+	if sp.Version != "4.3.1" {
+		t.Errorf("Version = %q, want %q", sp.Version, "4.3.1")
+	}
+	wantCacheDir := "/home/user/.claude/plugins/cache/claude-plugins-official/superpowers/4.3.1"
+	if sp.CacheDir != wantCacheDir {
+		t.Errorf("CacheDir = %q, want %q", sp.CacheDir, wantCacheDir)
+	}
+
+	no, ok := byName["Notion"]
+	if !ok {
+		t.Fatal("Notion not found in parsed plugins")
+	}
+	if no.Scope != "project" {
+		t.Errorf("Scope = %q, want %q", no.Scope, "project")
 	}
 }
 
@@ -52,6 +120,25 @@ func TestPluginCacheDir(t *testing.T) {
 	want := "/home/user/.claude/plugins/cache/official/superpowers/4.3.1"
 	if dir != want {
 		t.Errorf("PluginCacheDir = %q, want %q", dir, want)
+	}
+}
+
+func TestEnabledPluginsMapFormat(t *testing.T) {
+	dir := t.TempDir()
+	content := `{"enabledPlugins":{"superpowers@claude-plugins-official":true,"Notion@claude-plugins-official":false}}`
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	enabled, err := config.EnabledPlugins(dir)
+	if err != nil {
+		t.Fatalf("EnabledPlugins: %v", err)
+	}
+	if !enabled["superpowers@claude-plugins-official"] {
+		t.Error("expected superpowers@claude-plugins-official to be enabled")
+	}
+	if enabled["Notion@claude-plugins-official"] {
+		t.Error("expected Notion@claude-plugins-official to be disabled")
 	}
 }
 

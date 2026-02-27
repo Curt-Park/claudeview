@@ -6,7 +6,7 @@ import (
 )
 
 var memoryColumns = []ui.Column{
-	{Title: "NAME", Width: 20, Flex: true},
+	{Title: "NAME", Width: 20, Flex: true, MaxPercent: 0.40},
 	{Title: "SIZE", Width: 8},
 	{Title: "MODIFIED", Width: 11},
 }

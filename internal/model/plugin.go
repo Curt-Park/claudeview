@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 )
@@ -10,29 +11,101 @@ type Plugin struct {
 	Name         string
 	Version      string
 	Marketplace  string
+	Scope        string // "user", "project", "local"
 	Enabled      bool
 	InstalledAt  string
 	CacheDir     string
 	SkillCount   int
 	CommandCount int
 	HookCount    int
+	AgentCount   int
+	MCPCount     int
 }
 
-// CountSkills counts .md files in the plugin's skills/ directory.
+// contentDir returns the effective content directory for a plugin.
+// Some plugins (e.g. semgrep) nest their content under a "plugin/" subdirectory.
+func contentDir(cacheDir string) string {
+	sub := filepath.Join(cacheDir, "plugin")
+	if info, err := os.Stat(sub); err == nil && info.IsDir() {
+		return sub
+	}
+	return cacheDir
+}
+
+// CountSkills counts skill subdirectories in the plugin's skills/ directory.
 func CountSkills(cacheDir string) int {
-	return countFiles(filepath.Join(cacheDir, "skills"), ".md")
+	return countDirs(filepath.Join(contentDir(cacheDir), "skills"))
 }
 
 // CountCommands counts .md files in the plugin's commands/ directory.
 func CountCommands(cacheDir string) int {
-	return countFiles(filepath.Join(cacheDir, "commands"), ".md")
+	return countFiles(filepath.Join(contentDir(cacheDir), "commands"), ".md")
 }
 
-// CountHooks counts .sh/.js files in the plugin's hooks/ directory.
+// CountHooks counts hook event entries for a plugin.
+// If a hooks.json file is present it is parsed and the number of event types
+// (top-level keys inside "hooks") is returned. Otherwise all files in the
+// hooks/ directory are counted.
 func CountHooks(cacheDir string) int {
-	return countFiles(filepath.Join(cacheDir, "hooks"), "")
+	hooksDir := filepath.Join(contentDir(cacheDir), "hooks")
+	jsonPath := filepath.Join(hooksDir, "hooks.json")
+	if data, err := os.ReadFile(jsonPath); err == nil {
+		var wrapper struct {
+			Hooks map[string]json.RawMessage `json:"hooks"`
+		}
+		if err := json.Unmarshal(data, &wrapper); err == nil {
+			return len(wrapper.Hooks)
+		}
+	}
+	return countFiles(hooksDir, "")
 }
 
+// CountAgents counts .md files in the plugin's agents/ directory.
+func CountAgents(cacheDir string) int {
+	return countFiles(filepath.Join(contentDir(cacheDir), "agents"), ".md")
+}
+
+// CountMCPs counts MCP server entries for a plugin.
+// It checks .mcp.json and .claude-plugin/plugin.json (in that order),
+// returning the count from the first file that contains mcpServers.
+func CountMCPs(cacheDir string) int {
+	type mcpWrapper struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	candidates := []string{
+		filepath.Join(contentDir(cacheDir), ".mcp.json"),
+		filepath.Join(cacheDir, ".claude-plugin", "plugin.json"),
+	}
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var w mcpWrapper
+		if err := json.Unmarshal(data, &w); err == nil && len(w.MCPServers) > 0 {
+			return len(w.MCPServers)
+		}
+	}
+	return 0
+}
+
+// countDirs counts subdirectories in dir.
+func countDirs(dir string) int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			count++
+		}
+	}
+	return count
+}
+
+// countFiles counts files with the given extension in dir.
+// If ext is empty, all files are counted.
 func countFiles(dir, ext string) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

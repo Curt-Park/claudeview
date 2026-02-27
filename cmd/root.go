@@ -440,21 +440,21 @@ func (l *liveDataProvider) GetPlugins() []*model.Plugin {
 
 	var plugins []*model.Plugin
 	for _, p := range installed {
-		isEnabled := p.Enabled
-		if enabled != nil {
-			isEnabled = enabled[p.Name]
-		}
-		cacheDir := config.PluginCacheDir(l.claudeDir, p.Marketplace, p.Name, p.Version)
+		key := p.Name + "@" + p.Marketplace
+		isEnabled := enabled[key]
 		plugins = append(plugins, &model.Plugin{
 			Name:         p.Name,
 			Version:      p.Version,
 			Marketplace:  p.Marketplace,
+			Scope:        p.Scope,
 			Enabled:      isEnabled,
 			InstalledAt:  p.InstalledAt,
-			CacheDir:     cacheDir,
-			SkillCount:   model.CountSkills(cacheDir),
-			CommandCount: model.CountCommands(cacheDir),
-			HookCount:    model.CountHooks(cacheDir),
+			CacheDir:     p.CacheDir,
+			SkillCount:   model.CountSkills(p.CacheDir),
+			CommandCount: model.CountCommands(p.CacheDir),
+			HookCount:    model.CountHooks(p.CacheDir),
+			AgentCount:   model.CountAgents(p.CacheDir),
+			MCPCount:     model.CountMCPs(p.CacheDir),
 		})
 	}
 	return plugins
@@ -464,7 +464,7 @@ func (l *liveDataProvider) GetMemories(projectHash string) []*model.Memory {
 	if projectHash == "" {
 		return []*model.Memory{}
 	}
-	memDir := filepath.Join(l.claudeDir, projectHash, "memory")
+	memDir := filepath.Join(l.claudeDir, "projects", projectHash, "memory")
 	entries, err := os.ReadDir(memDir)
 	if err != nil {
 		return []*model.Memory{}
