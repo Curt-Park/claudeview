@@ -355,6 +355,9 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 		parts = append(parts, padded)
 	}
 	line := strings.Join(parts, " ")
+	if selected && row.Hot {
+		return StyleSelectedHot.Width(t.Width).Render(line)
+	}
 	if selected {
 		return StyleSelected.Width(t.Width).Render(line)
 	}

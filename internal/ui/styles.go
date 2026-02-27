@@ -76,6 +76,11 @@ var (
 
 	StyleHotRow = lipgloss.NewStyle().Foreground(colorYellow)
 
+	StyleSelectedHot = lipgloss.NewStyle().
+				Background(colorBgSel).
+				Foreground(colorYellow).
+				Bold(true)
+
 	StyleFilter = lipgloss.NewStyle().
 			Foreground(colorYellow)
 
