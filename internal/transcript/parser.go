@@ -105,11 +105,9 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 				continue
 			}
 			// Collect tool results to match with pending tool calls
-			for _, c := range msg.Content {
-				if c.Type == "tool_result" {
-					toolResults[c.ToolUseID] = c.Content
-					toolErrors[c.ToolUseID] = c.IsError
-				}
+			for _, c := range msg.ToolResults() {
+				toolResults[c.ToolUseID] = c.Content
+				toolErrors[c.ToolUseID] = c.IsError
 			}
 			// Flush pending assistant turn with matched results
 			if pendingAssistantTurn != nil {
@@ -118,11 +116,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			}
 			// Add user text turns
 			turn := Turn{Role: "user", Timestamp: ts}
-			for _, c := range msg.Content {
-				if c.Type == "text" {
-					turn.Text += c.Text
-				}
-			}
+			turn.Text = msg.TextContent()
 			if turn.Text != "" {
 				// Track the most recent real user message as topic (skip skill prefix lines)
 				if !strings.HasPrefix(turn.Text, "Base directory for this skill:") {
@@ -250,11 +244,9 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 				break
 			}
 			// Track the most recent real user message as topic (skip skill prefix lines)
-			for _, c := range msg.Content {
-				if c.Type == "text" && c.Text != "" {
-					if !strings.HasPrefix(c.Text, "Base directory for this skill:") {
-						agg.Topic = c.Text
-					}
+			if text := msg.TextContent(); text != "" {
+				if !strings.HasPrefix(text, "Base directory for this skill:") {
+					agg.Topic = text
 				}
 			}
 

@@ -43,7 +43,53 @@ type AssistantMessage struct {
 }
 
 // UserMessage is the message field when type=="user".
+// Content can be either a JSON array of MessageContent blocks (old format)
+// or a plain JSON string (new format).
 type UserMessage struct {
-	Role    string           `json:"role"`
-	Content []MessageContent `json:"content"`
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+// TextContent returns all plain-text strings from the content field,
+// handling both the array-of-blocks format and the plain-string format.
+func (m *UserMessage) TextContent() string {
+	if len(m.Content) == 0 {
+		return ""
+	}
+	// Try plain string first
+	var s string
+	if err := json.Unmarshal(m.Content, &s); err == nil {
+		return s
+	}
+	// Fall back to array of content blocks
+	var blocks []MessageContent
+	if err := json.Unmarshal(m.Content, &blocks); err != nil {
+		return ""
+	}
+	var text string
+	for _, c := range blocks {
+		if c.Type == "text" {
+			text += c.Text
+		}
+	}
+	return text
+}
+
+// ToolResults returns tool_result blocks from the content array.
+// Returns nil if content is a plain string.
+func (m *UserMessage) ToolResults() []MessageContent {
+	if len(m.Content) == 0 {
+		return nil
+	}
+	var blocks []MessageContent
+	if err := json.Unmarshal(m.Content, &blocks); err != nil {
+		return nil
+	}
+	var results []MessageContent
+	for _, c := range blocks {
+		if c.Type == "tool_result" {
+			results = append(results, c)
+		}
+	}
+	return results
 }
