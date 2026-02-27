@@ -272,6 +272,7 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 					agg.TotalToolCalls++
 				}
 			}
+			agg.NumTurns++
 
 		case "system":
 			if len(entry.Message) > 0 {
