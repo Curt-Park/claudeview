@@ -74,7 +74,7 @@ type DataProvider interface {
 	GetProjects() []*model.Project
 	GetSessions(projectHash string) []*model.Session
 	GetAgents(sessionID string) []*model.Agent
-	GetPlugins() []*model.Plugin
+	GetPlugins(projectHash string) []*model.Plugin
 	GetMemories(projectHash string) []*model.Memory
 }
 

@@ -31,7 +31,7 @@ type mockDP struct {
 func (m *mockDP) GetProjects() []*model.Project         { return m.projects }
 func (m *mockDP) GetSessions(_ string) []*model.Session { return m.sessions }
 func (m *mockDP) GetAgents(_ string) []*model.Agent     { return m.agents }
-func (m *mockDP) GetPlugins() []*model.Plugin           { return m.plugins }
+func (m *mockDP) GetPlugins(_ string) []*model.Plugin   { return m.plugins }
 func (m *mockDP) GetMemories(_ string) []*model.Memory  { return m.memories }
 
 // newApp creates an AppModel pre-sized for tests.

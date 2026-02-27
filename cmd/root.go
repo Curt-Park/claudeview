@@ -163,7 +163,7 @@ func (rm *rootModel) loadData() {
 	case model.ResourceAgents:
 		rm.agents = rm.dp.GetAgents(rm.app.SelectedSessionID)
 	case model.ResourcePlugins:
-		rm.plugins = rm.dp.GetPlugins()
+		rm.plugins = rm.dp.GetPlugins(rm.app.SelectedProjectHash)
 	case model.ResourceMemory:
 		rm.memories = rm.dp.GetMemories(rm.app.SelectedProjectHash)
 	}
@@ -282,7 +282,7 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 		case model.ResourceAgents:
 			msg.agents = dp.GetAgents(sessionID)
 		case model.ResourcePlugins:
-			msg.plugins = dp.GetPlugins()
+			msg.plugins = dp.GetPlugins(projectHash)
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
 		}
@@ -339,7 +339,7 @@ func (d *demoDataProvider) GetAgents(sessionID string) []*model.Agent {
 	}
 	return []*model.Agent{}
 }
-func (d *demoDataProvider) GetPlugins() []*model.Plugin { return d.plugins }
+func (d *demoDataProvider) GetPlugins(_ string) []*model.Plugin { return d.plugins }
 func (d *demoDataProvider) GetMemories(_ string) []*model.Memory {
 	return demo.GenerateMemories()
 }
@@ -432,17 +432,26 @@ func (l *liveDataProvider) GetAgents(sessionID string) []*model.Agent {
 	return []*model.Agent{}
 }
 
-func (l *liveDataProvider) GetPlugins() []*model.Plugin {
+func (l *liveDataProvider) GetPlugins(projectHash string) []*model.Plugin {
 	installed, err := config.LoadInstalledPlugins(l.claudeDir)
 	if err != nil {
 		return []*model.Plugin{}
 	}
-	enabled, _ := config.EnabledPlugins(l.claudeDir)
+	globalEnabled, _ := config.EnabledPlugins(l.claudeDir)
+
+	var projectEnabled map[string]bool
+	if projectHash != "" {
+		projectRoot := config.ProjectRootFromHash(projectHash)
+		projectEnabled = config.ProjectEnabledPlugins(projectRoot)
+	}
 
 	var plugins []*model.Plugin
 	for _, p := range installed {
+		if projectHash == "" && p.Scope != "user" {
+			continue
+		}
 		key := p.Name + "@" + p.Marketplace
-		isEnabled := enabled[key]
+		isEnabled := globalEnabled[key] || projectEnabled[key]
 		plugins = append(plugins, &model.Plugin{
 			Name:         p.Name,
 			Version:      p.Version,

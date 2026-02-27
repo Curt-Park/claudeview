@@ -114,6 +114,36 @@ func PluginCacheDir(claudeDir, marketplace, name, version string) string {
 	return filepath.Join(claudeDir, "plugins", "cache", marketplace, name, version)
 }
 
+// ProjectRootFromHash converts a Claude project hash back to the filesystem path.
+// Hash format: "-Users-mac-Repositories-foo" → "/Users/mac/Repositories/foo"
+func ProjectRootFromHash(hash string) string {
+	return strings.ReplaceAll(hash, "-", "/")
+}
+
+// ProjectEnabledPlugins reads enabledPlugins from a project's .claude/settings.json
+// and .claude/settings.local.json, merging both into a single map.
+func ProjectEnabledPlugins(projectRoot string) map[string]bool {
+	merged := make(map[string]bool)
+	for _, name := range []string{"settings.json", "settings.local.json"} {
+		path := filepath.Join(projectRoot, ".claude", name)
+		raw, err := loadJSON[map[string]json.RawMessage](path)
+		if err != nil {
+			continue
+		}
+		ep, ok := raw["enabledPlugins"]
+		if !ok {
+			continue
+		}
+		var m map[string]bool
+		if json.Unmarshal(ep, &m) == nil {
+			for k, v := range m {
+				merged[k] = v
+			}
+		}
+	}
+	return merged
+}
+
 // EnabledPlugins reads the enabled plugin map from settings.json.
 // The actual format is {"enabledPlugins": {"name@marketplace": true, ...}}.
 func EnabledPlugins(claudeDir string) (map[string]bool, error) {

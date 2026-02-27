@@ -174,6 +174,57 @@ func TestEnabledPlugins_MissingFile(t *testing.T) {
 	}
 }
 
+func TestProjectRootFromHash(t *testing.T) {
+	cases := []struct {
+		hash string
+		want string
+	}{
+		{"-Users-mac-Repositories-foo", "/Users/mac/Repositories/foo"},
+		{"-home-user-projects-bar", "/home/user/projects/bar"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		got := config.ProjectRootFromHash(c.hash)
+		if got != c.want {
+			t.Errorf("ProjectRootFromHash(%q) = %q, want %q", c.hash, got, c.want)
+		}
+	}
+}
+
+func TestProjectEnabledPlugins(t *testing.T) {
+	dir := t.TempDir()
+	claudeDir := filepath.Join(dir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	content := `{"enabledPlugins":{"superpowers@official":true,"Notion@official":false}}`
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	localContent := `{"enabledPlugins":{"autology@official":true}}`
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.local.json"), []byte(localContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	enabled := config.ProjectEnabledPlugins(dir)
+	if !enabled["superpowers@official"] {
+		t.Error("expected superpowers@official to be enabled")
+	}
+	if enabled["Notion@official"] {
+		t.Error("expected Notion@official to be disabled")
+	}
+	if !enabled["autology@official"] {
+		t.Error("expected autology@official to be enabled (from settings.local.json)")
+	}
+}
+
+func TestProjectEnabledPluginsMissing(t *testing.T) {
+	enabled := config.ProjectEnabledPlugins(t.TempDir())
+	if len(enabled) != 0 {
+		t.Errorf("expected empty map for missing .claude dir, got %v", enabled)
+	}
+}
+
 func TestEnabledPlugins_NoField(t *testing.T) {
 	dir := t.TempDir()
 	content := `{"model":"claude-opus-4-6"}`
