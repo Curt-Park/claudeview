@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Curt-Park/claudeview/internal/model"
 	"github.com/Curt-Park/claudeview/internal/ui"
@@ -48,5 +49,5 @@ func sessionRow(items []*model.Session, i int, flatMode bool) ui.Row {
 		s.TokenString(),
 		s.LastActive(),
 	)
-	return ui.Row{Cells: cells, Subtitle: s.MetaLine(), SubtitleIndent: subtitleIndent, Data: s}
+	return ui.Row{Cells: cells, Subtitle: s.MetaLine(), SubtitleIndent: subtitleIndent, Data: s, Hot: time.Since(s.ModTime) <= 5*time.Second}
 }

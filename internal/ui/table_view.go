@@ -25,6 +25,7 @@ type Row struct {
 	Subtitle       string // optional second line shown in dimmed style
 	SubtitleIndent int    // leading spaces before the subtitle text
 	Data           any    // original data object
+	Hot            bool   // true if this row was recently updated (for highlight)
 }
 
 // rowLineCount returns the number of display lines this row occupies.
@@ -356,6 +357,9 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 	line := strings.Join(parts, " ")
 	if selected {
 		return StyleSelected.Width(t.Width).Render(line)
+	}
+	if row.Hot {
+		return StyleHotRow.Render(line)
 	}
 	return line
 }

@@ -9,7 +9,7 @@ import (
 
 func TestTableNavItems(t *testing.T) {
 	// Sessions: enter + esc with specific descriptions
-	nav := ui.TableNavItems(model.ResourceSessions)
+	nav := ui.TableNavItems(model.ResourceSessions, false)
 	if len(nav) == 0 {
 		t.Fatal("TableNavItems returned empty slice")
 	}
@@ -30,7 +30,7 @@ func TestTableNavItems(t *testing.T) {
 	}
 
 	// Projects: enter present, no esc (root level)
-	projNav := ui.TableNavItems(model.ResourceProjects)
+	projNav := ui.TableNavItems(model.ResourceProjects, false)
 	hasEnter := false
 	for _, item := range projNav {
 		if item.Key == "esc" {
@@ -45,7 +45,7 @@ func TestTableNavItems(t *testing.T) {
 	}
 
 	// Agents: esc present, no enter (leaf node — no tools drill-down)
-	agentNav := ui.TableNavItems(model.ResourceAgents)
+	agentNav := ui.TableNavItems(model.ResourceAgents, false)
 	hasEscAgents := false
 	for _, item := range agentNav {
 		if item.Key == "enter" {
@@ -74,5 +74,74 @@ func TestTableUtilItemsHasFilter(t *testing.T) {
 		if !hasFilter {
 			t.Errorf("TableUtilItems(%s): missing '/' (filter) key", rt)
 		}
+	}
+}
+
+func TestTableNavItemsWithFilter(t *testing.T) {
+	// When hasFilter=true, esc should show "clear filter" for all resource types
+	for _, rt := range []model.ResourceType{
+		model.ResourceProjects, model.ResourceSessions, model.ResourceAgents,
+	} {
+		nav := ui.TableNavItems(rt, true)
+		escDesc := ""
+		for _, item := range nav {
+			if item.Key == "esc" {
+				escDesc = item.Desc
+			}
+		}
+		if escDesc != "clear filter" {
+			t.Errorf("TableNavItems(%s, hasFilter=true): expected esc desc %q, got %q", rt, "clear filter", escDesc)
+		}
+	}
+}
+
+func TestSetHighlightMatchesCompoundKey(t *testing.T) {
+	menu := ui.MenuModel{
+		NavItems: []ui.MenuItem{
+			{Key: "j/k", Desc: "down/up"},
+			{Key: "enter", Desc: "drill"},
+		},
+	}
+
+	menu.SetHighlight("j")
+
+	jk := ui.MenuItem{Key: "j/k", Desc: "down/up"}
+	if !menu.IsHighlighted(jk) {
+		t.Error("expected j/k to be highlighted after SetHighlight('j')")
+	}
+
+	enter := ui.MenuItem{Key: "enter", Desc: "drill"}
+	if menu.IsHighlighted(enter) {
+		t.Error("expected enter NOT to be highlighted")
+	}
+}
+
+func TestSetHighlightNoMatchIsNoOp(t *testing.T) {
+	menu := ui.MenuModel{
+		NavItems: []ui.MenuItem{{Key: "j/k", Desc: "down/up"}},
+	}
+
+	menu.SetHighlight("z") // no match
+
+	item := ui.MenuItem{Key: "j/k", Desc: "down/up"}
+	if menu.IsHighlighted(item) {
+		t.Error("expected no highlight when key does not match any item")
+	}
+}
+
+func TestClearHighlight(t *testing.T) {
+	menu := ui.MenuModel{
+		NavItems: []ui.MenuItem{{Key: "j/k", Desc: "down/up"}},
+	}
+	menu.SetHighlight("j")
+
+	item := ui.MenuItem{Key: "j/k", Desc: "down/up"}
+	if !menu.IsHighlighted(item) {
+		t.Fatal("expected highlight active before clear")
+	}
+
+	menu.ClearHighlight()
+	if menu.IsHighlighted(item) {
+		t.Error("expected highlight cleared after ClearHighlight")
 	}
 }

@@ -28,5 +28,6 @@ func projectRow(items []*model.Project, i int, _ bool) ui.Row {
 			model.FormatAge(time.Since(p.LastSeen)),
 		},
 		Data: p,
+		Hot:  time.Since(p.LastSeen) <= 5*time.Second,
 	}
 }

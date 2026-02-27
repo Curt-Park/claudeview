@@ -14,7 +14,7 @@ type InfoModel struct {
 	ClaudeVersion  string // Claude Code binary version
 	AppVersion     string // claudeview binary version
 	Width          int
-	MemoriesActive bool // whether <M> memories jump is available
+	MemoriesActive bool // whether <m> memories jump is available
 }
 
 // Height returns the number of terminal lines rendered by ViewWithMenu.
@@ -32,7 +32,9 @@ func (info InfoModel) Height(navCount, utilCount int) int {
 //	Col 3 (rightW chars):   t/p/m jump shortcuts
 //
 // Row 0 (Project) spans the full width. Remaining rows use the 4-column layout.
-func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
+func (info InfoModel) ViewWithMenu(menu MenuModel) string {
+	navItems := menu.NavItems
+	utilItems := menu.UtilItems
 	const labelW = 14 // visible chars reserved for label column
 	const leftW = 32  // total visible chars for the left info column
 
@@ -90,14 +92,12 @@ func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 	}
 	menuColW += 2 // trailing gap between menu columns
 
-	// Right column: t/p/m shortcuts (+ M when a project is active).
+	// Right column: p/m shortcuts (highlight when the key is active).
 	jumpHints := []string{
-		StyleKey.Render("<t>") + StyleKeyDesc.Render(" tasks"),
-		StyleKey.Render("<p>") + StyleKeyDesc.Render(" plugins"),
-		StyleKey.Render("<m>") + StyleKeyDesc.Render(" mcps"),
+		renderJumpHint(menu, "p", "plugins"),
 	}
 	if info.MemoriesActive {
-		jumpHints = append(jumpHints, StyleKey.Render("<M>")+StyleKeyDesc.Render(" memories"))
+		jumpHints = append(jumpHints, renderJumpHint(menu, "m", "memories"))
 	}
 	rightColW := 0
 	for _, h := range jumpHints {
@@ -130,9 +130,15 @@ func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 		nav := ""
 		if i < len(navItems) {
 			item := navItems[i]
-			keyStr := StyleKey.Render("<" + item.Key + ">")
-			keyPad := strings.Repeat(" ", max(maxNavKeyW-lipgloss.Width(keyStr), 0))
-			nav = keyStr + keyPad + " " + StyleKeyDesc.Render(item.Desc)
+			keyStyle := StyleKey
+			descStyle := StyleKeyDesc
+			if menu.IsHighlighted(item) {
+				keyStyle = StyleKeyHighlight
+				descStyle = StyleKeyHighlight
+			}
+			keyStr := keyStyle.Render("<" + item.Key + ">")
+			keyPad := strings.Repeat(" ", max(maxNavKeyW-lipgloss.Width(StyleKey.Render("<"+item.Key+">")), 0))
+			nav = keyStr + keyPad + " " + descStyle.Render(item.Desc)
 		}
 		navVis := lipgloss.Width(nav)
 		navPad := strings.Repeat(" ", max(menuColW-navVis, 2))
@@ -141,9 +147,15 @@ func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 		util := ""
 		if i < len(utilItems) {
 			item := utilItems[i]
-			keyStr := StyleKey.Render("<" + item.Key + ">")
-			keyPad := strings.Repeat(" ", max(maxUtilKeyW-lipgloss.Width(keyStr), 0))
-			util = keyStr + keyPad + " " + StyleKeyDesc.Render(item.Desc)
+			keyStyle := StyleKey
+			descStyle := StyleKeyDesc
+			if menu.IsHighlighted(item) {
+				keyStyle = StyleKeyHighlight
+				descStyle = StyleKeyHighlight
+			}
+			keyStr := keyStyle.Render("<" + item.Key + ">")
+			keyPad := strings.Repeat(" ", max(maxUtilKeyW-lipgloss.Width(StyleKey.Render("<"+item.Key+">")), 0))
+			util = keyStr + keyPad + " " + descStyle.Render(item.Desc)
 		}
 		utilVis := lipgloss.Width(util)
 		utilPad := strings.Repeat(" ", max(menuColW-utilVis, 2))
@@ -158,6 +170,16 @@ func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// renderJumpHint renders a single jump shortcut (e.g. "<p> plugins") with
+// optional highlight styling when the key is currently active.
+func renderJumpHint(menu MenuModel, key, desc string) string {
+	item := MenuItem{Key: key}
+	if menu.IsHighlighted(item) {
+		return StyleKeyHighlight.Render("<"+key+">") + StyleKeyHighlight.Render(" "+desc)
+	}
+	return StyleKey.Render("<"+key+">") + StyleKeyDesc.Render(" "+desc)
 }
 
 // truncateLeft returns at most maxW runes, prefixing "…" if truncated.

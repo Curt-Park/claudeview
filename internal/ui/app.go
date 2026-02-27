@@ -11,18 +11,14 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
-// ViewMode indicates what the content area is showing.
-type ViewMode int
-
-const (
-	ModeTable ViewMode = iota
-)
-
 // TickMsg is sent on each timer tick for animations.
 type TickMsg time.Time
 
 // RefreshMsg signals data has been refreshed.
 type RefreshMsg struct{}
+
+// HighlightClearMsg clears the menu key highlight after HighlightDuration.
+type HighlightClearMsg struct{}
 
 // AppModel is the top-level Bubble Tea model.
 type AppModel struct {
@@ -38,7 +34,6 @@ type AppModel struct {
 	Filter FilterModel
 
 	// Content
-	ViewMode ViewMode
 	Resource model.ResourceType
 	Table    TableView
 
@@ -56,6 +51,9 @@ type AppModel struct {
 	// Filter mode flag
 	inFilter bool
 
+	// filterStack saves parent-view filters across drill-downs
+	filterStack []string
+
 	// State saved before a t/p/m jump (for esc-to-restore)
 	jumpFrom *jumpFromState
 }
@@ -67,9 +65,8 @@ type jumpFromState struct {
 	SelectedSessionID   string
 	SelectedAgentID     string
 	Crumbs              CrumbsModel
-	ViewMode            ViewMode
-	NavItems            []MenuItem
-	UtilItems           []MenuItem
+	Filter              string
+	FilterStack         []string
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -77,9 +74,7 @@ type DataProvider interface {
 	GetProjects() []*model.Project
 	GetSessions(projectHash string) []*model.Session
 	GetAgents(sessionID string) []*model.Agent
-	GetTasks(sessionID string) []*model.Task
 	GetPlugins() []*model.Plugin
-	GetMCPServers() []*model.MCPServer
 	GetMemories(projectHash string) []*model.Memory
 }
 
@@ -90,10 +85,7 @@ func NewAppModel(dp DataProvider, initialResource model.ResourceType) AppModel {
 		Resource:     initialResource,
 	}
 	m.Info = InfoModel{}
-	m.Menu = MenuModel{
-		NavItems:  TableNavItems(m.Resource),
-		UtilItems: TableUtilItems(m.Resource),
-	}
+	m.refreshMenu()
 	m.Crumbs = CrumbsModel{Items: []string{string(initialResource)}}
 	m.Flash = FlashModel{}
 	m.Filter = FilterModel{}
@@ -129,15 +121,29 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Flash.IsExpired() // lazy expiry check
 		return m, tick()
 
+	case HighlightClearMsg:
+		m.Menu.ClearHighlight()
+		return m, nil
+
 	case tea.KeyMsg:
 		// Ctrl+C always quits
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
 
+		// Highlight menu items only when not in filter input mode.
+		var highlightCmd tea.Cmd
+		if !m.inFilter {
+			m.Menu.SetHighlight(msg.String())
+			highlightCmd = tea.Tick(HighlightDuration, func(time.Time) tea.Msg {
+				return HighlightClearMsg{}
+			})
+		}
+
 		// Filter mode
 		if m.inFilter {
-			return m.updateFilter(msg)
+			model, cmd := m.updateFilter(msg)
+			return model, tea.Batch(cmd, highlightCmd)
 		}
 
 		// Global keys (work in all view modes)
@@ -145,27 +151,21 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "/":
 			m.inFilter = true
 			m.Filter.Activate()
-			return m, nil
-		case "t":
-			m.jumpTo(model.ResourceTasks)
-			return m, nil
+			m.refreshMenu()
+			return m, highlightCmd
 		case "p":
 			m.jumpTo(model.ResourcePlugins)
-			return m, nil
+			return m, highlightCmd
 		case "m":
-			m.jumpTo(model.ResourceMCP)
-			return m, nil
-		case "M":
 			if m.SelectedProjectHash != "" {
 				m.jumpTo(model.ResourceMemory)
 			}
-			return m, nil
+			return m, highlightCmd
 		}
 
 		// View-specific keys
-		if m.ViewMode == ModeTable {
-			return m.updateTable(msg)
-		}
+		model, cmd := m.updateTable(msg)
+		return model, tea.Batch(cmd, highlightCmd)
 	}
 
 	return m, nil
@@ -178,9 +178,11 @@ func (m AppModel) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Filter.Deactivate()
 		m.Filter.Input = ""
 		m.Table.Filter = ""
+		m.refreshMenu()
 	case "enter":
 		m.inFilter = false
 		m.Filter.Deactivate()
+		m.refreshMenu()
 	case "backspace":
 		m.Filter.Backspace()
 		m.Table.Filter = m.Filter.Input
@@ -199,17 +201,37 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		if m.Table.Filter != "" {
+			// Filter clear: same view stays — keep highlight, update menu desc.
 			m.Table.Filter = ""
 			m.Filter.Input = ""
+			m.refreshMenu()
 		} else {
+			// View transition: clear highlight so next view doesn't show stale flash.
+			m.Menu.ClearHighlight()
 			m.navigateBack()
 		}
 	case "enter":
+		// View transition: clear highlight so next view doesn't show stale flash.
+		m.Menu.ClearHighlight()
 		m.drillDown()
 	default:
 		m.Table.Update(msg)
 	}
 	return m, nil
+}
+
+// refreshMenu updates the menu nav and util items based on current state.
+// hasFilter is true when a filter is active OR the filter input is open.
+func (m *AppModel) refreshMenu() {
+	m.Menu.NavItems = TableNavItems(m.Resource, m.Table.Filter != "" || m.inFilter)
+	m.Menu.UtilItems = TableUtilItems(m.Resource)
+}
+
+// switchResource pops the breadcrumb, sets the resource, and refreshes the menu.
+func (m *AppModel) switchResource(rt model.ResourceType) {
+	m.Crumbs.Pop()
+	m.Resource = rt
+	m.refreshMenu()
 }
 
 // jumpTo switches to a flat resource, saving the current state for esc-restore.
@@ -220,34 +242,45 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 		SelectedSessionID:   m.SelectedSessionID,
 		SelectedAgentID:     m.SelectedAgentID,
 		Crumbs:              m.Crumbs,
-		ViewMode:            m.ViewMode,
-		NavItems:            m.Menu.NavItems,
-		UtilItems:           m.Menu.UtilItems,
+		Filter:              m.Table.Filter,
+		FilterStack:         m.filterStack,
 	}
 	m.Resource = rt
-	m.ViewMode = ModeTable
-	m.Menu.NavItems = TableNavItems(rt)
-	m.Menu.UtilItems = TableUtilItems(rt)
+	m.filterStack = nil
+	m.refreshMenu()
 	m.Crumbs.Reset(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
 	m.Table.Filter = ""
 }
 
+// popFilter restores the parent view's filter from filterStack.
+func (m *AppModel) popFilter() {
+	if n := len(m.filterStack); n > 0 {
+		m.Table.Filter = m.filterStack[n-1]
+		m.Filter.Input = m.Table.Filter
+		m.filterStack = m.filterStack[:n-1]
+	} else {
+		m.Table.Filter = ""
+		m.Filter.Input = ""
+	}
+}
+
 func (m *AppModel) navigateBack() {
 	// Flat resources jumped to via t/p/m: restore previous state
 	switch m.Resource {
-	case model.ResourceTasks, model.ResourcePlugins, model.ResourceMCP, model.ResourceMemory:
+	case model.ResourcePlugins, model.ResourceMemory:
 		if m.jumpFrom != nil {
 			m.Resource = m.jumpFrom.Resource
 			m.SelectedProjectHash = m.jumpFrom.SelectedProjectHash
 			m.SelectedSessionID = m.jumpFrom.SelectedSessionID
 			m.SelectedAgentID = m.jumpFrom.SelectedAgentID
 			m.Crumbs = m.jumpFrom.Crumbs
-			m.ViewMode = m.jumpFrom.ViewMode
-			m.Menu.NavItems = m.jumpFrom.NavItems
-			m.Menu.UtilItems = m.jumpFrom.UtilItems
+			m.Table.Filter = m.jumpFrom.Filter
+			m.Filter.Input = m.jumpFrom.Filter
+			m.filterStack = m.jumpFrom.FilterStack
 			m.jumpFrom = nil
+			m.refreshMenu()
 		} else {
 			// No saved state (e.g. started directly on this resource): go to projects.
 			m.Resource = model.ResourceProjects
@@ -255,9 +288,7 @@ func (m *AppModel) navigateBack() {
 			m.SelectedSessionID = ""
 			m.SelectedAgentID = ""
 			m.Crumbs.Reset(string(model.ResourceProjects))
-			m.ViewMode = ModeTable
-			m.Menu.NavItems = TableNavItems(model.ResourceProjects)
-			m.Menu.UtilItems = TableUtilItems(model.ResourceProjects)
+			m.refreshMenu()
 		}
 		return
 	}
@@ -265,18 +296,12 @@ func (m *AppModel) navigateBack() {
 	switch m.Resource {
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
-		m.Crumbs.Pop()
-		m.Resource = model.ResourceSessions
-		m.ViewMode = ModeTable
-		m.Menu.NavItems = TableNavItems(m.Resource)
-		m.Menu.UtilItems = TableUtilItems(m.Resource)
+		m.popFilter()
+		m.switchResource(model.ResourceSessions)
 	case model.ResourceSessions:
 		m.SelectedProjectHash = ""
-		m.Crumbs.Pop()
-		m.Resource = model.ResourceProjects
-		m.ViewMode = ModeTable
-		m.Menu.NavItems = TableNavItems(m.Resource)
-		m.Menu.UtilItems = TableUtilItems(m.Resource)
+		m.popFilter()
+		m.switchResource(model.ResourceProjects)
 	}
 }
 
@@ -300,13 +325,13 @@ func (m *AppModel) drillDown() {
 }
 
 func (m *AppModel) drillInto(rt model.ResourceType) {
+	m.filterStack = append(m.filterStack, m.Table.Filter)
+	m.Table.Filter = ""
 	m.Resource = rt
-	m.ViewMode = ModeTable
-	m.Menu.NavItems = TableNavItems(m.Resource)
-	m.Menu.UtilItems = TableUtilItems(m.Resource)
 	m.Crumbs.Push(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
+	m.refreshMenu()
 }
 
 func (m *AppModel) updateSizes() {
@@ -353,7 +378,7 @@ func (m AppModel) View() string {
 	}
 
 	// --- 1. Info panel (7 lines) ---
-	infoStr := m.Info.ViewWithMenu(m.Menu.NavItems, m.Menu.UtilItems)
+	infoStr := m.Info.ViewWithMenu(m.Menu)
 
 	// --- 2. Resource title bar ---
 	titleStr := m.renderTitleBar()

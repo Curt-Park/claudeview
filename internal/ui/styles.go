@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/Curt-Park/claudeview/internal/model"
+)
 
 var (
 	// Colors
@@ -66,6 +70,12 @@ var (
 	StyleKeyDesc = lipgloss.NewStyle().
 			Foreground(colorGray)
 
+	StyleKeyHighlight = lipgloss.NewStyle().
+				Foreground(colorWhite).
+				Bold(true)
+
+	StyleHotRow = lipgloss.NewStyle().Foreground(colorYellow)
+
 	StyleFilter = lipgloss.NewStyle().
 			Foreground(colorYellow)
 
@@ -80,26 +90,22 @@ var (
 	StyleRowSubtitleSelected = lipgloss.NewStyle().Background(colorBgSel).Foreground(colorGray)
 )
 
-// StatusStyle returns the lipgloss style for a given status string.
-func StatusStyle(status string) lipgloss.Style {
+// StatusStyle returns the lipgloss style for a given status.
+func StatusStyle(status model.Status) lipgloss.Style {
 	switch status {
-	case "active":
+	case model.StatusActive:
 		return StyleActive
-	case "thinking":
+	case model.StatusThinking:
 		return StyleThinking
-	case "reading":
+	case model.StatusReading:
 		return StyleReading
-	case "writing":
-		return StyleWriting
-	case "searching":
-		return StyleSearching
-	case "executing":
+	case model.StatusExecuting:
 		return StyleExecuting
-	case "done", "ended", "completed":
+	case model.StatusDone, model.StatusEnded, model.StatusCompleted:
 		return StyleDone
-	case "error", "failed":
+	case model.StatusError, model.StatusFailed:
 		return StyleError
-	case "running":
+	case model.StatusRunning:
 		return StyleRunning
 	default:
 		return StyleNormal
