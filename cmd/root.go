@@ -81,35 +81,29 @@ func run(cmd *cobra.Command, args []string) error {
 
 // dataLoadedMsg carries freshly loaded data back to the UI goroutine.
 type dataLoadedMsg struct {
-	projects   []*model.Project
-	sessions   []*model.Session
-	agents     []*model.Agent
-	tasks      []*model.Task
-	plugins    []*model.Plugin
-	mcpServers []*model.MCPServer
-	memories   []*model.Memory
-	resource   model.ResourceType
+	projects []*model.Project
+	sessions []*model.Session
+	agents   []*model.Agent
+	plugins  []*model.Plugin
+	memories []*model.Memory
+	resource model.ResourceType
 }
 
 // rootModel wraps AppModel and manages actual resource data.
 type rootModel struct {
-	app        ui.AppModel
-	dp         ui.DataProvider
-	projects   []*model.Project
-	sessions   []*model.Session
-	agents     []*model.Agent
-	tasks      []*model.Task
-	plugins    []*model.Plugin
-	mcpServers []*model.MCPServer
-	memories   []*model.Memory
+	app      ui.AppModel
+	dp       ui.DataProvider
+	projects []*model.Project
+	sessions []*model.Session
+	agents   []*model.Agent
+	plugins  []*model.Plugin
+	memories []*model.Memory
 
 	// Resource views (eagerly initialized in newRootModel)
 	projectsView *view.ResourceView[*model.Project]
 	sessionsView *view.ResourceView[*model.Session]
 	agentsView   *view.ResourceView[*model.Agent]
-	tasksView    *view.ResourceView[*model.Task]
 	pluginsView  *view.ResourceView[*model.Plugin]
-	mcpView      *view.ResourceView[*model.MCPServer]
 	memoriesView *view.ResourceView[*model.Memory]
 
 	// Static info (set once at startup)
@@ -129,9 +123,7 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		projectsView:  view.NewProjectsView(0, 0),
 		sessionsView:  view.NewSessionsView(0, 0),
 		agentsView:    view.NewAgentsView(0, 0),
-		tasksView:     view.NewTasksView(0, 0),
 		pluginsView:   view.NewPluginsView(0, 0),
-		mcpView:       view.NewMCPView(0, 0),
 		memoriesView:  view.NewMemoriesView(0, 0),
 	}
 	rm.loadData()
@@ -170,12 +162,8 @@ func (rm *rootModel) loadData() {
 		rm.sessions = rm.dp.GetSessions(rm.app.SelectedProjectHash)
 	case model.ResourceAgents:
 		rm.agents = rm.dp.GetAgents(rm.app.SelectedSessionID)
-	case model.ResourceTasks:
-		rm.tasks = rm.dp.GetTasks(rm.app.SelectedSessionID)
 	case model.ResourcePlugins:
 		rm.plugins = rm.dp.GetPlugins()
-	case model.ResourceMCP:
-		rm.mcpServers = rm.dp.GetMCPServers()
 	case model.ResourceMemory:
 		rm.memories = rm.dp.GetMemories(rm.app.SelectedProjectHash)
 	}
@@ -207,12 +195,8 @@ func (rm *rootModel) syncView() {
 		rm.app.Table = rm.sessionsView.Sync(rm.sessions, w, h, sel, off, flt, rm.app.SelectedProjectHash == "")
 	case model.ResourceAgents:
 		rm.app.Table = rm.agentsView.Sync(rm.agents, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
-	case model.ResourceTasks:
-		rm.app.Table = rm.tasksView.Sync(rm.tasks, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
 	case model.ResourcePlugins:
 		rm.app.Table = rm.pluginsView.Sync(rm.plugins, w, h, sel, off, flt, false)
-	case model.ResourceMCP:
-		rm.app.Table = rm.mcpView.Sync(rm.mcpServers, w, h, sel, off, flt, false)
 	case model.ResourceMemory:
 		rm.app.Table = rm.memoriesView.Sync(rm.memories, w, h, sel, off, flt, false)
 	}
@@ -220,11 +204,7 @@ func (rm *rootModel) syncView() {
 
 func (rm *rootModel) updateInfo() {
 	rm.app.Info.Project = rm.app.SelectedProjectHash
-	sess := rm.app.SelectedSessionID
-	if len(sess) > 8 {
-		sess = sess[:8]
-	}
-	rm.app.Info.Session = sess
+	rm.app.Info.Session = view.ShortID(rm.app.SelectedSessionID, 8)
 	rm.app.Info.User = rm.userStr
 	rm.app.Info.ClaudeVersion = rm.claudeVersion
 	rm.app.Info.AppVersion = AppVersion
@@ -259,12 +239,8 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rm.sessions = msg.sessions
 			case model.ResourceAgents:
 				rm.agents = msg.agents
-			case model.ResourceTasks:
-				rm.tasks = msg.tasks
 			case model.ResourcePlugins:
 				rm.plugins = msg.plugins
-			case model.ResourceMCP:
-				rm.mcpServers = msg.mcpServers
 			case model.ResourceMemory:
 				rm.memories = msg.memories
 			}
@@ -304,12 +280,8 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			msg.sessions = dp.GetSessions(projectHash)
 		case model.ResourceAgents:
 			msg.agents = dp.GetAgents(sessionID)
-		case model.ResourceTasks:
-			msg.tasks = dp.GetTasks(sessionID)
 		case model.ResourcePlugins:
 			msg.plugins = dp.GetPlugins()
-		case model.ResourceMCP:
-			msg.mcpServers = dp.GetMCPServers()
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
 		}
@@ -324,17 +296,14 @@ func (rm *rootModel) View() string {
 // --- Demo Data Provider ---
 
 type demoDataProvider struct {
-	projects   []*model.Project
-	plugins    []*model.Plugin
-	mcpServers []*model.MCPServer
+	projects []*model.Project
+	plugins  []*model.Plugin
 }
 
 func newDemoProvider() ui.DataProvider {
-	projects := demo.GenerateProjects()
 	return &demoDataProvider{
-		projects:   projects,
-		plugins:    demo.GeneratePlugins(),
-		mcpServers: demo.GenerateMCPServers(),
+		projects: demo.GenerateProjects(),
+		plugins:  demo.GeneratePlugins(),
 	}
 }
 
@@ -369,18 +338,7 @@ func (d *demoDataProvider) GetAgents(sessionID string) []*model.Agent {
 	}
 	return []*model.Agent{}
 }
-func (d *demoDataProvider) GetTasks(sessionID string) []*model.Task {
-	if len(d.projects) > 0 && len(d.projects[0].Sessions) > 0 {
-		sid := d.projects[0].Sessions[0].ID
-		if sessionID != "" {
-			sid = sessionID
-		}
-		return demo.GenerateTasks(sid)
-	}
-	return []*model.Task{}
-}
-func (d *demoDataProvider) GetPlugins() []*model.Plugin       { return d.plugins }
-func (d *demoDataProvider) GetMCPServers() []*model.MCPServer { return d.mcpServers }
+func (d *demoDataProvider) GetPlugins() []*model.Plugin { return d.plugins }
 func (d *demoDataProvider) GetMemories(_ string) []*model.Memory {
 	return demo.GenerateMemories()
 }
@@ -473,31 +431,6 @@ func (l *liveDataProvider) GetAgents(sessionID string) []*model.Agent {
 	return []*model.Agent{}
 }
 
-func (l *liveDataProvider) GetTasks(sessionID string) []*model.Task {
-	if sessionID == "" {
-		sessionID = l.currentSession
-	}
-	entries, err := config.LoadTasks(l.claudeDir, sessionID)
-	if err != nil {
-		return []*model.Task{}
-	}
-	var tasks []*model.Task
-	for _, e := range entries {
-		tasks = append(tasks, &model.Task{
-			ID:          e.ID,
-			SessionID:   sessionID,
-			Subject:     e.Subject,
-			Description: e.Description,
-			Status:      model.Status(e.Status),
-			Owner:       e.Owner,
-			BlockedBy:   e.BlockedBy,
-			Blocks:      e.Blocks,
-			ActiveForm:  e.ActiveForm,
-		})
-	}
-	return tasks
-}
-
 func (l *liveDataProvider) GetPlugins() []*model.Plugin {
 	installed, err := config.LoadInstalledPlugins(l.claudeDir)
 	if err != nil {
@@ -525,29 +458,6 @@ func (l *liveDataProvider) GetPlugins() []*model.Plugin {
 		})
 	}
 	return plugins
-}
-
-func (l *liveDataProvider) GetMCPServers() []*model.MCPServer {
-	settings, err := config.LoadSettings(l.claudeDir)
-	if err != nil {
-		return []*model.MCPServer{}
-	}
-	var servers []*model.MCPServer
-	for name, s := range settings.MCPServers {
-		transport := s.Type
-		if transport == "" {
-			transport = "stdio"
-		}
-		servers = append(servers, &model.MCPServer{
-			Name:      name,
-			Transport: transport,
-			Command:   s.Command,
-			Args:      s.Args,
-			URL:       s.URL,
-			Status:    model.StatusRunning,
-		})
-	}
-	return servers
 }
 
 func (l *liveDataProvider) GetMemories(projectHash string) []*model.Memory {
@@ -601,7 +511,6 @@ func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Ses
 	l.mu.Unlock()
 
 	s.NumTurns = agg.NumTurns
-	s.DurationMS = agg.DurationMS
 	s.Topic = agg.Topic
 	s.Branch = agg.Branch
 	s.ToolCallCount = agg.TotalToolCalls

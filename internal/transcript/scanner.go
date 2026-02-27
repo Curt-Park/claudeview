@@ -47,7 +47,7 @@ func ScanProjects(claudeDir string) ([]ProjectInfo, error) {
 			continue
 		}
 
-		sessions, err := ScanSessions(projectPath)
+		sessions, err := scanSessions(projectPath)
 		if err != nil {
 			continue
 		}
@@ -125,8 +125,8 @@ func scanJSONLFiles(dir string, descending bool, includeSubagentDir bool) ([]Ses
 	return sessions, nil
 }
 
-// ScanSessions scans a project directory for session JSONL files.
-func ScanSessions(projectPath string) ([]SessionInfo, error) {
+// scanSessions scans a project directory for session JSONL files.
+func scanSessions(projectPath string) ([]SessionInfo, error) {
 	return scanJSONLFiles(projectPath, true, true)
 }
 

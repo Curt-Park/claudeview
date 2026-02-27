@@ -71,10 +71,41 @@ func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[stri
 	result.Turns = append(result.Turns, *turn)
 }
 
+// newJSONLScanner creates a bufio.Scanner with a 10MB buffer for JSONL parsing.
+func newJSONLScanner(r io.Reader) *bufio.Scanner {
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, 1<<20), 10<<20)
+	return s
+}
+
+// parseSystemDuration extracts duration, turn count, and cost from a system entry.
+// It handles both the old format (fields in Message) and new format (fields at top level).
+func parseSystemDuration(message json.RawMessage, rawLine []byte) (durationMS int64, numTurns int, costUSD float64) {
+	if len(message) > 0 {
+		var msg struct {
+			Subtype      string  `json:"subtype"`
+			DurationMS   int64   `json:"duration_ms"`
+			NumTurns     int     `json:"num_turns"`
+			TotalCostUSD float64 `json:"total_cost_usd"`
+		}
+		if err := json.Unmarshal(message, &msg); err == nil && msg.Subtype == "turn_duration" {
+			return msg.DurationMS, msg.NumTurns, msg.TotalCostUSD
+		}
+	} else {
+		var msg struct {
+			Subtype    string `json:"subtype"`
+			DurationMS int64  `json:"durationMs"`
+		}
+		if err := json.Unmarshal(rawLine, &msg); err == nil && msg.Subtype == "turn_duration" {
+			return msg.DurationMS, 0, 0
+		}
+	}
+	return 0, 0, 0
+}
+
 // Parse reads from an io.Reader and parses JSONL transcript entries.
 func Parse(r io.Reader) (*ParsedTranscript, error) {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024) // 10MB buffer
+	scanner := newJSONLScanner(r)
 
 	result := &ParsedTranscript{
 		TokensByModel: make(map[string]Usage),
@@ -91,7 +122,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			continue
 		}
 
-		var entry Entry
+		var entry entry
 		if err := json.Unmarshal(line, &entry); err != nil {
 			continue
 		}
@@ -100,12 +131,12 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 
 		switch entry.Type {
 		case "user":
-			var msg UserMessage
+			var msg userMessage
 			if err := json.Unmarshal(entry.Message, &msg); err != nil {
 				continue
 			}
 			// Collect tool results to match with pending tool calls
-			for _, c := range msg.ToolResults() {
+			for _, c := range msg.toolResults() {
 				toolResults[c.ToolUseID] = c.Content
 				toolErrors[c.ToolUseID] = c.IsError
 			}
@@ -116,7 +147,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			}
 			// Add user text turns
 			turn := Turn{Role: "user", Timestamp: ts}
-			turn.Text = msg.TextContent()
+			turn.Text = msg.textContent()
 			if turn.Text != "" {
 				// Set topic from first real user message, matching claude -r display (skip skill prefix lines)
 				if result.Topic == "" && !strings.HasPrefix(turn.Text, "Base directory for this skill:") {
@@ -126,7 +157,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			}
 
 		case "assistant":
-			var msg AssistantMessage
+			var msg assistantMessage
 			if err := json.Unmarshal(entry.Message, &msg); err != nil {
 				continue
 			}
@@ -154,31 +185,14 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			pendingAssistantTurn = &turn
 
 		case "system":
-			// Two formats in the wild:
-			//   Old: system fields inside a "message" object, duration_ms snake_case.
-			//   New: system fields at top level, durationMs camelCase (no cost/turns).
-			if len(entry.Message) > 0 {
-				// Old format
-				var msg struct {
-					Subtype      string  `json:"subtype"`
-					DurationMS   int64   `json:"duration_ms"`
-					NumTurns     int     `json:"num_turns"`
-					TotalCostUSD float64 `json:"total_cost_usd"`
-				}
-				if err := json.Unmarshal(entry.Message, &msg); err == nil && msg.Subtype == "turn_duration" {
-					result.TotalCost = msg.TotalCostUSD
-					result.DurationMS += msg.DurationMS
-					result.NumTurns = msg.NumTurns
-				}
-			} else {
-				// New format: fields at top level
-				var msg struct {
-					Subtype    string `json:"subtype"`
-					DurationMS int64  `json:"durationMs"`
-				}
-				if err := json.Unmarshal(line, &msg); err == nil && msg.Subtype == "turn_duration" {
-					result.DurationMS += msg.DurationMS
-				}
+			// Two formats: old (fields in Message, snake_case) and new (top-level, camelCase).
+			dur, turns, cost := parseSystemDuration(entry.Message, line)
+			result.DurationMS += dur
+			if turns > 0 {
+				result.NumTurns = turns
+			}
+			if cost > 0 {
+				result.TotalCost = cost
 			}
 		}
 	}
@@ -224,8 +238,7 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 		}
 	}
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
+	scanner := newJSONLScanner(f)
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -233,7 +246,7 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 			continue
 		}
 
-		var entry Entry
+		var entry entry
 		if err := json.Unmarshal(line, &entry); err != nil {
 			continue
 		}
@@ -245,13 +258,13 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 
 		switch entry.Type {
 		case "user":
-			var msg UserMessage
+			var msg userMessage
 			if err := json.Unmarshal(entry.Message, &msg); err != nil {
 				break
 			}
 			// Set topic from first real user message, matching claude -r display (skip skill prefix lines)
 			if agg.Topic == "" {
-				if text := msg.TextContent(); text != "" {
+				if text := msg.textContent(); text != "" {
 					if !strings.HasPrefix(text, "Base directory for this skill:") {
 						agg.Topic = extractTopic(text)
 					}
@@ -259,7 +272,7 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 			}
 
 		case "assistant":
-			var msg AssistantMessage
+			var msg assistantMessage
 			if err := json.Unmarshal(entry.Message, &msg); err != nil {
 				break
 			}
@@ -275,24 +288,10 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 			agg.NumTurns++
 
 		case "system":
-			if len(entry.Message) > 0 {
-				var msg struct {
-					Subtype    string `json:"subtype"`
-					DurationMS int64  `json:"duration_ms"`
-					NumTurns   int    `json:"num_turns"`
-				}
-				if err := json.Unmarshal(entry.Message, &msg); err == nil && msg.Subtype == "turn_duration" {
-					agg.DurationMS += msg.DurationMS
-					agg.NumTurns = msg.NumTurns
-				}
-			} else {
-				var msg struct {
-					Subtype    string `json:"subtype"`
-					DurationMS int64  `json:"durationMs"`
-				}
-				if err := json.Unmarshal(line, &msg); err == nil && msg.Subtype == "turn_duration" {
-					agg.DurationMS += msg.DurationMS
-				}
+			dur, turns, _ := parseSystemDuration(entry.Message, line)
+			agg.DurationMS += dur
+			if turns > 0 {
+				agg.NumTurns = turns
 			}
 		}
 	}

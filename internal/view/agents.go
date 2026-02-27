@@ -31,14 +31,10 @@ func agentRow(items []*model.Agent, i int, flatMode bool) ui.Row {
 	prefix := a.TreePrefix(isLast)
 	name := prefix + a.DisplayName()
 
-	statusStyle := ui.StatusStyle(string(a.Status))
+	statusStyle := ui.StatusStyle(a.Status)
 	var cells []string
 	if flatMode {
-		sessionID := a.SessionID
-		if len(sessionID) > 8 {
-			sessionID = sessionID[:8]
-		}
-		cells = append(cells, sessionID)
+		cells = append(cells, ShortID(a.SessionID, 8))
 	}
 	cells = append(cells,
 		name,

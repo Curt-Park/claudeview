@@ -2,7 +2,7 @@ BINARY_NAME := claudeview
 VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS     := -ldflags "-X main.Version=$(VERSION) -s -w"
 
-.PHONY: build install test bdd lint clean demo cross-build
+.PHONY: build install test lint clean demo cross-build
 
 ## build: build the binary for the current platform
 build:
@@ -17,10 +17,6 @@ install: build
 ## test: run all tests
 test:
 	go test -race -count=1 ./...
-
-## bdd: run BDD integration tests
-bdd:
-	go test -race -count=1 ./internal/ui/bdd/...
 
 ## fmt: run formatting
 fmt:

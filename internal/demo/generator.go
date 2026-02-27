@@ -187,16 +187,6 @@ func generateToolCalls(sessionID, agentID string, count int) []*model.ToolCall {
 	return calls
 }
 
-// GenerateTasks creates synthetic demo tasks.
-func GenerateTasks(sessionID string) []*model.Task {
-	return []*model.Task{
-		{ID: "1", SessionID: sessionID, Subject: "Explore project context", Status: model.StatusCompleted},
-		{ID: "2", SessionID: sessionID, Subject: "Ask clarifying questions", Status: model.StatusCompleted, BlockedBy: []string{"1"}},
-		{ID: "3", SessionID: sessionID, Subject: "Propose approaches", Status: model.StatusInProgress, BlockedBy: []string{"2"}},
-		{ID: "4", SessionID: sessionID, Subject: "Present design", Status: model.StatusPending, BlockedBy: []string{"3"}},
-	}
-}
-
 // GeneratePlugins creates synthetic demo plugins.
 func GeneratePlugins() []*model.Plugin {
 	return []*model.Plugin{
@@ -226,38 +216,6 @@ func GeneratePlugins() []*model.Plugin {
 			Enabled:     false,
 			InstalledAt: "2025-10-01",
 			SkillCount:  3,
-		},
-	}
-}
-
-// GenerateMCPServers creates synthetic demo MCP servers.
-func GenerateMCPServers() []*model.MCPServer {
-	return []*model.MCPServer{
-		{
-			Name:      "filesystem",
-			Plugin:    "superpowers",
-			Transport: "stdio",
-			Command:   "npx",
-			Args:      []string{"@anthropic/mcp-fs"},
-			ToolCount: 8,
-			Status:    model.StatusRunning,
-		},
-		{
-			Name:      "github",
-			Plugin:    "Notion",
-			Transport: "stdio",
-			Command:   "notion-mcp-server",
-			ToolCount: 12,
-			Status:    model.StatusRunning,
-		},
-		{
-			Name:      "sqlite",
-			Plugin:    "superpowers",
-			Transport: "stdio",
-			Command:   "mcp-server-sqlite",
-			Args:      []string{"--db-path", "~/.claude/data.db"},
-			ToolCount: 6,
-			Status:    model.StatusDone,
 		},
 	}
 }

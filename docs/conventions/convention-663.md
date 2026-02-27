@@ -21,7 +21,7 @@ tags:
   - make
   - pre-completion
   - quality-gate
-title: Pre-completion checklist — make fmt, lint, test, bdd
+title: Pre-completion checklist — make fmt, lint, test
 type: convention
 ---
 
@@ -32,8 +32,7 @@ Run the following commands in order and confirm all pass before finishing any ta
 ```bash
 make fmt    # Format all Go source files (gofmt + goimports)
 make lint   # Static analysis via golangci-lint — enforce style and catch bugs early
-make test   # Run all unit tests with race detector — verify correctness and concurrency safety
-make bdd    # Run BDD integration tests — verify observable UI behavior matches the spec
+make test   # Run all tests with race detector — unit, render integration, and BDD-style tests
 ```
 
 **Purpose:** Prevent regressions, enforce consistent style, and ensure the codebase remains shippable after every change — no matter how small.

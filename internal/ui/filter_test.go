@@ -42,27 +42,3 @@ func TestFilterAddCharAndBackspace(t *testing.T) {
 		t.Error("Backspace on empty should be no-op")
 	}
 }
-
-func TestFilterMatches(t *testing.T) {
-	f := ui.FilterModel{}
-
-	// Empty filter matches everything
-	if !f.Matches("anything") {
-		t.Error("empty filter should match anything")
-	}
-
-	f.Activate()
-	f.AddChar('f')
-	f.AddChar('o')
-	f.AddChar('o')
-
-	if !f.Matches("foobar") {
-		t.Error("'foobar' should match filter 'foo'")
-	}
-	if !f.Matches("FOO") {
-		t.Error("'FOO' should match filter 'foo' (case insensitive)")
-	}
-	if f.Matches("bar") {
-		t.Error("'bar' should not match filter 'foo'")
-	}
-}

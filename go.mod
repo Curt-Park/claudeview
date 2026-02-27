@@ -7,7 +7,6 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260223200540-d6a276319c45
-	github.com/fsnotify/fsnotify v1.9.0
 	github.com/spf13/cobra v1.10.2
 )
 
