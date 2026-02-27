@@ -173,6 +173,74 @@ func TestEscClearsRestoredFilter(t *testing.T) {
 	}
 }
 
+func TestDrilldownPluginToDetail(t *testing.T) {
+	p := &model.Plugin{Name: "superpowers", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePlugins)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"superpowers", "1.0", "user", "enabled", "0", "0", "0", "0", "0", ""},
+		Data:  p,
+	}})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.Resource != model.ResourcePluginDetail {
+		t.Errorf("expected resource=plugin-detail after Enter on plugin, got %s", app.Resource)
+	}
+	if app.SelectedPlugin != p {
+		t.Errorf("expected SelectedPlugin set after Enter")
+	}
+}
+
+func TestEscFromPluginDetailReturnsToPlugins(t *testing.T) {
+	p := &model.Plugin{Name: "superpowers", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePlugins)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"superpowers", "1.0", "user", "enabled", "0", "0", "0", "0", "0", ""},
+		Data:  p,
+	}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if app.Resource != model.ResourcePlugins {
+		t.Errorf("expected resource=plugins after Esc from plugin-detail, got %s", app.Resource)
+	}
+}
+
+func TestDrilldownMemoryToDetail(t *testing.T) {
+	m := &model.Memory{Name: "MEMORY.md", Path: "/tmp/MEMORY.md"}
+	app := newApp(model.ResourceMemory)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"MEMORY.md", "", "1 KB", "1h"},
+		Data:  m,
+	}})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.Resource != model.ResourceMemoryDetail {
+		t.Errorf("expected resource=memory-detail after Enter on memory, got %s", app.Resource)
+	}
+	if app.SelectedMemory != m {
+		t.Errorf("expected SelectedMemory set after Enter")
+	}
+}
+
+func TestEscFromMemoryDetailReturnsToMemories(t *testing.T) {
+	m := &model.Memory{Name: "MEMORY.md", Path: "/tmp/MEMORY.md"}
+	app := newApp(model.ResourceMemory)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"MEMORY.md", "", "1 KB", "1h"},
+		Data:  m,
+	}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if app.Resource != model.ResourceMemory {
+		t.Errorf("expected resource=memories after Esc from memory-detail, got %s", app.Resource)
+	}
+}
+
 func TestJumpPreservesFilterStack(t *testing.T) {
 	p := &model.Project{Hash: "proj-abc123"}
 	s := &model.Session{ID: "sess-xyz789"}

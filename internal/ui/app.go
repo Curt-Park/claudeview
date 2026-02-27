@@ -41,6 +41,8 @@ type AppModel struct {
 	SelectedProjectHash string
 	SelectedSessionID   string
 	SelectedAgentID     string
+	SelectedPlugin      *model.Plugin
+	SelectedMemory      *model.Memory
 
 	// Data providers (injected from outside)
 	DataProvider DataProvider
@@ -302,6 +304,10 @@ func (m *AppModel) navigateBack() {
 		m.SelectedProjectHash = ""
 		m.popFilter()
 		m.switchResource(model.ResourceProjects)
+	case model.ResourcePluginDetail:
+		m.switchResource(model.ResourcePlugins)
+	case model.ResourceMemoryDetail:
+		m.switchResource(model.ResourceMemory)
 	}
 }
 
@@ -321,6 +327,16 @@ func (m *AppModel) drillDown() {
 			m.SelectedSessionID = s.ID
 		}
 		m.drillInto(model.ResourceAgents)
+	case model.ResourcePlugins:
+		if p, ok := row.Data.(*model.Plugin); ok {
+			m.SelectedPlugin = p
+		}
+		m.drillInto(model.ResourcePluginDetail)
+	case model.ResourceMemory:
+		if mem, ok := row.Data.(*model.Memory); ok {
+			m.SelectedMemory = mem
+		}
+		m.drillInto(model.ResourceMemoryDetail)
 	}
 }
 
