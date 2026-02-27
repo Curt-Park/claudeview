@@ -114,13 +114,14 @@ func TestTopicSkipsSkillPrefix(t *testing.T) {
 	}
 }
 
-func TestTopicUsesLastUserMessage(t *testing.T) {
-	f, err := os.CreateTemp("", "lasttopic-*.jsonl")
+func TestTopicUsesFirstUserMessage(t *testing.T) {
+	f, err := os.CreateTemp("", "firsttopic-*.jsonl")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.Remove(f.Name()) }()
 
+	// Topic should be the first user message, matching claude -r display
 	content := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"How do I implement OAuth?"}]}}` + "\n" +
 		`{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"Here is how..."}],"model":"claude-sonnet-4-6","usage":{"input_tokens":10,"output_tokens":5}}}` + "\n" +
 		`{"type":"user","timestamp":"2025-01-01T10:00:02Z","message":{"role":"user","content":[{"type":"text","text":"Now refactor the token refresh logic"}]}}` + "\n"
@@ -133,9 +134,9 @@ func TestTopicUsesLastUserMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
 	}
-	want := "Now refactor the token refresh logic"
+	want := "How do I implement OAuth?"
 	if result.Topic != want {
-		t.Errorf("expected last user message as topic, got %q", result.Topic)
+		t.Errorf("expected first user message as topic, got %q", result.Topic)
 	}
 }
 
