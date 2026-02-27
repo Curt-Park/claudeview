@@ -15,10 +15,8 @@ import (
 type ViewMode int
 
 const (
-	ModeTable  ViewMode = iota
-	ModeLog             // l key
-	ModeDetail          // d key
-	ModeYAML            // y key — JSON dump of selected row
+	ModeTable ViewMode = iota
+	ModeLog            // l key
 )
 
 // TickMsg is sent on each timer tick for animations.
@@ -27,14 +25,8 @@ type TickMsg time.Time
 // RefreshMsg signals data has been refreshed.
 type RefreshMsg struct{}
 
-// DetailRequestMsg signals that the detail view should be populated.
-type DetailRequestMsg struct{}
-
 // LogRequestMsg signals that the log view should be populated.
 type LogRequestMsg struct{}
-
-// YAMLRequestMsg signals that the JSON dump view should be populated.
-type YAMLRequestMsg struct{}
 
 // AppModel is the top-level Bubble Tea model.
 type AppModel struct {
@@ -54,7 +46,6 @@ type AppModel struct {
 	Resource model.ResourceType
 	Table    TableView
 	Log      LogView
-	Detail   DetailView
 
 	// Navigation context (set on drill-down)
 	SelectedProjectHash string
@@ -177,8 +168,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTable(msg)
 		case ModeLog:
 			return m.updateLog(msg)
-		case ModeDetail, ModeYAML:
-			return m.updateDetail(msg)
 		}
 	}
 
@@ -231,18 +220,6 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.refreshLog()
 			return m, func() tea.Msg { return LogRequestMsg{} }
 		}
-	case "d":
-		m.ViewMode = ModeDetail
-		m.Menu.NavItems = DetailNavItems()
-		m.Menu.UtilItems = DetailUtilItems()
-		m.refreshDetail()
-		return m, func() tea.Msg { return DetailRequestMsg{} }
-	case "y":
-		m.ViewMode = ModeYAML
-		m.Menu.NavItems = DetailNavItems()
-		m.Menu.UtilItems = DetailUtilItems()
-		m.refreshDetail()
-		return m, func() tea.Msg { return YAMLRequestMsg{} }
 	default:
 		m.Table.Update(msg)
 	}
@@ -279,17 +256,6 @@ func (m AppModel) updateLog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.Log.Update(msg)
-	return m, nil
-}
-
-func (m AppModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
-		m.ViewMode = ModeTable
-		m.Menu.NavItems = TableNavItems(m.Resource)
-		m.Menu.UtilItems = TableUtilItems(m.Resource)
-		return m, nil
-	}
-	m.Detail.Update(msg)
 	return m, nil
 }
 
@@ -390,10 +356,6 @@ func (m *AppModel) refreshLog() {
 	m.Log = NewLogView(string(m.Resource), m.contentWidth(), m.contentHeight())
 }
 
-func (m *AppModel) refreshDetail() {
-	m.Detail = NewDetailView(string(m.Resource), m.contentWidth(), m.contentHeight())
-}
-
 func (m *AppModel) updateSizes() {
 	w := m.contentWidth()
 	h := m.contentHeight()
@@ -405,8 +367,6 @@ func (m *AppModel) updateSizes() {
 	m.Table.Height = h
 	m.Log.Width = w
 	m.Log.Height = h
-	m.Detail.Width = w
-	m.Detail.Height = h
 }
 
 // ContentHeight returns the number of terminal lines available for content.
@@ -454,8 +414,6 @@ func (m AppModel) View() string {
 		contentStr = m.Table.View()
 	case ModeLog:
 		contentStr = m.Log.View()
-	case ModeDetail, ModeYAML:
-		contentStr = m.Detail.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
 	if limit := m.contentHeight(); len(rawLines) > limit {

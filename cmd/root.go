@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -270,14 +269,8 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rm.syncView()
 		}
 
-	case ui.DetailRequestMsg:
-		rm.populateDetail()
-
 	case ui.LogRequestMsg:
 		rm.populateLog()
-
-	case ui.YAMLRequestMsg:
-		rm.populateJSON()
 
 	}
 
@@ -295,55 +288,6 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return rm, tea.Batch(cmd, extraCmd)
 	}
 	return rm, cmd
-}
-
-func (rm *rootModel) populateJSON() {
-	row := rm.app.Table.SelectedRow()
-	if row == nil {
-		return
-	}
-	b, err := json.MarshalIndent(row.Data, "", "  ")
-	if err != nil {
-		rm.app.Detail.SetContentString(fmt.Sprintf("error: %v", err))
-		return
-	}
-	rm.app.Detail.SetContentString(string(b))
-}
-
-func (rm *rootModel) populateDetail() {
-	row := rm.app.Table.SelectedRow()
-	if row == nil {
-		return
-	}
-	var lines []string
-	switch rm.app.Resource {
-	case model.ResourceSessions:
-		if s, ok := row.Data.(*model.Session); ok {
-			lines = view.SessionDetailLines(s)
-		}
-	case model.ResourceAgents:
-		if a, ok := row.Data.(*model.Agent); ok {
-			lines = view.AgentDetailLines(a)
-		}
-	case model.ResourceTasks:
-		if t, ok := row.Data.(*model.Task); ok {
-			lines = view.TaskDetailLines(t)
-		}
-	case model.ResourcePlugins:
-		if p, ok := row.Data.(*model.Plugin); ok {
-			lines = view.PluginDetailLines(p)
-		}
-	case model.ResourceMCP:
-		if s, ok := row.Data.(*model.MCPServer); ok {
-			lines = view.MCPDetailLines(s)
-		}
-	default:
-		// Fallback: JSON dump
-		if b, err := json.MarshalIndent(row.Data, "  ", "  "); err == nil {
-			lines = strings.Split(string(b), "\n")
-		}
-	}
-	rm.app.Detail.SetContent(lines)
 }
 
 func (rm *rootModel) populateLog() {

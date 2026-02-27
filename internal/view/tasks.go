@@ -11,7 +11,9 @@ var taskColumnsBase = []ui.Column{
 	{Title: "ID", Width: 4},
 	{Title: "STATUS", Width: 12},
 	{Title: "SUBJECT", Width: 40, Flex: true},
+	{Title: "OWNER", Width: 10},
 	{Title: "BLOCKED BY", Width: 14},
+	{Title: "BLOCKS", Width: 12},
 }
 
 var taskColumnsFlat = []ui.Column{
@@ -19,7 +21,9 @@ var taskColumnsFlat = []ui.Column{
 	{Title: "ID", Width: 4},
 	{Title: "STATUS", Width: 12},
 	{Title: "SUBJECT", Width: 40, Flex: true},
+	{Title: "OWNER", Width: 10},
 	{Title: "BLOCKED BY", Width: 14},
+	{Title: "BLOCKS", Width: 12},
 }
 
 // NewTasksView creates a tasks view.
@@ -31,6 +35,7 @@ func taskRow(items []*model.Task, i int, flatMode bool) ui.Row {
 	t := items[i]
 	statusStyle := ui.StatusStyle(string(t.Status))
 	blockedBy := strings.Join(t.BlockedBy, ", ")
+	blocks := strings.Join(t.Blocks, ", ")
 	var cells []string
 	if flatMode {
 		sessionID := t.SessionID
@@ -43,7 +48,9 @@ func taskRow(items []*model.Task, i int, flatMode bool) ui.Row {
 		t.ID,
 		statusStyle.Render(t.StatusIcon()+" "+string(t.Status)),
 		t.Subject,
+		t.Owner,
 		blockedBy,
+		blocks,
 	)
 	return ui.Row{Cells: cells, Data: t}
 }

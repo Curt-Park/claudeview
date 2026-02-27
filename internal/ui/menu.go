@@ -46,7 +46,6 @@ func TableUtilItems(rt model.ResourceType) []MenuItem {
 	if ResourceHasLog(rt) {
 		items = append(items, MenuItem{Key: "l", Desc: "logs"})
 	}
-	items = append(items, MenuItem{Key: "d", Desc: "detail"})
 	return items
 }
 
@@ -66,19 +65,4 @@ func LogUtilItems() []MenuItem {
 		{Key: "f", Desc: "follow"},
 		{Key: "/", Desc: "filter"},
 	}
-}
-
-// DetailNavItems returns navigation menu items for the detail/YAML view.
-func DetailNavItems() []MenuItem {
-	return []MenuItem{
-		{Key: "j/k", Desc: "down/up"},
-		{Key: "G/g", Desc: "bottom/top"},
-		{Key: "ctrl+d/u", Desc: "page down/up"},
-		{Key: "esc", Desc: "back"},
-	}
-}
-
-// DetailUtilItems returns utility menu items for the detail/YAML view.
-func DetailUtilItems() []MenuItem {
-	return []MenuItem{}
 }

@@ -10,6 +10,7 @@ import (
 var sessionColumnsBase = []ui.Column{
 	{Title: "NAME", Width: 10},
 	{Title: "TOPIC", Width: 20, Flex: true, MaxPercent: 0.35},
+	{Title: "TURNS", Width: 6},
 	{Title: "AGENTS", Width: 6},
 	{Title: "TOOLS", Width: 6},
 	{Title: "TOKENS", Width: 20, Flex: true, MaxPercent: 0.25},
@@ -20,6 +21,7 @@ var sessionColumnsFlat = []ui.Column{
 	{Title: "PROJECT", Width: 20},
 	{Title: "NAME", Width: 10},
 	{Title: "TOPIC", Width: 20, Flex: true, MaxPercent: 0.35},
+	{Title: "TURNS", Width: 6},
 	{Title: "AGENTS", Width: 6},
 	{Title: "TOOLS", Width: 6},
 	{Title: "TOKENS", Width: 20, Flex: true, MaxPercent: 0.25},
@@ -43,6 +45,7 @@ func sessionRow(items []*model.Session, i int, flatMode bool) ui.Row {
 	cells = append(cells,
 		s.ShortID(),
 		s.TopicShort(120),
+		fmt.Sprintf("%d", s.NumTurns),
 		fmt.Sprintf("%d", s.AgentCount),
 		fmt.Sprintf("%d", s.ToolCallCount),
 		s.TokenString(),

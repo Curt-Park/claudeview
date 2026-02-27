@@ -11,6 +11,7 @@ var mcpColumns = []ui.Column{
 	{Title: "NAME", Width: 16},
 	{Title: "PLUGIN", Width: 14},
 	{Title: "TRANSPORT", Width: 10},
+	{Title: "STATUS", Width: 10},
 	{Title: "TOOLS", Width: 6},
 	{Title: "COMMAND", Width: 40, Flex: true},
 }
@@ -25,9 +26,10 @@ func mcpRow(items []*model.MCPServer, i int, _ bool) ui.Row {
 	statusStyle := ui.StatusStyle(string(s.Status))
 	return ui.Row{
 		Cells: []string{
-			statusStyle.Render(s.Name),
+			s.Name,
 			s.Plugin,
 			s.Transport,
+			statusStyle.Render(string(s.Status)),
 			fmt.Sprintf("%d", s.ToolCount),
 			s.CommandString(),
 		},

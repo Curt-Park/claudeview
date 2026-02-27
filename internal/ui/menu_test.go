@@ -109,19 +109,3 @@ func TestLogUtilItems(t *testing.T) {
 		t.Error("LogUtilItems: missing '/' (filter) key")
 	}
 }
-
-func TestDetailNavItems(t *testing.T) {
-	items := ui.DetailNavItems()
-	if len(items) == 0 {
-		t.Fatal("DetailNavItems returned empty slice")
-	}
-	hasEsc := false
-	for _, item := range items {
-		if item.Key == "esc" {
-			hasEsc = true
-		}
-	}
-	if !hasEsc {
-		t.Error("DetailNavItems: missing 'esc' key")
-	}
-}

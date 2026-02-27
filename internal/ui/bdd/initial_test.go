@@ -28,6 +28,6 @@ func TestInitialMenuShown(t *testing.T) {
 
 	waitForOutput(t, tm, func(bts []byte) bool {
 		out := string(bts)
-		return strings.Contains(out, "<enter>") && strings.Contains(out, "<d>")
+		return strings.Contains(out, "<enter>") && strings.Contains(out, "</>")
 	})
 }
