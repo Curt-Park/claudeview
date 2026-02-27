@@ -91,20 +91,26 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 		{Key: "G/g", Desc: "bottom/top"},
 		{Key: "ctrl+d/u", Desc: "page down/up"},
 	}
-	if hasFilter {
-		items = append(items, MenuItem{Key: "esc", Desc: "clear filter"})
-		return items
-	}
 	switch rt {
 	case model.ResourceProjects:
 		items = append(items, MenuItem{Key: "enter", Desc: "see sessions"})
 	case model.ResourceSessions:
 		items = append(items, MenuItem{Key: "enter", Desc: "see agents"})
-		items = append(items, MenuItem{Key: "esc", Desc: "see projects"})
 	case model.ResourceAgents:
-		items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
-	default:
-		items = append(items, MenuItem{Key: "esc", Desc: "back"})
+		// no enter hint
+	}
+	if hasFilter {
+		items = append(items, MenuItem{Key: "esc", Desc: "clear filter"})
+	} else {
+		switch rt {
+		case model.ResourceSessions:
+			items = append(items, MenuItem{Key: "esc", Desc: "see projects"})
+		case model.ResourceAgents:
+			items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
+		case model.ResourcePlugins, model.ResourceMemory:
+			items = append(items, MenuItem{Key: "esc", Desc: "back"})
+		// ResourceProjects: no esc (root level)
+		}
 	}
 	return items
 }
