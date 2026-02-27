@@ -400,7 +400,15 @@ func (m AppModel) View() string {
 	titleStr := m.renderTitleBar()
 
 	// --- 3. Content ---
-	contentStr := m.Table.View()
+	var contentStr string
+	switch m.Resource {
+	case model.ResourcePluginDetail:
+		contentStr = RenderPluginDetail(m.SelectedPlugin, m.contentWidth())
+	case model.ResourceMemoryDetail:
+		contentStr = RenderMemoryDetail(m.SelectedMemory)
+	default:
+		contentStr = m.Table.View()
+	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
 	if limit := m.contentHeight(); len(rawLines) > limit {
 		rawLines = rawLines[:limit]

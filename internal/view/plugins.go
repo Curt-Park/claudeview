@@ -2,7 +2,6 @@ package view
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Curt-Park/claudeview/internal/model"
 	"github.com/Curt-Park/claudeview/internal/ui"
@@ -59,47 +58,3 @@ func pluginRow(items []*model.Plugin, i int, _ bool) ui.Row {
 	}
 }
 
-// RenderPluginDetail renders plugin content as a plain string for the detail view.
-func RenderPluginDetail(p *model.Plugin, _ int) string {
-	if p == nil {
-		return ""
-	}
-
-	var sb strings.Builder
-
-	// Header line: Name (bold/colored) + Version and Scope (dimmed).
-	header := ui.StyleTitle.Render(p.Name)
-	if p.Version != "" {
-		header += "  " + ui.StyleDim.Render(p.Version)
-	}
-	if p.Scope != "" {
-		header += "  " + ui.StyleDim.Render(p.Scope)
-	}
-	sb.WriteString(header)
-
-	type section struct {
-		label string
-		items []string
-	}
-
-	sections := []section{
-		{"Skills", model.ListSkills(p.CacheDir)},
-		{"Commands", model.ListCommands(p.CacheDir)},
-		{"Hooks", model.ListHooks(p.CacheDir)},
-		{"Agents", model.ListAgents(p.CacheDir)},
-		{"MCPs", model.ListMCPs(p.CacheDir)},
-	}
-
-	for _, s := range sections {
-		if len(s.items) == 0 {
-			continue
-		}
-		sb.WriteString("\n\n")
-		sb.WriteString(ui.StyleKey.Render(s.label + ":"))
-		for _, item := range s.items {
-			sb.WriteString("\n  " + item)
-		}
-	}
-
-	return sb.String()
-}
