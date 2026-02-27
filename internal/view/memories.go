@@ -1,6 +1,9 @@
 package view
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/Curt-Park/claudeview/internal/model"
 	"github.com/Curt-Park/claudeview/internal/ui"
 )
@@ -15,6 +18,18 @@ var memoryColumns = []ui.Column{
 // NewMemoriesView creates a memories view.
 func NewMemoriesView(width, height int) *ResourceView[*model.Memory] {
 	return NewResourceView(memoryColumns, nil, memoryRow, width, height)
+}
+
+// RenderMemoryDetail reads and returns the raw content of a memory file.
+func RenderMemoryDetail(m *model.Memory) string {
+	if m == nil {
+		return ""
+	}
+	data, err := os.ReadFile(m.Path)
+	if err != nil {
+		return fmt.Sprintf("error reading %s: %v", m.Path, err)
+	}
+	return string(data)
 }
 
 func memoryRow(items []*model.Memory, i int, _ bool) ui.Row {
