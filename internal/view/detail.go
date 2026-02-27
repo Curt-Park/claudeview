@@ -10,19 +10,20 @@ import (
 // SessionDetailLines returns detail lines for a session.
 func SessionDetailLines(s *model.Session) []string {
 	lines := []string{
-		fmt.Sprintf("  ID         : %s", s.ID),
-		fmt.Sprintf("  Model      : %s", s.Model),
-		fmt.Sprintf("  Status     : %s", s.Status),
-		fmt.Sprintf("  Agents     : %d", len(s.Agents)),
-		fmt.Sprintf("  Turns      : %d", s.NumTurns),
-		fmt.Sprintf("  Cost       : %s", s.CostString()),
-		fmt.Sprintf("  Tokens     : %s (in:%d out:%d)", s.TokenString(), s.InputTokens, s.OutputTokens),
-		fmt.Sprintf("  Duration   : %.1fs", float64(s.DurationMS)/1000),
-		fmt.Sprintf("  Age        : %s", s.Age()),
-		fmt.Sprintf("  File       : %s", s.FilePath),
+		fmt.Sprintf("  ID          : %s", s.ID),
+		fmt.Sprintf("  Topic       : %s", s.Topic),
+		fmt.Sprintf("  Agents      : %d", s.AgentCount),
+		fmt.Sprintf("  Turns       : %d", s.NumTurns),
+		fmt.Sprintf("  Tokens      : %s", s.TokenString()),
+		fmt.Sprintf("  Duration    : %.1fs", float64(s.DurationMS)/1000),
+		fmt.Sprintf("  Last Active : %s", s.LastActive()),
+		fmt.Sprintf("  File        : %s", s.FilePath),
+	}
+	for m, tc := range s.TokensByModel {
+		lines = append(lines, fmt.Sprintf("    %s: in=%d out=%d", m, tc.InputTokens, tc.OutputTokens))
 	}
 	if s.SubagentDir != "" {
-		lines = append(lines, fmt.Sprintf("  Subagents  : %s", s.SubagentDir))
+		lines = append(lines, fmt.Sprintf("  Subagents   : %s", s.SubagentDir))
 	}
 	return lines
 }

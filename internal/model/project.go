@@ -14,14 +14,3 @@ type Project struct {
 func (p *Project) SessionCount() int {
 	return len(p.Sessions)
 }
-
-// ActiveSessions returns sessions that are still active (no ended timestamp).
-func (p *Project) ActiveSessions() []*Session {
-	var active []*Session
-	for _, s := range p.Sessions {
-		if s.Status == StatusActive {
-			active = append(active, s)
-		}
-	}
-	return active
-}

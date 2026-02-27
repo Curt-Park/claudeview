@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strings"
-	"time"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -79,6 +79,18 @@ func run(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+// dataLoadedMsg carries freshly loaded data back to the UI goroutine.
+type dataLoadedMsg struct {
+	projects   []*model.Project
+	sessions   []*model.Session
+	agents     []*model.Agent
+	toolCalls  []*model.ToolCall
+	tasks      []*model.Task
+	plugins    []*model.Plugin
+	mcpServers []*model.MCPServer
+	resource   model.ResourceType
+}
+
 // rootModel wraps AppModel and manages actual resource data.
 type rootModel struct {
 	app        ui.AppModel
@@ -103,6 +115,9 @@ type rootModel struct {
 	// Static info (set once at startup)
 	userStr       string
 	claudeVersion string
+
+	// Async loading state
+	loading bool
 }
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
@@ -222,9 +237,33 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.app.Height = msg.Height
 		rm.syncView()
 
-	case ui.RefreshMsg:
-		rm.loadData()
-		rm.syncView()
+	case ui.TickMsg:
+		if !rm.loading {
+			rm.loading = true
+			return rm, rm.loadDataAsync()
+		}
+
+	case dataLoadedMsg:
+		rm.loading = false
+		if msg.resource == rm.app.Resource {
+			switch msg.resource {
+			case model.ResourceProjects:
+				rm.projects = msg.projects
+			case model.ResourceSessions:
+				rm.sessions = msg.sessions
+			case model.ResourceAgents:
+				rm.agents = msg.agents
+			case model.ResourceTools:
+				rm.toolCalls = msg.toolCalls
+			case model.ResourceTasks:
+				rm.tasks = msg.tasks
+			case model.ResourcePlugins:
+				rm.plugins = msg.plugins
+			case model.ResourceMCP:
+				rm.mcpServers = msg.mcpServers
+			}
+			rm.syncView()
+		}
 
 	case ui.DetailRequestMsg:
 		rm.populateDetail()
@@ -372,6 +411,35 @@ func (rm *rootModel) populateLog() {
 	rm.app.Log.SetLines(logLines)
 }
 
+// loadDataAsync returns a tea.Cmd that loads data in a background goroutine.
+func (rm *rootModel) loadDataAsync() tea.Cmd {
+	resource := rm.app.Resource
+	projectHash := rm.app.SelectedProjectHash
+	sessionID := rm.app.SelectedSessionID
+	agentID := rm.app.SelectedAgentID
+	dp := rm.dp
+	return func() tea.Msg {
+		msg := dataLoadedMsg{resource: resource}
+		switch resource {
+		case model.ResourceProjects:
+			msg.projects = dp.GetProjects()
+		case model.ResourceSessions:
+			msg.sessions = dp.GetSessions(projectHash)
+		case model.ResourceAgents:
+			msg.agents = dp.GetAgents(sessionID)
+		case model.ResourceTools:
+			msg.toolCalls = dp.GetTools(agentID)
+		case model.ResourceTasks:
+			msg.tasks = dp.GetTasks(sessionID)
+		case model.ResourcePlugins:
+			msg.plugins = dp.GetPlugins()
+		case model.ResourceMCP:
+			msg.mcpServers = dp.GetMCPServers()
+		}
+		return msg
+	}
+}
+
 func (rm *rootModel) View() string {
 	return rm.app.View()
 }
@@ -466,10 +534,15 @@ type liveDataProvider struct {
 	claudeDir      string
 	currentProject string
 	currentSession string
+	aggCache       map[string]*transcript.SessionAggregates
+	mu             sync.Mutex
 }
 
 func newLiveProvider(claudeDir string) ui.DataProvider {
-	return &liveDataProvider{claudeDir: claudeDir}
+	return &liveDataProvider{
+		claudeDir: claudeDir,
+		aggCache:  make(map[string]*transcript.SessionAggregates),
+	}
 }
 
 func (l *liveDataProvider) GetProjects() []*model.Project {
@@ -485,7 +558,7 @@ func (l *liveDataProvider) GetProjects() []*model.Project {
 			LastSeen: info.LastSeen,
 		}
 		for _, si := range info.Sessions {
-			s := sessionFromInfo(si)
+			s := l.sessionFromInfo(si)
 			p.Sessions = append(p.Sessions, s)
 		}
 		projects = append(projects, p)
@@ -509,7 +582,7 @@ func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
 			continue
 		}
 		for _, si := range info.Sessions {
-			s := sessionFromInfo(si)
+			s := l.sessionFromInfo(si)
 			s.ProjectHash = info.Hash
 			sessions = append(sessions, s)
 		}
@@ -631,43 +704,38 @@ func (l *liveDataProvider) GetMCPServers() []*model.MCPServer {
 	return servers
 }
 
-// sessionFromInfo creates a Session model from a transcript SessionInfo.
-func sessionFromInfo(si transcript.SessionInfo) *model.Session {
+// sessionFromInfo creates a Session model from a transcript SessionInfo using incremental parsing.
+func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Session {
 	s := &model.Session{
 		ID:          si.ID,
 		FilePath:    si.FilePath,
 		SubagentDir: si.SubagentDir,
 		ModTime:     si.ModTime,
-		Status:      model.StatusEnded,
 	}
 
-	// Quick parse to get metadata
-	parsed, err := transcript.ParseFile(si.FilePath)
+	l.mu.Lock()
+	cached := l.aggCache[si.FilePath]
+	l.mu.Unlock()
+
+	agg, err := transcript.ParseAggregatesIncremental(si.FilePath, cached)
 	if err != nil {
 		return s
 	}
 
-	s.TotalCost = parsed.TotalCost
-	s.NumTurns = parsed.NumTurns
-	s.DurationMS = parsed.DurationMS
+	l.mu.Lock()
+	l.aggCache[si.FilePath] = agg
+	l.mu.Unlock()
 
-	// Extract tokens and model from last assistant turn
-	for i := len(parsed.Turns) - 1; i >= 0; i-- {
-		t := parsed.Turns[i]
-		if t.Role == "assistant" {
-			s.InputTokens = t.Usage.InputTokens
-			s.OutputTokens = t.Usage.OutputTokens
-			s.Model = t.Model
-			break
-		}
+	s.NumTurns = agg.NumTurns
+	s.DurationMS = agg.DurationMS
+	s.Topic = agg.Topic
+	s.ToolCallCount = agg.TotalToolCalls
+	s.AgentCount = 1 + transcript.CountSubagents(si.SubagentDir)
+
+	s.TokensByModel = make(map[string]model.TokenCount, len(agg.TokensByModel))
+	for m, u := range agg.TokensByModel {
+		s.TokensByModel[m] = model.TokenCount{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}
 	}
-
-	// Determine status: active if JSONL was modified within the last 5 minutes
-	// (covers pauses between turns while Claude Code is still running).
-	if time.Since(si.ModTime) < 5*time.Minute {
-		s.Status = model.StatusActive
-	}
-
 	return s
 }
 
@@ -699,7 +767,7 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 		ID:         "",
 		SessionID:  s.ID,
 		Type:       model.AgentTypeMain,
-		Status:     s.Status,
+		Status:     model.StatusEnded,
 		FilePath:   s.FilePath,
 		IsSubagent: false,
 	}

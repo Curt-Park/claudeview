@@ -137,3 +137,21 @@ func ScanSubagents(subagentDir string) ([]SessionInfo, error) {
 	}
 	return scanJSONLFiles(subagentDir, false, false)
 }
+
+// CountSubagents returns the number of subagent JSONL files in the given directory.
+func CountSubagents(subagentDir string) int {
+	if subagentDir == "" {
+		return 0
+	}
+	entries, err := os.ReadDir(subagentDir)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".jsonl") {
+			count++
+		}
+	}
+	return count
+}

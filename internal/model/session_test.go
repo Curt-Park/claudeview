@@ -15,41 +15,67 @@ func TestSessionShortID(t *testing.T) {
 }
 
 func TestSessionTokenString(t *testing.T) {
-	s := &model.Session{InputTokens: 50000, OutputTokens: 12500}
-	got := s.TokenString()
-	if got != "62.5k" {
-		t.Errorf("TokenString() = %q, want %q", got, "62.5k")
-	}
-}
-
-func TestSessionCostString(t *testing.T) {
-	s := &model.Session{TotalCost: 0.4234}
-	got := s.CostString()
-	if got != "$0.4234" {
-		t.Errorf("CostString() = %q, want %q", got, "$0.4234")
-	}
-}
-
-func TestSessionAge(t *testing.T) {
-	s := &model.Session{ModTime: time.Now().Add(-5 * time.Minute)}
-	age := s.Age()
-	if age == "" {
-		t.Error("Age() returned empty string")
-	}
-	// Should be "5m" approximately
-	if age != "5m" {
-		t.Errorf("Age() = %q, expected ~5m", age)
-	}
-}
-
-func TestSessionToolCount(t *testing.T) {
 	s := &model.Session{
-		Agents: []*model.Agent{
-			{ToolCalls: []*model.ToolCall{{}, {}, {}}},
-			{ToolCalls: []*model.ToolCall{{}}},
+		TokensByModel: map[string]model.TokenCount{
+			"claude-sonnet-4-6": {InputTokens: 50000, OutputTokens: 12500},
 		},
 	}
-	if got := s.ToolCount(); got != 4 {
-		t.Errorf("ToolCount() = %d, want 4", got)
+	got := s.TokenString()
+	if got != "sonnet:62k" {
+		t.Errorf("TokenString() = %q, want %q", got, "sonnet:62k")
+	}
+}
+
+func TestSessionTokenStringEmpty(t *testing.T) {
+	s := &model.Session{}
+	if got := s.TokenString(); got != "-" {
+		t.Errorf("TokenString() empty = %q, want %q", got, "-")
+	}
+}
+
+func TestSessionTokenStringMultiModel(t *testing.T) {
+	s := &model.Session{
+		TokensByModel: map[string]model.TokenCount{
+			"claude-opus-4-6":   {InputTokens: 1000000, OutputTokens: 500000},
+			"claude-sonnet-4-6": {InputTokens: 50000, OutputTokens: 12500},
+		},
+	}
+	got := s.TokenString()
+	// Alphabetically: opus before sonnet
+	if got != "opus:1.5M sonnet:62k" {
+		t.Errorf("TokenString() = %q, want %q", got, "opus:1.5M sonnet:62k")
+	}
+}
+
+func TestSessionLastActive(t *testing.T) {
+	s := &model.Session{ModTime: time.Now().Add(-5 * time.Minute)}
+	got := s.LastActive()
+	if got == "" {
+		t.Error("LastActive() returned empty string")
+	}
+	if got != "5m" {
+		t.Errorf("LastActive() = %q, expected ~5m", got)
+	}
+}
+
+func TestSessionTopicShort(t *testing.T) {
+	tests := []struct {
+		name   string
+		topic  string
+		maxLen int
+		want   string
+	}{
+		{"empty topic", "", 20, "-"},
+		{"short topic", "Hello world", 20, "Hello world"},
+		{"multiline topic", "First line\nSecond line", 20, "First line"},
+		{"truncated topic", "This is a very long topic text", 15, "This is a very…"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &model.Session{Topic: tc.topic}
+			if got := s.TopicShort(tc.maxLen); got != tc.want {
+				t.Errorf("TopicShort(%d) = %q, want %q", tc.maxLen, got, tc.want)
+			}
+		})
 	}
 }

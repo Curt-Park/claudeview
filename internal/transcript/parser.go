@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -32,10 +33,13 @@ type Turn struct {
 
 // ParsedTranscript is the result of parsing a JSONL file.
 type ParsedTranscript struct {
-	Turns      []Turn
-	TotalCost  float64
-	DurationMS int64
-	NumTurns   int
+	Turns          []Turn
+	Topic          string
+	TokensByModel  map[string]Usage
+	TotalToolCalls int
+	TotalCost      float64
+	DurationMS     int64
+	NumTurns       int
 }
 
 // ParseFile reads and parses a JSONL transcript file.
@@ -48,7 +52,7 @@ func ParseFile(path string) (*ParsedTranscript, error) {
 	return Parse(f)
 }
 
-// flushPendingTurn matches tool results into the pending turn and appends it.
+// flushPendingTurn matches tool results into the pending turn, accumulates metrics, and appends it.
 func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[string]json.RawMessage, toolErrors map[string]bool) {
 	for i := range turn.ToolCalls {
 		tc := &turn.ToolCalls[i]
@@ -57,6 +61,13 @@ func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[stri
 			tc.IsError = toolErrors[tc.ID]
 		}
 	}
+	// Accumulate per-model token usage
+	u := result.TokensByModel[turn.Model]
+	u.InputTokens += turn.Usage.InputTokens
+	u.OutputTokens += turn.Usage.OutputTokens
+	result.TokensByModel[turn.Model] = u
+	// Count tool calls
+	result.TotalToolCalls += len(turn.ToolCalls)
 	result.Turns = append(result.Turns, *turn)
 }
 
@@ -65,7 +76,9 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024) // 10MB buffer
 
-	result := &ParsedTranscript{}
+	result := &ParsedTranscript{
+		TokensByModel: make(map[string]Usage),
+	}
 	// toolResults maps tool_use_id -> tool_result content
 	toolResults := map[string]json.RawMessage{}
 	toolErrors := map[string]bool{}
@@ -111,6 +124,10 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 				}
 			}
 			if turn.Text != "" {
+				// Set topic from first real user message (skip skill prefix lines)
+				if result.Topic == "" && !strings.HasPrefix(turn.Text, "Base directory for this skill:") {
+					result.Topic = turn.Text
+				}
 				result.Turns = append(result.Turns, turn)
 			}
 
@@ -178,4 +195,118 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 	}
 
 	return result, scanner.Err()
+}
+
+// SessionAggregates holds cached session-level metrics for incremental parsing.
+type SessionAggregates struct {
+	Topic          string
+	TokensByModel  map[string]Usage
+	TotalToolCalls int
+	DurationMS     int64
+	NumTurns       int
+	Offset         int64 // next read start position
+}
+
+// ParseAggregatesIncremental reads a JSONL file from the stored offset,
+// accumulates metrics into agg, and returns the updated aggregates.
+// If agg is nil, a new SessionAggregates is created (reading from offset 0).
+func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAggregates, error) {
+	if agg == nil {
+		agg = &SessionAggregates{
+			TokensByModel: make(map[string]Usage),
+		}
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return agg, err
+	}
+	defer func() { _ = f.Close() }()
+
+	if agg.Offset > 0 {
+		if _, err := f.Seek(agg.Offset, io.SeekStart); err != nil {
+			return agg, err
+		}
+	}
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var entry Entry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			continue
+		}
+
+		switch entry.Type {
+		case "user":
+			if agg.Topic != "" {
+				break
+			}
+			var msg UserMessage
+			if err := json.Unmarshal(entry.Message, &msg); err != nil {
+				break
+			}
+			for _, c := range msg.Content {
+				if c.Type == "text" && c.Text != "" {
+					if !strings.HasPrefix(c.Text, "Base directory for this skill:") {
+						agg.Topic = c.Text
+						break
+					}
+				}
+			}
+
+		case "assistant":
+			var msg AssistantMessage
+			if err := json.Unmarshal(entry.Message, &msg); err != nil {
+				break
+			}
+			u := agg.TokensByModel[msg.Model]
+			u.InputTokens += msg.Usage.InputTokens
+			u.OutputTokens += msg.Usage.OutputTokens
+			agg.TokensByModel[msg.Model] = u
+			for _, c := range msg.Content {
+				if c.Type == "tool_use" {
+					agg.TotalToolCalls++
+				}
+			}
+
+		case "system":
+			if len(entry.Message) > 0 {
+				var msg struct {
+					Subtype    string `json:"subtype"`
+					DurationMS int64  `json:"duration_ms"`
+					NumTurns   int    `json:"num_turns"`
+				}
+				if err := json.Unmarshal(entry.Message, &msg); err == nil && msg.Subtype == "turn_duration" {
+					agg.DurationMS += msg.DurationMS
+					agg.NumTurns = msg.NumTurns
+				}
+			} else {
+				var msg struct {
+					Subtype    string `json:"subtype"`
+					DurationMS int64  `json:"durationMs"`
+				}
+				if err := json.Unmarshal(line, &msg); err == nil && msg.Subtype == "turn_duration" {
+					agg.DurationMS += msg.DurationMS
+				}
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return agg, err
+	}
+
+	// Update offset to end of file
+	if pos, err := f.Seek(0, io.SeekEnd); err == nil {
+		agg.Offset = pos
+	}
+
+	return agg, nil
 }
