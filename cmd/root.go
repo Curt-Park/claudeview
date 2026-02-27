@@ -209,6 +209,7 @@ func (rm *rootModel) updateInfo() {
 	rm.app.Info.ClaudeVersion = rm.claudeVersion
 	rm.app.Info.AppVersion = AppVersion
 	rm.app.Info.MemoriesActive = rm.app.SelectedProjectHash != ""
+	rm.app.Info.Resource = rm.app.Resource
 }
 
 func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

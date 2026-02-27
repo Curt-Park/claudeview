@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/Curt-Park/claudeview/internal/model"
 )
 
 // InfoModel holds the top info panel data (k9s-style left column + right menu).
@@ -14,7 +16,8 @@ type InfoModel struct {
 	ClaudeVersion  string // Claude Code binary version
 	AppVersion     string // claudeview binary version
 	Width          int
-	MemoriesActive bool // whether <m> memories jump is available
+	MemoriesActive bool               // whether <m> memories jump is available
+	Resource       model.ResourceType // current active resource (hides its own jump hint)
 }
 
 // Height returns the number of terminal lines rendered by ViewWithMenu.
@@ -97,10 +100,14 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 	utilColW += 2
 
 	// Col 3: p/m jump shortcuts.
-	jumpHints := []string{
-		renderJumpHint(menu, "p", "plugins"),
+	// Plugins and memories views cannot navigate to each other, so both hints
+	// are hidden when either view is active.
+	var jumpHints []string
+	inPluginsOrMemories := info.Resource == model.ResourcePlugins || info.Resource == model.ResourceMemory
+	if !inPluginsOrMemories {
+		jumpHints = append(jumpHints, renderJumpHint(menu, "p", "plugins"))
 	}
-	if info.MemoriesActive {
+	if info.MemoriesActive && !inPluginsOrMemories {
 		jumpHints = append(jumpHints, renderJumpHint(menu, "m", "memories"))
 	}
 	rightColW := 0
