@@ -13,6 +13,7 @@ type InstalledPlugin struct {
 	Version     string
 	Marketplace string
 	Scope       string // "user", "project", "local"
+	ProjectPath string // set for project/local scope plugins
 	InstalledAt string
 	CacheDir    string // full path to the plugin cache directory
 }
@@ -25,6 +26,7 @@ type installedPluginsV2 struct {
 
 type installedPluginV2Entry struct {
 	Scope        string `json:"scope"`
+	ProjectPath  string `json:"projectPath"`
 	InstallPath  string `json:"installPath"`
 	Version      string `json:"version"`
 	InstalledAt  string `json:"installedAt"`
@@ -49,6 +51,7 @@ func LoadInstalledPlugins(claudeDir string) ([]InstalledPlugin, error) {
 					Version:     e.Version,
 					Marketplace: marketplace,
 					Scope:       e.Scope,
+					ProjectPath: e.ProjectPath,
 					InstalledAt: e.InstalledAt,
 					CacheDir:    e.InstallPath,
 				})
@@ -112,12 +115,6 @@ func splitPluginKey(key string) (name, marketplace string) {
 // PluginCacheDir returns the path where a plugin's files are cached.
 func PluginCacheDir(claudeDir, marketplace, name, version string) string {
 	return filepath.Join(claudeDir, "plugins", "cache", marketplace, name, version)
-}
-
-// ProjectRootFromHash converts a Claude project hash back to the filesystem path.
-// Hash format: "-Users-mac-Repositories-foo" → "/Users/mac/Repositories/foo"
-func ProjectRootFromHash(hash string) string {
-	return strings.ReplaceAll(hash, "-", "/")
 }
 
 // ProjectEnabledPlugins reads enabledPlugins from a project's .claude/settings.json

@@ -439,19 +439,19 @@ func (l *liveDataProvider) GetPlugins(projectHash string) []*model.Plugin {
 	}
 	globalEnabled, _ := config.EnabledPlugins(l.claudeDir)
 
-	var projectEnabled map[string]bool
-	if projectHash != "" {
-		projectRoot := config.ProjectRootFromHash(projectHash)
-		projectEnabled = config.ProjectEnabledPlugins(projectRoot)
-	}
-
 	var plugins []*model.Plugin
 	for _, p := range installed {
 		if projectHash == "" && p.Scope != "user" {
 			continue
 		}
 		key := p.Name + "@" + p.Marketplace
-		isEnabled := globalEnabled[key] || projectEnabled[key]
+		var isEnabled bool
+		if p.ProjectPath != "" {
+			pluginEnabled := config.ProjectEnabledPlugins(p.ProjectPath)
+			isEnabled = pluginEnabled[key]
+		} else {
+			isEnabled = globalEnabled[key]
+		}
 		plugins = append(plugins, &model.Plugin{
 			Name:         p.Name,
 			Version:      p.Version,

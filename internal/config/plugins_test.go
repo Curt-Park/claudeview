@@ -174,22 +174,6 @@ func TestEnabledPlugins_MissingFile(t *testing.T) {
 	}
 }
 
-func TestProjectRootFromHash(t *testing.T) {
-	cases := []struct {
-		hash string
-		want string
-	}{
-		{"-Users-mac-Repositories-foo", "/Users/mac/Repositories/foo"},
-		{"-home-user-projects-bar", "/home/user/projects/bar"},
-		{"", ""},
-	}
-	for _, c := range cases {
-		got := config.ProjectRootFromHash(c.hash)
-		if got != c.want {
-			t.Errorf("ProjectRootFromHash(%q) = %q, want %q", c.hash, got, c.want)
-		}
-	}
-}
 
 func TestProjectEnabledPlugins(t *testing.T) {
 	dir := t.TempDir()
