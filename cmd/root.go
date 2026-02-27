@@ -231,6 +231,8 @@ func (rm *rootModel) updateInfo() {
 }
 
 func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var extraCmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		rm.app.Width = msg.Width
@@ -238,9 +240,12 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.syncView()
 
 	case ui.TickMsg:
+		// Refresh time-based columns (LAST ACTIVE) on every tick
+		rm.syncView()
+		// Trigger async data reload if not already in progress
 		if !rm.loading {
 			rm.loading = true
-			return rm, rm.loadDataAsync()
+			extraCmd = rm.loadDataAsync()
 		}
 
 	case dataLoadedMsg:
@@ -276,7 +281,7 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	}
 
-	// Update app model
+	// Update app model — must always run so AppModel can re-schedule tick()
 	prevResource := rm.app.Resource
 	newApp, cmd := rm.app.Update(msg)
 	rm.app = newApp.(ui.AppModel)
@@ -286,6 +291,9 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.loadData()
 	}
 
+	if extraCmd != nil {
+		return rm, tea.Batch(cmd, extraCmd)
+	}
 	return rm, cmd
 }
 
