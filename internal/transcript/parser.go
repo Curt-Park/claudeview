@@ -310,28 +310,34 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 
 // extractTopic normalizes raw user message text for use as a session topic.
 //
-// Claude Code injects XML-wrapped messages for slash-command invocations.
-// Two known formats:
+// Claude Code wraps slash-command invocations in XML tags. Known formats:
 //
-//   - <local-command-caveat>…</local-command-caveat><command-name>skill</command-name>…
-//   - <command-message>skill</command-message>…
+//   - <local-command-caveat>…</local-command-caveat>           (caveat only, no command yet)
+//   - <command-name>/skill</command-name>…                     (command in next turn)
+//   - <command-message>skill</command-message><command-name>/skill</command-name>…
+//   - <local-command-stdout>…                                  (tool output, not useful)
 //
-// In both cases we extract the command/skill name so the topic is human-readable,
-// matching the display used by `claude -r`.
-// Returns "" when no useful content is found so the caller can skip this message
-// and use the next real user turn as the topic.
+// Returns "" when no human-readable content is found so the caller skips the
+// message and uses the next real user turn as the topic.
 func extractTopic(text string) string {
-	if strings.HasPrefix(text, "<local-command-caveat>") {
-		// Try <command-name> then <command-message> inside the caveat block.
-		for _, tag := range []string{"command-name", "command-message"} {
-			if name := extractXMLTag(text, tag); name != "" {
-				return name
-			}
-		}
-		// No recognisable command tag — skip this message entirely.
+	switch {
+	case strings.HasPrefix(text, "<local-command-caveat>"),
+		strings.HasPrefix(text, "<local-command-stdout>"),
+		strings.HasPrefix(text, "<local-command-stderr>"):
+		// These are injected by Claude Code and carry no useful topic text.
 		return ""
-	}
-	if strings.HasPrefix(text, "<command-message>") {
+
+	case strings.HasPrefix(text, "<command-name>"):
+		// e.g. <command-name>/plugin</command-name>…
+		if name := extractXMLTag(text, "command-name"); name != "" {
+			return name
+		}
+
+	case strings.HasPrefix(text, "<command-message>"):
+		// Prefer <command-name> (includes / prefix) when also present in the same message.
+		if name := extractXMLTag(text, "command-name"); name != "" {
+			return name
+		}
 		if name := extractXMLTag(text, "command-message"); name != "" {
 			return name
 		}
