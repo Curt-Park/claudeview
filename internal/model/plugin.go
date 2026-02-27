@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 // Plugin represents an installed Claude Code plugin.
@@ -87,6 +89,107 @@ func CountMCPs(cacheDir string) int {
 		}
 	}
 	return 0
+}
+
+// ListSkills returns the names of skill subdirectories.
+func ListSkills(cacheDir string) []string {
+	return listDirNames(filepath.Join(contentDir(cacheDir), "skills"))
+}
+
+// ListCommands returns command names (filenames without .md extension).
+func ListCommands(cacheDir string) []string {
+	return listFileStems(filepath.Join(contentDir(cacheDir), "commands"), ".md")
+}
+
+// ListHooks returns hook event names from hooks.json or filenames.
+func ListHooks(cacheDir string) []string {
+	hooksDir := filepath.Join(contentDir(cacheDir), "hooks")
+	jsonPath := filepath.Join(hooksDir, "hooks.json")
+	if data, err := os.ReadFile(jsonPath); err == nil {
+		var wrapper struct {
+			Hooks map[string]json.RawMessage `json:"hooks"`
+		}
+		if err := json.Unmarshal(data, &wrapper); err == nil {
+			names := make([]string, 0, len(wrapper.Hooks))
+			for k := range wrapper.Hooks {
+				names = append(names, k)
+			}
+			sort.Strings(names)
+			return names
+		}
+	}
+	return listFileStems(hooksDir, "")
+}
+
+// ListAgents returns agent names (filenames without .md extension).
+func ListAgents(cacheDir string) []string {
+	return listFileStems(filepath.Join(contentDir(cacheDir), "agents"), ".md")
+}
+
+// ListMCPs returns MCP server names from .mcp.json or plugin.json.
+func ListMCPs(cacheDir string) []string {
+	type mcpWrapper struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	candidates := []string{
+		filepath.Join(contentDir(cacheDir), ".mcp.json"),
+		filepath.Join(cacheDir, ".claude-plugin", "plugin.json"),
+	}
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var w mcpWrapper
+		if err := json.Unmarshal(data, &w); err == nil && len(w.MCPServers) > 0 {
+			names := make([]string, 0, len(w.MCPServers))
+			for k := range w.MCPServers {
+				names = append(names, k)
+			}
+			sort.Strings(names)
+			return names
+		}
+	}
+	return nil
+}
+
+// listDirNames returns names of subdirectories in dir.
+func listDirNames(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	return names
+}
+
+// listFileStems returns filenames in dir with the given extension stripped.
+// If ext is empty, all filenames are returned as-is.
+func listFileStems(dir, ext string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if ext != "" {
+			if filepath.Ext(name) != ext {
+				continue
+			}
+			name = strings.TrimSuffix(name, ext)
+		}
+		names = append(names, name)
+	}
+	return names
 }
 
 // countDirs counts subdirectories in dir.

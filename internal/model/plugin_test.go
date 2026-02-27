@@ -176,6 +176,53 @@ func TestCountSkillsCountsSubdirs(t *testing.T) {
 	}
 }
 
+func TestListSkills(t *testing.T) {
+	base := makeTempDir(t)
+	dir := filepath.Join(base, "skills")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "brainstorming"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "debugging"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "README.md")) // files should be ignored
+
+	got := model.ListSkills(base)
+	if len(got) != 2 {
+		t.Fatalf("ListSkills() = %v, want 2 items", got)
+	}
+}
+
+func TestListCommands(t *testing.T) {
+	base := makeTempDir(t)
+	dir := filepath.Join(base, "commands")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "commit.md"))
+	writeFile(t, filepath.Join(dir, "review-pr.md"))
+
+	got := model.ListCommands(base)
+	if len(got) != 2 {
+		t.Fatalf("ListCommands() = %v, want 2 items", got)
+	}
+	for _, name := range got {
+		if filepath.Ext(name) == ".md" {
+			t.Errorf("expected .md extension stripped, got %q", name)
+		}
+	}
+}
+
+func TestListSkillsMissingDir(t *testing.T) {
+	got := model.ListSkills("/nonexistent/path/xyz")
+	if got != nil {
+		t.Errorf("expected nil for missing dir, got %v", got)
+	}
+}
+
 func TestCountMCPs(t *testing.T) {
 	t.Run("missing file returns 0", func(t *testing.T) {
 		if got := model.CountMCPs("/nonexistent/path"); got != 0 {
