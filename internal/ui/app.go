@@ -305,8 +305,10 @@ func (m *AppModel) navigateBack() {
 		m.popFilter()
 		m.switchResource(model.ResourceProjects)
 	case model.ResourcePluginDetail:
+		m.popFilter()
 		m.switchResource(model.ResourcePlugins)
 	case model.ResourceMemoryDetail:
+		m.popFilter()
 		m.switchResource(model.ResourceMemory)
 	}
 }

@@ -241,6 +241,23 @@ func TestEscFromMemoryDetailReturnsToMemories(t *testing.T) {
 	}
 }
 
+func TestEscFromPluginDetailRestoresFilter(t *testing.T) {
+	p := &model.Plugin{Name: "superpowers", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePlugins)
+	app.Table.SetRows([]ui.Row{{Cells: []string{"superpowers", "1.0", "user", "enabled", "0", "0", "0", "0", "0", ""}, Data: p}})
+	app.Table.Filter = "super"
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if app.Resource != model.ResourcePlugins {
+		t.Errorf("expected resource=plugins after Esc from plugin-detail, got %s", app.Resource)
+	}
+	if app.Table.Filter != "super" {
+		t.Errorf("expected filter %q restored after Esc from plugin-detail, got %q", "super", app.Table.Filter)
+	}
+}
+
 func TestJumpPreservesFilterStack(t *testing.T) {
 	p := &model.Project{Hash: "proj-abc123"}
 	s := &model.Session{ID: "sess-xyz789"}
