@@ -309,19 +309,45 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 }
 
 // extractTopic normalizes raw user message text for use as a session topic.
-// When the message begins with a <local-command-caveat> block (injected by
-// Claude Code for /slash-command invocations), the content of the
-// <command-name> tag is returned instead so the topic is human-readable.
+//
+// Claude Code injects XML-wrapped messages for slash-command invocations.
+// Two known formats:
+//
+//   - <local-command-caveat>…</local-command-caveat><command-name>skill</command-name>…
+//   - <command-message>skill</command-message>…
+//
+// In both cases we extract the command/skill name so the topic is human-readable,
+// matching the display used by `claude -r`.
+// Returns "" when no useful content is found so the caller can skip this message
+// and use the next real user turn as the topic.
 func extractTopic(text string) string {
-	if !strings.HasPrefix(text, "<local-command-caveat>") {
-		return text
+	if strings.HasPrefix(text, "<local-command-caveat>") {
+		// Try <command-name> then <command-message> inside the caveat block.
+		for _, tag := range []string{"command-name", "command-message"} {
+			if name := extractXMLTag(text, tag); name != "" {
+				return name
+			}
+		}
+		// No recognisable command tag — skip this message entirely.
+		return ""
 	}
-	const openTag = "<command-name>"
-	const closeTag = "</command-name>"
-	start := strings.Index(text, openTag)
-	end := strings.Index(text, closeTag)
-	if start >= 0 && end > start+len(openTag) {
-		return strings.TrimSpace(text[start+len(openTag) : end])
+	if strings.HasPrefix(text, "<command-message>") {
+		if name := extractXMLTag(text, "command-message"); name != "" {
+			return name
+		}
 	}
 	return text
+}
+
+// extractXMLTag returns the trimmed content of the first occurrence of
+// <tag>…</tag> in s, or "" if not found.
+func extractXMLTag(s, tag string) string {
+	open := "<" + tag + ">"
+	close := "</" + tag + ">"
+	start := strings.Index(s, open)
+	end := strings.Index(s, close)
+	if start >= 0 && end > start+len(open) {
+		return strings.TrimSpace(s[start+len(open) : end])
+	}
+	return ""
 }

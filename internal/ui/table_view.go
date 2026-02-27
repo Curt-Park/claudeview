@@ -231,7 +231,7 @@ func (t TableView) View() string {
 		sb.WriteString("\n")
 		linesUsed++
 		if row.Subtitle != "" && linesUsed < visible {
-			sb.WriteString(t.renderSubtitleLine(row))
+			sb.WriteString(t.renderSubtitleLine(row, i == selected))
 			sb.WriteString("\n")
 			linesUsed++
 		}
@@ -362,10 +362,14 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 
 // renderSubtitleLine renders the subtitle string as a full-width dimmed line,
 // indented by row.SubtitleIndent spaces to align under a specific column.
-func (t TableView) renderSubtitleLine(row Row) string {
+// When selected is true the row's selection background is applied.
+func (t TableView) renderSubtitleLine(row Row, selected bool) string {
 	prefix := strings.Repeat(" ", max(0, row.SubtitleIndent))
 	text := prefix + row.Subtitle
 	padded := padRight(text, t.Width)
+	if selected {
+		return StyleRowSubtitleSelected.Width(t.Width).Render(padded)
+	}
 	return StyleRowSubtitle.Render(padded)
 }
 

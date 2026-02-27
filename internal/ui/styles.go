@@ -76,7 +76,8 @@ var (
 	StyleLogTime   = lipgloss.NewStyle().Foreground(colorDimGray)
 
 	// StyleRowSubtitle is used for the optional second line of a table row.
-	StyleRowSubtitle = lipgloss.NewStyle().Foreground(colorGray)
+	StyleRowSubtitle         = lipgloss.NewStyle().Foreground(colorGray)
+	StyleRowSubtitleSelected = lipgloss.NewStyle().Background(colorBgSel).Foreground(colorGray)
 )
 
 // StatusStyle returns the lipgloss style for a given status string.
