@@ -8,18 +8,29 @@ import (
 )
 
 var pluginColumns = []ui.Column{
-	{Title: "NAME", Width: 20, Flex: true},
+	{Title: "NAME", Width: 20, Flex: true, MaxPercent: 0.25},
 	{Title: "VERSION", Width: 10},
+	{Title: "SCOPE", Width: 8},
 	{Title: "STATUS", Width: 10},
 	{Title: "SKILLS", Width: 7},
 	{Title: "COMMANDS", Width: 9},
 	{Title: "HOOKS", Width: 6},
+	{Title: "AGENTS", Width: 7},
+	{Title: "MCPS", Width: 5},
 	{Title: "INSTALLED", Width: 12},
 }
 
 // NewPluginsView creates a plugins view.
 func NewPluginsView(width, height int) *ResourceView[*model.Plugin] {
 	return NewResourceView(pluginColumns, nil, pluginRow, width, height)
+}
+
+// isoDate extracts the YYYY-MM-DD portion of an ISO timestamp for display.
+func isoDate(s string) string {
+	if len(s) >= 10 {
+		return s[:10]
+	}
+	return s
 }
 
 func pluginRow(items []*model.Plugin, i int, _ bool) ui.Row {
@@ -34,11 +45,14 @@ func pluginRow(items []*model.Plugin, i int, _ bool) ui.Row {
 		Cells: []string{
 			p.Name,
 			p.Version,
+			p.Scope,
 			statusStyle.Render(statusStr),
 			fmt.Sprintf("%d", p.SkillCount),
 			fmt.Sprintf("%d", p.CommandCount),
 			fmt.Sprintf("%d", p.HookCount),
-			p.InstalledAt,
+			fmt.Sprintf("%d", p.AgentCount),
+			fmt.Sprintf("%d", p.MCPCount),
+			isoDate(p.InstalledAt),
 		},
 		Data: p,
 	}

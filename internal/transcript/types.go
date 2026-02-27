@@ -2,17 +2,18 @@ package transcript
 
 import "encoding/json"
 
-// Entry represents a single JSONL line in a transcript file.
-type Entry struct {
+// entry represents a single JSONL line in a transcript file.
+type entry struct {
 	Type      string          `json:"type"`
 	Timestamp string          `json:"timestamp"`
 	UUID      string          `json:"uuid"`
 	SessionID string          `json:"sessionId"`
+	GitBranch string          `json:"gitBranch"`
 	Message   json.RawMessage `json:"message"`
 }
 
-// MessageContent is a polymorphic content block inside a message.
-type MessageContent struct {
+// messageContent is a polymorphic content block inside a message.
+type messageContent struct {
 	Type  string          `json:"type"`
 	Text  string          `json:"text,omitempty"`
 	ID    string          `json:"id,omitempty"`
@@ -34,16 +35,62 @@ type Usage struct {
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 }
 
-// AssistantMessage is the message field when type=="assistant".
-type AssistantMessage struct {
+// assistantMessage is the message field when type=="assistant".
+type assistantMessage struct {
 	Role    string           `json:"role"`
-	Content []MessageContent `json:"content"`
+	Content []messageContent `json:"content"`
 	Model   string           `json:"model"`
 	Usage   Usage            `json:"usage"`
 }
 
-// UserMessage is the message field when type=="user".
-type UserMessage struct {
-	Role    string           `json:"role"`
-	Content []MessageContent `json:"content"`
+// userMessage is the message field when type=="user".
+// Content can be either a JSON array of messageContent blocks (old format)
+// or a plain JSON string (new format).
+type userMessage struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+// textContent returns all plain-text strings from the content field,
+// handling both the array-of-blocks format and the plain-string format.
+func (m *userMessage) textContent() string {
+	if len(m.Content) == 0 {
+		return ""
+	}
+	// Try plain string first
+	var s string
+	if err := json.Unmarshal(m.Content, &s); err == nil {
+		return s
+	}
+	// Fall back to array of content blocks
+	var blocks []messageContent
+	if err := json.Unmarshal(m.Content, &blocks); err != nil {
+		return ""
+	}
+	var text string
+	for _, c := range blocks {
+		if c.Type == "text" {
+			text += c.Text
+		}
+	}
+	return text
+}
+
+// toolResults returns tool_result blocks from the content array.
+// Returns nil if content is a plain string.
+func (m *userMessage) toolResults() []messageContent {
+	if len(m.Content) == 0 {
+		return nil
+	}
+	var blocks []messageContent
+	if err := json.Unmarshal(m.Content, &blocks); err != nil {
+		return nil
+	}
+	var results []messageContent
+	for _, c := range blocks {
+		if c.Type == "tool_result" {
+			results = append(results, c)
+		}
+	}
+	return results
 }

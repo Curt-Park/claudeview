@@ -7,54 +7,85 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
+// GenerateMemories creates synthetic demo memory files.
+func GenerateMemories() []*model.Memory {
+	now := time.Now()
+	return []*model.Memory{
+		{
+			Name:    "MEMORY.md",
+			Path:    "/demo/.claude/projects/demo-project-1/memory/MEMORY.md",
+			Title:   "Project Memory",
+			Size:    2048,
+			ModTime: now.Add(-10 * time.Minute),
+		},
+		{
+			Name:    "patterns.md",
+			Path:    "/demo/.claude/projects/demo-project-1/memory/patterns.md",
+			Title:   "Code Patterns",
+			Size:    512,
+			ModTime: now.Add(-2 * time.Hour),
+		},
+		{
+			Name:    "debugging.md",
+			Path:    "/demo/.claude/projects/demo-project-1/memory/debugging.md",
+			Title:   "Debugging Notes",
+			Size:    1024,
+			ModTime: now.Add(-24 * time.Hour),
+		},
+	}
+}
+
 // GenerateProjects creates synthetic demo projects.
 func GenerateProjects() []*model.Project {
 	now := time.Now()
 
 	sessions1 := []*model.Session{
 		{
-			ID:           "abc12345-demo-0001-0000-000000000001",
-			ProjectHash:  "demo-project-1",
-			Model:        "claude-opus-4-6",
-			Status:       model.StatusActive,
-			TotalCost:    0.4234,
-			InputTokens:  120000,
-			OutputTokens: 25200,
-			NumTurns:     12,
-			StartTime:    now.Add(-5 * time.Minute),
-			ModTime:      now.Add(-30 * time.Second),
-			Agents:       generateAgents("abc12345"),
+			ID:            "abc12345-demo-0001-0000-000000000001",
+			ProjectHash:   "demo-project-1",
+			Topic:         "Refactor authentication module to use OAuth2",
+			Branch:        "feat/auth-refactor",
+			FileSize:      1363149,
+			TokensByModel: map[string]model.TokenCount{"claude-opus-4-6": {InputTokens: 120000, OutputTokens: 25200}},
+			AgentCount:    4,
+			ToolCallCount: 18,
+			NumTurns:      12,
+			StartTime:     now.Add(-5 * time.Minute),
+			ModTime:       now.Add(-30 * time.Second),
+			Agents:        generateAgents("abc12345"),
 		},
 		{
-			ID:           "def45678-demo-0002-0000-000000000002",
-			ProjectHash:  "demo-project-1",
-			Model:        "claude-sonnet-4-6",
-			Status:       model.StatusEnded,
-			TotalCost:    0.0823,
-			InputTokens:  20000,
-			OutputTokens: 3100,
-			NumTurns:     5,
-			StartTime:    now.Add(-2 * time.Hour),
-			EndTime:      now.Add(-90 * time.Minute),
-			ModTime:      now.Add(-90 * time.Minute),
-			Agents:       generateAgents("def45678"),
+			ID:            "def45678-demo-0002-0000-000000000002",
+			ProjectHash:   "demo-project-1",
+			Topic:         "Fix login redirect bug after password reset",
+			Branch:        "fix/login-redirect",
+			FileSize:      510054,
+			TokensByModel: map[string]model.TokenCount{"claude-sonnet-4-6": {InputTokens: 20000, OutputTokens: 3100}},
+			AgentCount:    4,
+			ToolCallCount: 18,
+			NumTurns:      5,
+			StartTime:     now.Add(-2 * time.Hour),
+			EndTime:       now.Add(-90 * time.Minute),
+			ModTime:       now.Add(-90 * time.Minute),
+			Agents:        generateAgents("def45678"),
 		},
 	}
 
 	sessions2 := []*model.Session{
 		{
-			ID:           "ghi78901-demo-0003-0000-000000000003",
-			ProjectHash:  "demo-project-2",
-			Model:        "claude-haiku-4-5",
-			Status:       model.StatusEnded,
-			TotalCost:    0.0123,
-			InputTokens:  5000,
-			OutputTokens: 800,
-			NumTurns:     3,
-			StartTime:    now.Add(-24 * time.Hour),
-			EndTime:      now.Add(-23 * time.Hour),
-			ModTime:      now.Add(-23 * time.Hour),
-			Agents:       generateAgents("ghi78901"),
+			ID:            "ghi78901-demo-0003-0000-000000000003",
+			ProjectHash:   "demo-project-2",
+			Topic:         "Update test coverage for API endpoints",
+			Branch:        "main",
+			FileSize:      2662400,
+			TokensByModel: map[string]model.TokenCount{"claude-haiku-4-5": {InputTokens: 5000, OutputTokens: 800}},
+			AgentCount:    4,
+			ToolCallCount: 18,
+			NumTurns:      3,
+			StartTime:     now.Add(-24 * time.Hour),
+			EndTime:       now.Add(-23 * time.Hour),
+			ModTime:       now.Add(-23 * time.Hour),
+			Agents:        generateAgents("ghi78901"),
 		},
 	}
 
@@ -159,16 +190,6 @@ func generateToolCalls(sessionID, agentID string, count int) []*model.ToolCall {
 	return calls
 }
 
-// GenerateTasks creates synthetic demo tasks.
-func GenerateTasks(sessionID string) []*model.Task {
-	return []*model.Task{
-		{ID: "1", SessionID: sessionID, Subject: "Explore project context", Status: model.StatusCompleted},
-		{ID: "2", SessionID: sessionID, Subject: "Ask clarifying questions", Status: model.StatusCompleted, BlockedBy: []string{"1"}},
-		{ID: "3", SessionID: sessionID, Subject: "Propose approaches", Status: model.StatusInProgress, BlockedBy: []string{"2"}},
-		{ID: "4", SessionID: sessionID, Subject: "Present design", Status: model.StatusPending, BlockedBy: []string{"3"}},
-	}
-}
-
 // GeneratePlugins creates synthetic demo plugins.
 func GeneratePlugins() []*model.Plugin {
 	return []*model.Plugin{
@@ -176,60 +197,37 @@ func GeneratePlugins() []*model.Plugin {
 			Name:         "superpowers",
 			Version:      "4.3.1",
 			Marketplace:  "claude-plugins-official",
+			Scope:        "user",
 			Enabled:      true,
 			InstalledAt:  "2025-12-15",
 			SkillCount:   15,
 			CommandCount: 2,
 			HookCount:    1,
+			AgentCount:   0,
+			MCPCount:     0,
 		},
 		{
 			Name:         "Notion",
 			Version:      "1.2.0",
 			Marketplace:  "claude-plugins-official",
+			Scope:        "user",
 			Enabled:      true,
 			InstalledAt:  "2025-11-20",
 			SkillCount:   8,
 			CommandCount: 1,
+			AgentCount:   1,
+			MCPCount:     1,
 		},
 		{
 			Name:        "code-review",
 			Version:     "2.0.1",
 			Marketplace: "claude-plugins-official",
+			Scope:       "project",
 			Enabled:     false,
 			InstalledAt: "2025-10-01",
 			SkillCount:  3,
-		},
-	}
-}
-
-// GenerateMCPServers creates synthetic demo MCP servers.
-func GenerateMCPServers() []*model.MCPServer {
-	return []*model.MCPServer{
-		{
-			Name:      "filesystem",
-			Plugin:    "superpowers",
-			Transport: "stdio",
-			Command:   "npx",
-			Args:      []string{"@anthropic/mcp-fs"},
-			ToolCount: 8,
-			Status:    model.StatusRunning,
-		},
-		{
-			Name:      "github",
-			Plugin:    "Notion",
-			Transport: "stdio",
-			Command:   "notion-mcp-server",
-			ToolCount: 12,
-			Status:    model.StatusRunning,
-		},
-		{
-			Name:      "sqlite",
-			Plugin:    "superpowers",
-			Transport: "stdio",
-			Command:   "mcp-server-sqlite",
-			Args:      []string{"--db-path", "~/.claude/data.db"},
-			ToolCount: 6,
-			Status:    model.StatusDone,
+			AgentCount:  0,
+			MCPCount:    0,
 		},
 	}
 }

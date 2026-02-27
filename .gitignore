@@ -4,4 +4,3 @@ bin/
 *.out
 coverage.txt
 .vscode
-docs/plans

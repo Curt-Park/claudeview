@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
-	"time"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -79,30 +79,39 @@ func run(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+// dataLoadedMsg carries freshly loaded data back to the UI goroutine.
+type dataLoadedMsg struct {
+	projects []*model.Project
+	sessions []*model.Session
+	agents   []*model.Agent
+	plugins  []*model.Plugin
+	memories []*model.Memory
+	resource model.ResourceType
+}
+
 // rootModel wraps AppModel and manages actual resource data.
 type rootModel struct {
-	app        ui.AppModel
-	dp         ui.DataProvider
-	projects   []*model.Project
-	sessions   []*model.Session
-	agents     []*model.Agent
-	toolCalls  []*model.ToolCall
-	tasks      []*model.Task
-	plugins    []*model.Plugin
-	mcpServers []*model.MCPServer
+	app      ui.AppModel
+	dp       ui.DataProvider
+	projects []*model.Project
+	sessions []*model.Session
+	agents   []*model.Agent
+	plugins  []*model.Plugin
+	memories []*model.Memory
 
 	// Resource views (eagerly initialized in newRootModel)
 	projectsView *view.ResourceView[*model.Project]
 	sessionsView *view.ResourceView[*model.Session]
 	agentsView   *view.ResourceView[*model.Agent]
-	toolsView    *view.ResourceView[*model.ToolCall]
-	tasksView    *view.ResourceView[*model.Task]
 	pluginsView  *view.ResourceView[*model.Plugin]
-	mcpView      *view.ResourceView[*model.MCPServer]
+	memoriesView *view.ResourceView[*model.Memory]
 
 	// Static info (set once at startup)
 	userStr       string
 	claudeVersion string
+
+	// Async loading state
+	loading bool
 }
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
@@ -114,10 +123,8 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		projectsView:  view.NewProjectsView(0, 0),
 		sessionsView:  view.NewSessionsView(0, 0),
 		agentsView:    view.NewAgentsView(0, 0),
-		toolsView:     view.NewToolsView(0, 0),
-		tasksView:     view.NewTasksView(0, 0),
 		pluginsView:   view.NewPluginsView(0, 0),
-		mcpView:       view.NewMCPView(0, 0),
+		memoriesView:  view.NewMemoriesView(0, 0),
 	}
 	rm.loadData()
 	return rm
@@ -155,14 +162,10 @@ func (rm *rootModel) loadData() {
 		rm.sessions = rm.dp.GetSessions(rm.app.SelectedProjectHash)
 	case model.ResourceAgents:
 		rm.agents = rm.dp.GetAgents(rm.app.SelectedSessionID)
-	case model.ResourceTools:
-		rm.toolCalls = rm.dp.GetTools(rm.app.SelectedAgentID)
-	case model.ResourceTasks:
-		rm.tasks = rm.dp.GetTasks(rm.app.SelectedSessionID)
 	case model.ResourcePlugins:
-		rm.plugins = rm.dp.GetPlugins()
-	case model.ResourceMCP:
-		rm.mcpServers = rm.dp.GetMCPServers()
+		rm.plugins = rm.dp.GetPlugins(rm.app.SelectedProjectHash)
+	case model.ResourceMemory:
+		rm.memories = rm.dp.GetMemories(rm.app.SelectedProjectHash)
 	}
 	rm.syncView()
 }
@@ -192,52 +195,62 @@ func (rm *rootModel) syncView() {
 		rm.app.Table = rm.sessionsView.Sync(rm.sessions, w, h, sel, off, flt, rm.app.SelectedProjectHash == "")
 	case model.ResourceAgents:
 		rm.app.Table = rm.agentsView.Sync(rm.agents, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
-	case model.ResourceTools:
-		rm.app.Table = rm.toolsView.Sync(rm.toolCalls, w, h, sel, off, flt, rm.app.SelectedAgentID == "")
-	case model.ResourceTasks:
-		rm.app.Table = rm.tasksView.Sync(rm.tasks, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
 	case model.ResourcePlugins:
 		rm.app.Table = rm.pluginsView.Sync(rm.plugins, w, h, sel, off, flt, false)
-	case model.ResourceMCP:
-		rm.app.Table = rm.mcpView.Sync(rm.mcpServers, w, h, sel, off, flt, false)
+	case model.ResourceMemory:
+		rm.app.Table = rm.memoriesView.Sync(rm.memories, w, h, sel, off, flt, false)
 	}
 }
 
 func (rm *rootModel) updateInfo() {
 	rm.app.Info.Project = rm.app.SelectedProjectHash
-	sess := rm.app.SelectedSessionID
-	if len(sess) > 8 {
-		sess = sess[:8]
-	}
-	rm.app.Info.Session = sess
+	rm.app.Info.Session = view.ShortID(rm.app.SelectedSessionID, 8)
 	rm.app.Info.User = rm.userStr
 	rm.app.Info.ClaudeVersion = rm.claudeVersion
 	rm.app.Info.AppVersion = AppVersion
+	rm.app.Info.MemoriesActive = rm.app.SelectedProjectHash != ""
+	rm.app.Info.Resource = rm.app.Resource
 }
 
 func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var extraCmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		rm.app.Width = msg.Width
 		rm.app.Height = msg.Height
 		rm.syncView()
 
-	case ui.RefreshMsg:
-		rm.loadData()
+	case ui.TickMsg:
+		// Refresh time-based columns (LAST ACTIVE) on every tick
 		rm.syncView()
+		// Trigger async data reload if not already in progress
+		if !rm.loading {
+			rm.loading = true
+			extraCmd = rm.loadDataAsync()
+		}
 
-	case ui.DetailRequestMsg:
-		rm.populateDetail()
-
-	case ui.LogRequestMsg:
-		rm.populateLog()
-
-	case ui.YAMLRequestMsg:
-		rm.populateJSON()
+	case dataLoadedMsg:
+		rm.loading = false
+		if msg.resource == rm.app.Resource {
+			switch msg.resource {
+			case model.ResourceProjects:
+				rm.projects = msg.projects
+			case model.ResourceSessions:
+				rm.sessions = msg.sessions
+			case model.ResourceAgents:
+				rm.agents = msg.agents
+			case model.ResourcePlugins:
+				rm.plugins = msg.plugins
+			case model.ResourceMemory:
+				rm.memories = msg.memories
+			}
+			rm.syncView()
+		}
 
 	}
 
-	// Update app model
+	// Update app model — must always run so AppModel can re-schedule tick()
 	prevResource := rm.app.Resource
 	newApp, cmd := rm.app.Update(msg)
 	rm.app = newApp.(ui.AppModel)
@@ -247,129 +260,34 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.loadData()
 	}
 
+	if extraCmd != nil {
+		return rm, tea.Batch(cmd, extraCmd)
+	}
 	return rm, cmd
 }
 
-func (rm *rootModel) populateJSON() {
-	row := rm.app.Table.SelectedRow()
-	if row == nil {
-		return
+// loadDataAsync returns a tea.Cmd that loads data in a background goroutine.
+func (rm *rootModel) loadDataAsync() tea.Cmd {
+	resource := rm.app.Resource
+	projectHash := rm.app.SelectedProjectHash
+	sessionID := rm.app.SelectedSessionID
+	dp := rm.dp
+	return func() tea.Msg {
+		msg := dataLoadedMsg{resource: resource}
+		switch resource {
+		case model.ResourceProjects:
+			msg.projects = dp.GetProjects()
+		case model.ResourceSessions:
+			msg.sessions = dp.GetSessions(projectHash)
+		case model.ResourceAgents:
+			msg.agents = dp.GetAgents(sessionID)
+		case model.ResourcePlugins:
+			msg.plugins = dp.GetPlugins(projectHash)
+		case model.ResourceMemory:
+			msg.memories = dp.GetMemories(projectHash)
+		}
+		return msg
 	}
-	b, err := json.MarshalIndent(row.Data, "", "  ")
-	if err != nil {
-		rm.app.Detail.SetContentString(fmt.Sprintf("error: %v", err))
-		return
-	}
-	rm.app.Detail.SetContentString(string(b))
-}
-
-func (rm *rootModel) populateDetail() {
-	row := rm.app.Table.SelectedRow()
-	if row == nil {
-		return
-	}
-	var lines []string
-	switch rm.app.Resource {
-	case model.ResourceSessions:
-		if s, ok := row.Data.(*model.Session); ok {
-			lines = view.SessionDetailLines(s)
-		}
-	case model.ResourceAgents:
-		if a, ok := row.Data.(*model.Agent); ok {
-			lines = view.AgentDetailLines(a)
-		}
-	case model.ResourceTasks:
-		if t, ok := row.Data.(*model.Task); ok {
-			lines = view.TaskDetailLines(t)
-		}
-	case model.ResourcePlugins:
-		if p, ok := row.Data.(*model.Plugin); ok {
-			lines = view.PluginDetailLines(p)
-		}
-	case model.ResourceMCP:
-		if s, ok := row.Data.(*model.MCPServer); ok {
-			lines = view.MCPDetailLines(s)
-		}
-	default:
-		// Fallback: JSON dump
-		if b, err := json.MarshalIndent(row.Data, "  ", "  "); err == nil {
-			lines = strings.Split(string(b), "\n")
-		}
-	}
-	rm.app.Detail.SetContent(lines)
-}
-
-func (rm *rootModel) populateLog() {
-	row := rm.app.Table.SelectedRow()
-	if row == nil {
-		return
-	}
-
-	var filePath string
-	switch rm.app.Resource {
-	case model.ResourceSessions:
-		if s, ok := row.Data.(*model.Session); ok {
-			filePath = s.FilePath
-		}
-	case model.ResourceAgents:
-		if a, ok := row.Data.(*model.Agent); ok {
-			filePath = a.FilePath
-		}
-	}
-
-	if filePath == "" {
-		rm.app.Log.SetLines([]ui.LogLine{{Text: "(no transcript file for this resource)", Style: "normal"}})
-		return
-	}
-
-	parsed, err := transcript.ParseFile(filePath)
-	if err != nil {
-		rm.app.Log.SetLines([]ui.LogLine{{Text: fmt.Sprintf("error reading transcript: %v", err), Style: "normal"}})
-		return
-	}
-
-	var logLines []ui.LogLine
-	for _, turn := range parsed.Turns {
-		ts := ""
-		if !turn.Timestamp.IsZero() {
-			ts = turn.Timestamp.Format("15:04:05")
-		}
-		header := fmt.Sprintf("[%s] %s", ts, turn.Role)
-		logLines = append(logLines, ui.LogLine{Text: header, Style: "time"})
-
-		if turn.Thinking != "" {
-			for line := range strings.SplitSeq(turn.Thinking, "\n") {
-				logLines = append(logLines, ui.LogLine{Text: "  <think> " + line, Style: "think"})
-			}
-		}
-		if turn.Text != "" {
-			for line := range strings.SplitSeq(turn.Text, "\n") {
-				logLines = append(logLines, ui.LogLine{Text: "  " + line, Style: "text"})
-			}
-		}
-		for _, tc := range turn.ToolCalls {
-			logLines = append(logLines, ui.LogLine{Text: fmt.Sprintf("  ► %s", tc.Name), Style: "tool"})
-			if len(tc.Input) > 0 && string(tc.Input) != "null" {
-				input := string(tc.Input)
-				if len(input) > 120 {
-					input = input[:119] + "…"
-				}
-				logLines = append(logLines, ui.LogLine{Text: "    input: " + input, Style: "tool"})
-			}
-			if len(tc.Result) > 0 && string(tc.Result) != "null" {
-				result := string(tc.Result)
-				if len(result) > 120 {
-					result = result[:119] + "…"
-				}
-				logLines = append(logLines, ui.LogLine{Text: "    result: " + result, Style: "result"})
-			}
-		}
-	}
-
-	if len(logLines) == 0 {
-		logLines = []ui.LogLine{{Text: "(empty transcript)", Style: "normal"}}
-	}
-	rm.app.Log.SetLines(logLines)
 }
 
 func (rm *rootModel) View() string {
@@ -379,17 +297,14 @@ func (rm *rootModel) View() string {
 // --- Demo Data Provider ---
 
 type demoDataProvider struct {
-	projects   []*model.Project
-	plugins    []*model.Plugin
-	mcpServers []*model.MCPServer
+	projects []*model.Project
+	plugins  []*model.Plugin
 }
 
 func newDemoProvider() ui.DataProvider {
-	projects := demo.GenerateProjects()
 	return &demoDataProvider{
-		projects:   projects,
-		plugins:    demo.GeneratePlugins(),
-		mcpServers: demo.GenerateMCPServers(),
+		projects: demo.GenerateProjects(),
+		plugins:  demo.GeneratePlugins(),
 	}
 }
 
@@ -424,41 +339,10 @@ func (d *demoDataProvider) GetAgents(sessionID string) []*model.Agent {
 	}
 	return []*model.Agent{}
 }
-func (d *demoDataProvider) GetTools(agentID string) []*model.ToolCall {
-	if agentID == "" {
-		var all []*model.ToolCall
-		for _, p := range d.projects {
-			for _, s := range p.Sessions {
-				for _, a := range s.Agents {
-					all = append(all, a.ToolCalls...)
-				}
-			}
-		}
-		return all
-	}
-	for _, p := range d.projects {
-		for _, s := range p.Sessions {
-			for _, a := range s.Agents {
-				if a.ID == agentID {
-					return a.ToolCalls
-				}
-			}
-		}
-	}
-	return []*model.ToolCall{}
+func (d *demoDataProvider) GetPlugins(_ string) []*model.Plugin { return d.plugins }
+func (d *demoDataProvider) GetMemories(_ string) []*model.Memory {
+	return demo.GenerateMemories()
 }
-func (d *demoDataProvider) GetTasks(sessionID string) []*model.Task {
-	if len(d.projects) > 0 && len(d.projects[0].Sessions) > 0 {
-		sid := d.projects[0].Sessions[0].ID
-		if sessionID != "" {
-			sid = sessionID
-		}
-		return demo.GenerateTasks(sid)
-	}
-	return []*model.Task{}
-}
-func (d *demoDataProvider) GetPlugins() []*model.Plugin       { return d.plugins }
-func (d *demoDataProvider) GetMCPServers() []*model.MCPServer { return d.mcpServers }
 
 // --- Live Data Provider ---
 
@@ -466,10 +350,15 @@ type liveDataProvider struct {
 	claudeDir      string
 	currentProject string
 	currentSession string
+	aggCache       map[string]*transcript.SessionAggregates
+	mu             sync.Mutex
 }
 
 func newLiveProvider(claudeDir string) ui.DataProvider {
-	return &liveDataProvider{claudeDir: claudeDir}
+	return &liveDataProvider{
+		claudeDir: claudeDir,
+		aggCache:  make(map[string]*transcript.SessionAggregates),
+	}
 }
 
 func (l *liveDataProvider) GetProjects() []*model.Project {
@@ -485,7 +374,10 @@ func (l *liveDataProvider) GetProjects() []*model.Project {
 			LastSeen: info.LastSeen,
 		}
 		for _, si := range info.Sessions {
-			s := sessionFromInfo(si)
+			s := l.sessionFromInfo(si)
+			if s.Topic == "" {
+				continue // skip empty sessions (no user messages yet)
+			}
 			p.Sessions = append(p.Sessions, s)
 		}
 		projects = append(projects, p)
@@ -509,7 +401,10 @@ func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
 			continue
 		}
 		for _, si := range info.Sessions {
-			s := sessionFromInfo(si)
+			s := l.sessionFromInfo(si)
+			if s.Topic == "" {
+				continue // skip empty sessions (no user messages yet)
+			}
 			s.ProjectHash = info.Hash
 			sessions = append(sessions, s)
 		}
@@ -537,137 +432,109 @@ func (l *liveDataProvider) GetAgents(sessionID string) []*model.Agent {
 	return []*model.Agent{}
 }
 
-func (l *liveDataProvider) GetTools(agentID string) []*model.ToolCall {
-	agents := l.GetAgents(l.currentSession)
-	if agentID == "" {
-		var all []*model.ToolCall
-		for _, a := range agents {
-			all = append(all, a.ToolCalls...)
-		}
-		return all
-	}
-	for _, a := range agents {
-		if a.ID == agentID {
-			return a.ToolCalls
-		}
-	}
-	return []*model.ToolCall{}
-}
-
-func (l *liveDataProvider) GetTasks(sessionID string) []*model.Task {
-	if sessionID == "" {
-		sessionID = l.currentSession
-	}
-	entries, err := config.LoadTasks(l.claudeDir, sessionID)
-	if err != nil {
-		return []*model.Task{}
-	}
-	var tasks []*model.Task
-	for _, e := range entries {
-		tasks = append(tasks, &model.Task{
-			ID:          e.ID,
-			SessionID:   sessionID,
-			Subject:     e.Subject,
-			Description: e.Description,
-			Status:      model.Status(e.Status),
-			Owner:       e.Owner,
-			BlockedBy:   e.BlockedBy,
-			Blocks:      e.Blocks,
-			ActiveForm:  e.ActiveForm,
-		})
-	}
-	return tasks
-}
-
-func (l *liveDataProvider) GetPlugins() []*model.Plugin {
+func (l *liveDataProvider) GetPlugins(projectHash string) []*model.Plugin {
 	installed, err := config.LoadInstalledPlugins(l.claudeDir)
 	if err != nil {
 		return []*model.Plugin{}
 	}
-	enabled, _ := config.EnabledPlugins(l.claudeDir)
+	globalEnabled, _ := config.EnabledPlugins(l.claudeDir)
 
 	var plugins []*model.Plugin
 	for _, p := range installed {
-		isEnabled := p.Enabled
-		if enabled != nil {
-			isEnabled = enabled[p.Name]
+		if projectHash == "" && p.Scope != "user" {
+			continue
 		}
-		cacheDir := config.PluginCacheDir(l.claudeDir, p.Marketplace, p.Name, p.Version)
+		key := p.Name + "@" + p.Marketplace
+		var isEnabled bool
+		if p.ProjectPath != "" {
+			pluginEnabled := config.ProjectEnabledPlugins(p.ProjectPath)
+			isEnabled = pluginEnabled[key]
+		} else {
+			isEnabled = globalEnabled[key]
+		}
 		plugins = append(plugins, &model.Plugin{
 			Name:         p.Name,
 			Version:      p.Version,
 			Marketplace:  p.Marketplace,
+			Scope:        p.Scope,
 			Enabled:      isEnabled,
 			InstalledAt:  p.InstalledAt,
-			CacheDir:     cacheDir,
-			SkillCount:   model.CountSkills(cacheDir),
-			CommandCount: model.CountCommands(cacheDir),
-			HookCount:    model.CountHooks(cacheDir),
+			CacheDir:     p.CacheDir,
+			SkillCount:   model.CountSkills(p.CacheDir),
+			CommandCount: model.CountCommands(p.CacheDir),
+			HookCount:    model.CountHooks(p.CacheDir),
+			AgentCount:   model.CountAgents(p.CacheDir),
+			MCPCount:     model.CountMCPs(p.CacheDir),
 		})
 	}
 	return plugins
 }
 
-func (l *liveDataProvider) GetMCPServers() []*model.MCPServer {
-	settings, err := config.LoadSettings(l.claudeDir)
-	if err != nil {
-		return []*model.MCPServer{}
+func (l *liveDataProvider) GetMemories(projectHash string) []*model.Memory {
+	if projectHash == "" {
+		return []*model.Memory{}
 	}
-	var servers []*model.MCPServer
-	for name, s := range settings.MCPServers {
-		transport := s.Type
-		if transport == "" {
-			transport = "stdio"
+	memDir := filepath.Join(l.claudeDir, "projects", projectHash, "memory")
+	entries, err := os.ReadDir(memDir)
+	if err != nil {
+		return []*model.Memory{}
+	}
+	var memories []*model.Memory
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".md" {
+			continue
 		}
-		servers = append(servers, &model.MCPServer{
-			Name:      name,
-			Transport: transport,
-			Command:   s.Command,
-			Args:      s.Args,
-			URL:       s.URL,
-			Status:    model.StatusRunning,
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		path := filepath.Join(memDir, e.Name())
+		memories = append(memories, &model.Memory{
+			Name:    e.Name(),
+			Path:    path,
+			Title:   mdTitle(path),
+			Size:    info.Size(),
+			ModTime: info.ModTime(),
 		})
 	}
-	return servers
+	return memories
 }
 
-// sessionFromInfo creates a Session model from a transcript SessionInfo.
-func sessionFromInfo(si transcript.SessionInfo) *model.Session {
+// sessionFromInfo creates a Session model from a transcript SessionInfo using incremental parsing.
+func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Session {
 	s := &model.Session{
 		ID:          si.ID,
 		FilePath:    si.FilePath,
 		SubagentDir: si.SubagentDir,
 		ModTime:     si.ModTime,
-		Status:      model.StatusEnded,
 	}
 
-	// Quick parse to get metadata
-	parsed, err := transcript.ParseFile(si.FilePath)
+	l.mu.Lock()
+	cached := l.aggCache[si.FilePath]
+	l.mu.Unlock()
+
+	agg, err := transcript.ParseAggregatesIncremental(si.FilePath, cached)
 	if err != nil {
 		return s
 	}
 
-	s.TotalCost = parsed.TotalCost
-	s.NumTurns = parsed.NumTurns
-	s.DurationMS = parsed.DurationMS
+	l.mu.Lock()
+	l.aggCache[si.FilePath] = agg
+	l.mu.Unlock()
 
-	// Extract tokens and model from last assistant turn
-	for i := len(parsed.Turns) - 1; i >= 0; i-- {
-		t := parsed.Turns[i]
-		if t.Role == "assistant" {
-			s.InputTokens = t.Usage.InputTokens
-			s.OutputTokens = t.Usage.OutputTokens
-			s.Model = t.Model
-			break
-		}
+	s.NumTurns = agg.NumTurns
+	s.Topic = agg.Topic
+	s.Branch = agg.Branch
+	s.ToolCallCount = agg.TotalToolCalls
+	s.AgentCount = 1 + transcript.CountSubagents(si.SubagentDir)
+	if info, err := os.Stat(si.FilePath); err == nil {
+		s.FileSize = info.Size()
 	}
 
-	// Determine status: active if JSONL was modified within the last 5 minutes
-	// (covers pauses between turns while Claude Code is still running).
-	if time.Since(si.ModTime) < 5*time.Minute {
-		s.Status = model.StatusActive
+	s.TokensByModel = make(map[string]model.TokenCount, len(agg.TokensByModel))
+	for m, u := range agg.TokensByModel {
+		s.TokensByModel[m] = model.TokenCount{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}
 	}
-
 	return s
 }
 
@@ -699,7 +566,7 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 		ID:         "",
 		SessionID:  s.ID,
 		Type:       model.AgentTypeMain,
-		Status:     s.Status,
+		Status:     model.StatusEnded,
 		FilePath:   s.FilePath,
 		IsSubagent: false,
 	}
@@ -736,6 +603,23 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 	}
 
 	return agents
+}
+
+// mdTitle reads the first `# Heading` line from a markdown file and returns
+// the heading text. Returns an empty string if the file cannot be read or
+// contains no top-level heading.
+func mdTitle(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.SplitAfter(string(data), "\n") {
+		line = strings.TrimRight(line, "\r\n")
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimPrefix(line, "# ")
+		}
+	}
+	return ""
 }
 
 // detectAgentType infers agent type from its ID or filename.

@@ -8,120 +8,140 @@ import (
 )
 
 func TestTableNavItems(t *testing.T) {
-	// Sessions: enter + esc in nav items
-	nav := ui.TableNavItems(model.ResourceSessions)
+	// Sessions: enter + esc with specific descriptions
+	nav := ui.TableNavItems(model.ResourceSessions, false)
 	if len(nav) == 0 {
 		t.Fatal("TableNavItems returned empty slice")
 	}
-	hasEnter, hasEsc := false, false
+	enterDesc, escDesc := "", ""
 	for _, item := range nav {
 		if item.Key == "enter" {
-			hasEnter = true
+			enterDesc = item.Desc
 		}
 		if item.Key == "esc" {
-			hasEsc = true
+			escDesc = item.Desc
 		}
 	}
-	if !hasEnter {
+	if enterDesc == "" {
 		t.Error("TableNavItems(sessions): missing 'enter' key")
 	}
-	if !hasEsc {
+	if escDesc == "" {
 		t.Error("TableNavItems(sessions): missing 'esc' key")
 	}
 
-	// Tools: no enter, but has esc
-	toolNav := ui.TableNavItems(model.ResourceTools)
-	hasEscTools := false
-	for _, item := range toolNav {
-		if item.Key == "enter" {
-			t.Error("TableNavItems(tools): unexpected 'enter' key")
-		}
-		if item.Key == "esc" {
-			hasEscTools = true
-		}
-	}
-	if !hasEscTools {
-		t.Error("TableNavItems(tools): missing 'esc' key")
-	}
-
-	// Projects: no esc (root level, nothing to go back to)
-	projNav := ui.TableNavItems(model.ResourceProjects)
+	// Projects: enter present, no esc (root level)
+	projNav := ui.TableNavItems(model.ResourceProjects, false)
+	hasEnter := false
 	for _, item := range projNav {
 		if item.Key == "esc" {
 			t.Error("TableNavItems(projects): unexpected 'esc' key (root level)")
 		}
+		if item.Key == "enter" {
+			hasEnter = true
+		}
 	}
-}
+	if !hasEnter {
+		t.Error("TableNavItems(projects): missing 'enter' key")
+	}
 
-func TestTableUtilItems(t *testing.T) {
-	// Sessions: logs key present, no esc (moved to nav)
-	util := ui.TableUtilItems(model.ResourceSessions)
-	if len(util) == 0 {
-		t.Fatal("TableUtilItems returned empty slice")
-	}
-	hasLogs := false
-	for _, item := range util {
-		if item.Key == "l" {
-			hasLogs = true
+	// Agents: esc present, no enter (leaf node — no tools drill-down)
+	agentNav := ui.TableNavItems(model.ResourceAgents, false)
+	hasEscAgents := false
+	for _, item := range agentNav {
+		if item.Key == "enter" {
+			t.Error("TableNavItems(agents): unexpected 'enter' key")
 		}
 		if item.Key == "esc" {
-			t.Error("TableUtilItems: unexpected 'esc' key (should be in nav)")
+			hasEscAgents = true
 		}
 	}
-	if !hasLogs {
-		t.Error("TableUtilItems(sessions): missing 'l' (logs) key")
+	if !hasEscAgents {
+		t.Error("TableNavItems(agents): missing 'esc' key")
 	}
+}
 
-	// Tools: no logs
-	toolUtil := ui.TableUtilItems(model.ResourceTools)
-	for _, item := range toolUtil {
-		if item.Key == "l" {
-			t.Error("TableUtilItems(tools): unexpected 'l' key")
+func TestTableUtilItemsHasFilter(t *testing.T) {
+	for _, rt := range []model.ResourceType{
+		model.ResourceSessions, model.ResourceAgents, model.ResourceProjects,
+	} {
+		util := ui.TableUtilItems(rt)
+		hasFilter := false
+		for _, item := range util {
+			if item.Key == "/" {
+				hasFilter = true
+			}
+		}
+		if !hasFilter {
+			t.Errorf("TableUtilItems(%s): missing '/' (filter) key", rt)
 		}
 	}
 }
 
-func TestLogNavItems(t *testing.T) {
-	items := ui.LogNavItems()
-	if len(items) == 0 {
-		t.Fatal("LogNavItems returned empty slice")
+func TestTableNavItemsWithFilter(t *testing.T) {
+	// When hasFilter=true, esc should show "clear filter" for all resource types
+	for _, rt := range []model.ResourceType{
+		model.ResourceProjects, model.ResourceSessions, model.ResourceAgents,
+	} {
+		nav := ui.TableNavItems(rt, true)
+		escDesc := ""
+		for _, item := range nav {
+			if item.Key == "esc" {
+				escDesc = item.Desc
+			}
+		}
+		if escDesc != "clear filter" {
+			t.Errorf("TableNavItems(%s, hasFilter=true): expected esc desc %q, got %q", rt, "clear filter", escDesc)
+		}
 	}
 }
 
-func TestLogUtilItems(t *testing.T) {
-	items := ui.LogUtilItems()
-	if len(items) == 0 {
-		t.Fatal("LogUtilItems returned empty slice")
+func TestSetHighlightMatchesCompoundKey(t *testing.T) {
+	menu := ui.MenuModel{
+		NavItems: []ui.MenuItem{
+			{Key: "j/k", Desc: "down/up"},
+			{Key: "enter", Desc: "drill"},
+		},
 	}
-	hasFollow, hasFilter := false, false
-	for _, item := range items {
-		if item.Key == "f" {
-			hasFollow = true
-		}
-		if item.Key == "/" {
-			hasFilter = true
-		}
+
+	menu.SetHighlight("j")
+
+	jk := ui.MenuItem{Key: "j/k", Desc: "down/up"}
+	if !menu.IsHighlighted(jk) {
+		t.Error("expected j/k to be highlighted after SetHighlight('j')")
 	}
-	if !hasFollow {
-		t.Error("LogUtilItems: missing 'f' (follow) key")
-	}
-	if !hasFilter {
-		t.Error("LogUtilItems: missing '/' (filter) key")
+
+	enter := ui.MenuItem{Key: "enter", Desc: "drill"}
+	if menu.IsHighlighted(enter) {
+		t.Error("expected enter NOT to be highlighted")
 	}
 }
 
-func TestDetailNavItems(t *testing.T) {
-	items := ui.DetailNavItems()
-	if len(items) == 0 {
-		t.Fatal("DetailNavItems returned empty slice")
+func TestSetHighlightNoMatchIsNoOp(t *testing.T) {
+	menu := ui.MenuModel{
+		NavItems: []ui.MenuItem{{Key: "j/k", Desc: "down/up"}},
 	}
-	hasEsc := false
-	for _, item := range items {
-		if item.Key == "esc" {
-			hasEsc = true
-		}
+
+	menu.SetHighlight("z") // no match
+
+	item := ui.MenuItem{Key: "j/k", Desc: "down/up"}
+	if menu.IsHighlighted(item) {
+		t.Error("expected no highlight when key does not match any item")
 	}
-	if !hasEsc {
-		t.Error("DetailNavItems: missing 'esc' key")
+}
+
+func TestClearHighlight(t *testing.T) {
+	menu := ui.MenuModel{
+		NavItems: []ui.MenuItem{{Key: "j/k", Desc: "down/up"}},
+	}
+	menu.SetHighlight("j")
+
+	item := ui.MenuItem{Key: "j/k", Desc: "down/up"}
+	if !menu.IsHighlighted(item) {
+		t.Fatal("expected highlight active before clear")
+	}
+
+	menu.ClearHighlight()
+	if menu.IsHighlighted(item) {
+		t.Error("expected highlight cleared after ClearHighlight")
 	}
 }

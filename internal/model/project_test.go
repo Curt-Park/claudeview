@@ -25,33 +25,3 @@ func TestProjectSessionCount(t *testing.T) {
 		})
 	}
 }
-
-func TestProjectActiveSessions(t *testing.T) {
-	active := &model.Session{Status: model.StatusActive}
-	ended := &model.Session{Status: model.StatusEnded}
-	done := &model.Session{Status: model.StatusDone}
-
-	tests := []struct {
-		name     string
-		sessions []*model.Session
-		wantLen  int
-	}{
-		{"no sessions", nil, 0},
-		{"mixed status active and ended", []*model.Session{active, ended, done}, 1},
-		{"all active", []*model.Session{active, active}, 2},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			p := &model.Project{Sessions: tc.sessions}
-			got := p.ActiveSessions()
-			if len(got) != tc.wantLen {
-				t.Errorf("ActiveSessions() len = %d, want %d", len(got), tc.wantLen)
-			}
-			for _, s := range got {
-				if s.Status != model.StatusActive {
-					t.Errorf("ActiveSessions() returned session with status %q, want active", s.Status)
-				}
-			}
-		})
-	}
-}

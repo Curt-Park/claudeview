@@ -17,9 +17,23 @@ type Column struct {
 }
 
 // Row is a single row in the table (slice of cell strings + raw data).
+// If Subtitle is non-empty it is rendered as a second dimmed line below the row.
+// SubtitleIndent specifies how many spaces to prepend to the subtitle (e.g. to
+// align it under a specific column).
 type Row struct {
-	Cells []string
-	Data  any // original data object
+	Cells          []string
+	Subtitle       string // optional second line shown in dimmed style
+	SubtitleIndent int    // leading spaces before the subtitle text
+	Data           any    // original data object
+	Hot            bool   // true if this row was recently updated (for highlight)
+}
+
+// rowLineCount returns the number of display lines this row occupies.
+func rowLineCount(row Row) int {
+	if row.Subtitle != "" {
+		return 2
+	}
+	return 1
 }
 
 // TableView is a generic scrollable table component.
@@ -114,12 +128,21 @@ func (t *TableView) PageDown() {
 }
 
 func (t *TableView) ensureVisible() {
+	rows := t.filteredRows()
 	dr := t.dataRows()
 	if t.Selected < t.Offset {
 		t.Offset = t.Selected
+		return
 	}
-	if t.Selected >= t.Offset+dr {
-		t.Offset = t.Selected - dr + 1
+	// Count display lines from offset to selected (inclusive).
+	lines := 0
+	for i := t.Offset; i <= t.Selected && i < len(rows); i++ {
+		lines += rowLineCount(rows[i])
+	}
+	// Advance offset until selected row fits within the viewport.
+	for lines > dr && t.Offset < t.Selected {
+		lines -= rowLineCount(rows[t.Offset])
+		t.Offset++
 	}
 }
 
@@ -202,34 +225,14 @@ func (t TableView) View() string {
 		}
 	}
 
-	// Pre-render the expanded (selected) row so we know its line count.
-	// If it doesn't fit at the current scroll position, nudge offset up
-	// so the full expansion is visible — without mutating t.Offset.
-	var expandedLines []string
-	if selected >= offset && selected < len(rows) {
-		expandedLines = strings.Split(t.renderExpandedRow(rows[selected], cols), "\n")
-		linesBeforeSel := selected - offset
-		if linesBeforeSel+len(expandedLines) > visible {
-			offset = min(selected, max(0, selected-(visible-len(expandedLines))))
-		}
-	}
-
 	linesUsed := 0
 	for i := offset; i < len(rows) && linesUsed < visible; i++ {
 		row := rows[i]
-		if i == selected {
-			remaining := visible - linesUsed
-			lines := expandedLines
-			if len(lines) > remaining {
-				lines = lines[:remaining]
-			}
-			for _, l := range lines {
-				sb.WriteString(l)
-				sb.WriteString("\n")
-				linesUsed++
-			}
-		} else {
-			sb.WriteString(t.renderRow(row, cols, false))
+		sb.WriteString(t.renderRow(row, cols, i == selected))
+		sb.WriteString("\n")
+		linesUsed++
+		if row.Subtitle != "" && linesUsed < visible {
+			sb.WriteString(t.renderSubtitleLine(row, i == selected))
 			sb.WriteString("\n")
 			linesUsed++
 		}
@@ -352,79 +355,29 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 		parts = append(parts, padded)
 	}
 	line := strings.Join(parts, " ")
+	if selected && row.Hot {
+		return StyleSelectedHot.Width(t.Width).Render(line)
+	}
 	if selected {
 		return StyleSelected.Width(t.Width).Render(line)
+	}
+	if row.Hot {
+		return StyleHotRow.Render(line)
 	}
 	return line
 }
 
-// renderExpandedRow renders the selected row as multiple lines, wrapping each
-// cell's full content within its column width so nothing is truncated.
-func (t TableView) renderExpandedRow(row Row, widths []int) string {
-	colLines := make([][]string, len(t.Columns))
-	maxLines := 1
-	for i := range t.Columns {
-		cell := ""
-		if i < len(row.Cells) {
-			cell = ansi.Strip(row.Cells[i])
-		}
-		wrapped := wrapText(cell, widths[i])
-		colLines[i] = wrapped
-		if len(wrapped) > maxLines {
-			maxLines = len(wrapped)
-		}
+// renderSubtitleLine renders the subtitle string as a full-width dimmed line,
+// indented by row.SubtitleIndent spaces to align under a specific column.
+// When selected is true the row's selection background is applied.
+func (t TableView) renderSubtitleLine(row Row, selected bool) string {
+	prefix := strings.Repeat(" ", max(0, row.SubtitleIndent))
+	text := prefix + row.Subtitle
+	padded := padRight(text, t.Width)
+	if selected {
+		return StyleRowSubtitleSelected.Width(t.Width).Render(padded)
 	}
-
-	var sb strings.Builder
-	for lineIdx := 0; lineIdx < maxLines; lineIdx++ {
-		var parts []string
-		for i := range t.Columns {
-			cell := ""
-			if lineIdx < len(colLines[i]) {
-				cell = colLines[i][lineIdx]
-			}
-			parts = append(parts, padRight(cell, widths[i]))
-		}
-		line := strings.Join(parts, " ")
-		if lineIdx > 0 {
-			sb.WriteString("\n")
-		}
-		sb.WriteString(StyleSelected.Width(t.Width).Render(line))
-	}
-	return sb.String()
-}
-
-// wrapText splits s into lines of at most width visible characters.
-// It works correctly with multibyte and wide (CJK) characters.
-func wrapText(s string, width int) []string {
-	if width <= 0 || s == "" {
-		return []string{""}
-	}
-	runes := []rune(s)
-	var lines []string
-	for len(runes) > 0 {
-		if lipgloss.Width(string(runes)) <= width {
-			lines = append(lines, string(runes))
-			break
-		}
-		// Greedily consume runes up to width visible chars.
-		lineW := 0
-		end := 0
-		for _, r := range runes {
-			rw := lipgloss.Width(string(r))
-			if lineW+rw > width {
-				break
-			}
-			lineW += rw
-			end++
-		}
-		if end == 0 {
-			end = 1 // force-include at least one rune to avoid infinite loop
-		}
-		lines = append(lines, string(runes[:end]))
-		runes = runes[end:]
-	}
-	return lines
+	return StyleRowSubtitle.Render(padded)
 }
 
 func padRight(s string, n int) string {

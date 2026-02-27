@@ -2,76 +2,83 @@ package model
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 )
 
-// Status represents the current state of a session/agent.
-type Status string
-
-const (
-	StatusActive    Status = "active"
-	StatusThinking  Status = "thinking"
-	StatusReading   Status = "reading"
-	StatusExecuting Status = "executing"
-	StatusDone      Status = "done"
-	StatusEnded     Status = "ended"
-	StatusError     Status = "error"
-	StatusFailed    Status = "failed"
-	StatusRunning   Status = "running"
-	StatusPending   Status = "pending"
-)
+// TokenCount holds per-model token usage.
+type TokenCount struct {
+	InputTokens  int
+	OutputTokens int
+}
 
 // Session represents a Claude Code session.
 type Session struct {
-	ID           string
-	ProjectHash  string
-	FilePath     string
-	SubagentDir  string
-	Model        string
-	Status       Status
-	Agents       []*Agent
-	TotalCost    float64
-	InputTokens  int
-	OutputTokens int
-	NumTurns     int
-	DurationMS   int64
-	StartTime    time.Time
-	EndTime      time.Time
-	ModTime      time.Time
+	ID            string
+	ProjectHash   string
+	FilePath      string
+	SubagentDir   string
+	Branch        string
+	FileSize      int64
+	Topic         string
+	TokensByModel map[string]TokenCount
+	AgentCount    int
+	ToolCallCount int
+	Agents        []*Agent
+	NumTurns      int
+	StartTime     time.Time
+	EndTime       time.Time
+	ModTime       time.Time
 }
 
-// Age returns a human-friendly elapsed time string.
-func (s *Session) Age() string {
-	t := s.ModTime
-	if !s.EndTime.IsZero() {
-		t = s.EndTime
-	}
-	return FormatAge(time.Since(t))
+// LastActive returns a human-friendly elapsed time string based on ModTime.
+func (s *Session) LastActive() string {
+	return FormatAge(time.Since(s.ModTime))
 }
 
-// TotalTokens returns combined input+output token count.
-func (s *Session) TotalTokens() int {
-	return s.InputTokens + s.OutputTokens
-}
-
-// CostString returns formatted cost.
-func (s *Session) CostString() string {
-	if s.TotalCost == 0 {
-		return "-"
-	}
-	return fmt.Sprintf("$%.4f", s.TotalCost)
-}
-
-// TokenString returns formatted token count.
+// TokenString returns a compact per-model token string (e.g. "opus:125k sonnet:50k").
 func (s *Session) TokenString() string {
-	t := s.TotalTokens()
-	if t == 0 {
+	if len(s.TokensByModel) == 0 {
 		return "-"
 	}
-	if t >= 1000 {
-		return fmt.Sprintf("%.1fk", float64(t)/1000)
+	models := make([]string, 0, len(s.TokensByModel))
+	for m := range s.TokensByModel {
+		models = append(models, m)
 	}
-	return fmt.Sprintf("%d", t)
+	sort.Strings(models)
+
+	var parts []string
+	for _, m := range models {
+		tc := s.TokensByModel[m]
+		total := tc.InputTokens + tc.OutputTokens
+		parts = append(parts, fmt.Sprintf("%s:%s", shortModelName(m), formatTokens(total)))
+	}
+	return strings.Join(parts, " ")
+}
+
+// TopicShort returns a normalized, truncated topic string.
+// Newlines are replaced with spaces (matching claude -r style) so the full
+// content is visible on a single line.
+func (s *Session) TopicShort(maxLen int) string {
+	if s.Topic == "" {
+		return "-"
+	}
+	topic := strings.ReplaceAll(s.Topic, "\n", " ")
+	runes := []rune(topic)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen-1]) + "…"
+	}
+	return topic
+}
+
+// MetaLine returns a compact metadata string: "branch · size".
+func (s *Session) MetaLine() string {
+	size := FormatSize(s.FileSize)
+	if s.Branch == "" {
+		return size
+	}
+	return s.Branch + " · " + size
 }
 
 // ShortID returns the first 8 chars of the session ID.
@@ -82,25 +89,33 @@ func (s *Session) ShortID() string {
 	return s.ID
 }
 
-// ToolCount returns total tool calls across all agents.
-func (s *Session) ToolCount() int {
-	count := 0
-	for _, a := range s.Agents {
-		count += len(a.ToolCalls)
+// shortModelName extracts a short identifier from a model name.
+func shortModelName(model string) string {
+	lower := strings.ToLower(model)
+	switch {
+	case strings.Contains(lower, "opus"):
+		return "opus"
+	case strings.Contains(lower, "sonnet"):
+		return "sonnet"
+	case strings.Contains(lower, "haiku"):
+		return "haiku"
+	default:
+		parts := strings.Split(model, "-")
+		if len(parts) > 0 {
+			return parts[len(parts)-1]
+		}
+		return model
 	}
-	return count
 }
 
-// FormatAge converts a duration into a human-friendly string (e.g. "5m", "2h", "3d").
-func FormatAge(d time.Duration) string {
+// formatTokens formats a token count as "125k", "1.5M", etc.
+func formatTokens(n int) string {
 	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1000:
+		return fmt.Sprintf("%dk", n/1000)
 	default:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
+		return fmt.Sprintf("%d", n)
 	}
 }

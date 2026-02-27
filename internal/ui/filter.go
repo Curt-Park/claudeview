@@ -1,7 +1,5 @@
 package ui
 
-import "strings"
-
 // FilterModel handles the `/` filter mode.
 type FilterModel struct {
 	Active bool
@@ -30,14 +28,6 @@ func (f *FilterModel) Backspace() {
 	if len(f.Input) > 0 {
 		f.Input = f.Input[:len(f.Input)-1]
 	}
-}
-
-// Matches returns true if the given string matches the current filter.
-func (f *FilterModel) Matches(s string) bool {
-	if f.Input == "" {
-		return true
-	}
-	return strings.Contains(strings.ToLower(s), strings.ToLower(f.Input))
 }
 
 // Height returns the number of terminal lines rendered by View.
