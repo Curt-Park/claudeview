@@ -103,7 +103,8 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 	// Plugins and memories views cannot navigate to each other, so both hints
 	// are hidden when either view is active.
 	var jumpHints []string
-	inPluginsOrMemories := info.Resource == model.ResourcePlugins || info.Resource == model.ResourceMemory
+	inPluginsOrMemories := info.Resource == model.ResourcePlugins || info.Resource == model.ResourceMemory ||
+		info.Resource == model.ResourcePluginDetail || info.Resource == model.ResourceMemoryDetail
 	if !inPluginsOrMemories {
 		jumpHints = append(jumpHints, renderJumpHint(menu, "p", "plugins"))
 	}

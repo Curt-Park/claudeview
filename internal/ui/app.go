@@ -412,8 +412,12 @@ func (m AppModel) View() string {
 		contentStr = m.Table.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
-	if limit := m.contentHeight(); len(rawLines) > limit {
+	limit := m.contentHeight()
+	if len(rawLines) > limit {
 		rawLines = rawLines[:limit]
+	}
+	for len(rawLines) < limit {
+		rawLines = append(rawLines, "")
 	}
 
 	// --- 4. Status bar ---
