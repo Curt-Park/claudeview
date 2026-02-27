@@ -4,11 +4,13 @@ package model
 type ResourceType string
 
 const (
-	ResourceProjects ResourceType = "projects"
-	ResourceSessions ResourceType = "sessions"
-	ResourceAgents   ResourceType = "agents"
-	ResourcePlugins  ResourceType = "plugins"
-	ResourceMemory   ResourceType = "memories"
+	ResourceProjects     ResourceType = "projects"
+	ResourceSessions     ResourceType = "sessions"
+	ResourceAgents       ResourceType = "agents"
+	ResourcePlugins      ResourceType = "plugins"
+	ResourceMemory       ResourceType = "memories"
+	ResourcePluginDetail ResourceType = "plugin-detail"
+	ResourceMemoryDetail ResourceType = "memory-detail"
 )
 
 // ResourceAliases maps shorthand commands to full resource names.
