@@ -9,7 +9,7 @@ import (
 )
 
 // RenderPluginDetail renders plugin content as a plain string for the detail view.
-func RenderPluginDetail(p *model.Plugin, _ int) string {
+func RenderPluginDetail(p *model.Plugin) string {
 	if p == nil {
 		return ""
 	}

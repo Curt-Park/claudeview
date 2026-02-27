@@ -403,7 +403,7 @@ func (m AppModel) View() string {
 	var contentStr string
 	switch m.Resource {
 	case model.ResourcePluginDetail:
-		contentStr = RenderPluginDetail(m.SelectedPlugin, m.contentWidth())
+		contentStr = RenderPluginDetail(m.SelectedPlugin)
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory)
 	default:
