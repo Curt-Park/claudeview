@@ -109,7 +109,7 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 			items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
 		case model.ResourcePlugins, model.ResourceMemory:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
-		// ResourceProjects: no esc (root level)
+			// ResourceProjects: no esc (root level)
 		}
 	}
 	return items

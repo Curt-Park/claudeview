@@ -6,6 +6,7 @@ import "time"
 type Memory struct {
 	Name    string
 	Path    string
+	Title   string // first # heading in the file, empty if none
 	Size    int64
 	ModTime time.Time
 }

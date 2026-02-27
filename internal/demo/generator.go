@@ -14,18 +14,21 @@ func GenerateMemories() []*model.Memory {
 		{
 			Name:    "MEMORY.md",
 			Path:    "/demo/.claude/projects/demo-project-1/memory/MEMORY.md",
+			Title:   "Project Memory",
 			Size:    2048,
 			ModTime: now.Add(-10 * time.Minute),
 		},
 		{
 			Name:    "patterns.md",
 			Path:    "/demo/.claude/projects/demo-project-1/memory/patterns.md",
+			Title:   "Code Patterns",
 			Size:    512,
 			ModTime: now.Add(-2 * time.Hour),
 		},
 		{
 			Name:    "debugging.md",
 			Path:    "/demo/.claude/projects/demo-project-1/memory/debugging.md",
+			Title:   "Debugging Notes",
 			Size:    1024,
 			ModTime: now.Add(-24 * time.Hour),
 		},

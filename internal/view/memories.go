@@ -6,7 +6,8 @@ import (
 )
 
 var memoryColumns = []ui.Column{
-	{Title: "NAME", Width: 20, Flex: true, MaxPercent: 0.40},
+	{Title: "NAME", Width: 18},
+	{Title: "TITLE", Width: 20, Flex: true, MaxPercent: 0.45},
 	{Title: "SIZE", Width: 8},
 	{Title: "MODIFIED", Width: 11},
 }
@@ -21,6 +22,7 @@ func memoryRow(items []*model.Memory, i int, _ bool) ui.Row {
 	return ui.Row{
 		Cells: []string{
 			m.Name,
+			m.Title,
 			m.SizeStr(),
 			m.LastModified(),
 		},

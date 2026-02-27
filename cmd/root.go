@@ -479,9 +479,11 @@ func (l *liveDataProvider) GetMemories(projectHash string) []*model.Memory {
 		if err != nil {
 			continue
 		}
+		path := filepath.Join(memDir, e.Name())
 		memories = append(memories, &model.Memory{
 			Name:    e.Name(),
-			Path:    filepath.Join(memDir, e.Name()),
+			Path:    path,
+			Title:   mdTitle(path),
 			Size:    info.Size(),
 			ModTime: info.ModTime(),
 		})
@@ -592,6 +594,23 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 	}
 
 	return agents
+}
+
+// mdTitle reads the first `# Heading` line from a markdown file and returns
+// the heading text. Returns an empty string if the file cannot be read or
+// contains no top-level heading.
+func mdTitle(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.SplitAfter(string(data), "\n") {
+		line = strings.TrimRight(line, "\r\n")
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimPrefix(line, "# ")
+		}
+	}
+	return ""
 }
 
 // detectAgentType infers agent type from its ID or filename.
