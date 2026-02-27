@@ -67,10 +67,9 @@ func CountAgents(cacheDir string) int {
 	return countFiles(filepath.Join(contentDir(cacheDir), "agents"), ".md")
 }
 
-// CountMCPs counts MCP server entries for a plugin.
-// It checks .mcp.json and .claude-plugin/plugin.json (in that order),
-// returning the count from the first file that contains mcpServers.
-func CountMCPs(cacheDir string) int {
+// mcpServers reads and returns the mcpServers map from .mcp.json or
+// .claude-plugin/plugin.json, whichever is found first. Returns nil if neither exists.
+func mcpServers(cacheDir string) map[string]json.RawMessage {
 	type mcpWrapper struct {
 		MCPServers map[string]json.RawMessage `json:"mcpServers"`
 	}
@@ -85,10 +84,17 @@ func CountMCPs(cacheDir string) int {
 		}
 		var w mcpWrapper
 		if err := json.Unmarshal(data, &w); err == nil && len(w.MCPServers) > 0 {
-			return len(w.MCPServers)
+			return w.MCPServers
 		}
 	}
-	return 0
+	return nil
+}
+
+// CountMCPs counts MCP server entries for a plugin.
+// It checks .mcp.json and .claude-plugin/plugin.json (in that order),
+// returning the count from the first file that contains mcpServers.
+func CountMCPs(cacheDir string) int {
+	return len(mcpServers(cacheDir))
 }
 
 // ListSkills returns the names of skill subdirectories.
@@ -128,29 +134,16 @@ func ListAgents(cacheDir string) []string {
 
 // ListMCPs returns MCP server names from .mcp.json or plugin.json.
 func ListMCPs(cacheDir string) []string {
-	type mcpWrapper struct {
-		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	servers := mcpServers(cacheDir)
+	if servers == nil {
+		return nil
 	}
-	candidates := []string{
-		filepath.Join(contentDir(cacheDir), ".mcp.json"),
-		filepath.Join(cacheDir, ".claude-plugin", "plugin.json"),
+	names := make([]string, 0, len(servers))
+	for k := range servers {
+		names = append(names, k)
 	}
-	for _, path := range candidates {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var w mcpWrapper
-		if err := json.Unmarshal(data, &w); err == nil && len(w.MCPServers) > 0 {
-			names := make([]string, 0, len(w.MCPServers))
-			for k := range w.MCPServers {
-				names = append(names, k)
-			}
-			sort.Strings(names)
-			return names
-		}
-	}
-	return nil
+	sort.Strings(names)
+	return names
 }
 
 // listDirNames returns names of subdirectories in dir.

@@ -223,6 +223,50 @@ func TestListSkillsMissingDir(t *testing.T) {
 	}
 }
 
+func TestListHooks(t *testing.T) {
+	base := makeTempDir(t)
+	dir := filepath.Join(base, "hooks")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := `{"hooks":{"PreToolUse":[],"PostToolUse":[]}}`
+	if err := os.WriteFile(filepath.Join(dir, "hooks.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := model.ListHooks(base)
+	if len(got) != 2 {
+		t.Fatalf("ListHooks() = %v, want 2 items", got)
+	}
+}
+
+func TestListAgents(t *testing.T) {
+	base := makeTempDir(t)
+	dir := filepath.Join(base, "agents")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "code-reviewer.md"))
+	got := model.ListAgents(base)
+	if len(got) != 1 {
+		t.Fatalf("ListAgents() = %v, want 1 item", got)
+	}
+	if got[0] != "code-reviewer" {
+		t.Errorf("got %q, want %q", got[0], "code-reviewer")
+	}
+}
+
+func TestListMCPs(t *testing.T) {
+	base := makeTempDir(t)
+	content := `{"mcpServers":{"my-server":{},"other-server":{}}}`
+	if err := os.WriteFile(filepath.Join(base, ".mcp.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := model.ListMCPs(base)
+	if len(got) != 2 {
+		t.Fatalf("ListMCPs() = %v, want 2 items", got)
+	}
+}
+
 func TestCountMCPs(t *testing.T) {
 	t.Run("missing file returns 0", func(t *testing.T) {
 		if got := model.CountMCPs("/nonexistent/path"); got != 0 {
