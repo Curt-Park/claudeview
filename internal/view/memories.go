@@ -17,7 +17,6 @@ func NewMemoriesView(width, height int) *ResourceView[*model.Memory] {
 	return NewResourceView(memoryColumns, nil, memoryRow, width, height)
 }
 
-
 func memoryRow(items []*model.Memory, i int, _ bool) ui.Row {
 	m := items[i]
 	return ui.Row{

@@ -57,4 +57,3 @@ func pluginRow(items []*model.Plugin, i int, _ bool) ui.Row {
 		Data: p,
 	}
 }
-

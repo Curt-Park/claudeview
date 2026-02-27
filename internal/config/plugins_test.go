@@ -174,7 +174,6 @@ func TestEnabledPlugins_MissingFile(t *testing.T) {
 	}
 }
 
-
 func TestProjectEnabledPlugins(t *testing.T) {
 	dir := t.TempDir()
 	claudeDir := filepath.Join(dir, ".claude")
