@@ -120,7 +120,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			if turn.Text != "" {
 				// Set topic from first real user message, matching claude -r display (skip skill prefix lines)
 				if result.Topic == "" && !strings.HasPrefix(turn.Text, "Base directory for this skill:") {
-					result.Topic = turn.Text
+					result.Topic = extractTopic(turn.Text)
 				}
 				result.Turns = append(result.Turns, turn)
 			}
@@ -253,7 +253,7 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 			if agg.Topic == "" {
 				if text := msg.TextContent(); text != "" {
 					if !strings.HasPrefix(text, "Base directory for this skill:") {
-						agg.Topic = text
+						agg.Topic = extractTopic(text)
 					}
 				}
 			}
@@ -306,4 +306,22 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 	}
 
 	return agg, nil
+}
+
+// extractTopic normalizes raw user message text for use as a session topic.
+// When the message begins with a <local-command-caveat> block (injected by
+// Claude Code for /slash-command invocations), the content of the
+// <command-name> tag is returned instead so the topic is human-readable.
+func extractTopic(text string) string {
+	if !strings.HasPrefix(text, "<local-command-caveat>") {
+		return text
+	}
+	const openTag = "<command-name>"
+	const closeTag = "</command-name>"
+	start := strings.Index(text, openTag)
+	end := strings.Index(text, closeTag)
+	if start >= 0 && end > start+len(openTag) {
+		return strings.TrimSpace(text[start+len(openTag) : end])
+	}
+	return text
 }

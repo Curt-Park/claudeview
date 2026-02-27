@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // DetailView displays detailed information about a selected item.
@@ -125,6 +126,37 @@ func (d *DetailView) Update(msg tea.Msg) bool {
 		}
 	}
 	return false
+}
+
+// wrapText splits s into lines of at most width visible characters.
+func wrapText(s string, width int) []string {
+	if width <= 0 || s == "" {
+		return []string{""}
+	}
+	runes := []rune(s)
+	var lines []string
+	for len(runes) > 0 {
+		if lipgloss.Width(string(runes)) <= width {
+			lines = append(lines, string(runes))
+			break
+		}
+		lineW := 0
+		end := 0
+		for _, r := range runes {
+			rw := lipgloss.Width(string(r))
+			if lineW+rw > width {
+				break
+			}
+			lineW += rw
+			end++
+		}
+		if end == 0 {
+			end = 1
+		}
+		lines = append(lines, string(runes[:end]))
+		runes = runes[end:]
+	}
+	return lines
 }
 
 // View renders the detail view.
