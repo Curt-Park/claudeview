@@ -7,6 +7,31 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
+// GenerateMemories creates synthetic demo memory files.
+func GenerateMemories() []*model.Memory {
+	now := time.Now()
+	return []*model.Memory{
+		{
+			Name:    "MEMORY.md",
+			Path:    "/demo/.claude/projects/demo-project-1/memory/MEMORY.md",
+			Size:    2048,
+			ModTime: now.Add(-10 * time.Minute),
+		},
+		{
+			Name:    "patterns.md",
+			Path:    "/demo/.claude/projects/demo-project-1/memory/patterns.md",
+			Size:    512,
+			ModTime: now.Add(-2 * time.Hour),
+		},
+		{
+			Name:    "debugging.md",
+			Path:    "/demo/.claude/projects/demo-project-1/memory/debugging.md",
+			Size:    1024,
+			ModTime: now.Add(-24 * time.Hour),
+		},
+	}
+}
+
 // GenerateProjects creates synthetic demo projects.
 func GenerateProjects() []*model.Project {
 	now := time.Now()

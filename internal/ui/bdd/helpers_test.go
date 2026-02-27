@@ -30,6 +30,7 @@ type mockDP struct {
 	tasks      []*model.Task
 	plugins    []*model.Plugin
 	mcpServers []*model.MCPServer
+	memories   []*model.Memory
 }
 
 func (m *mockDP) GetProjects() []*model.Project         { return m.projects }
@@ -39,6 +40,7 @@ func (m *mockDP) GetTools(_ string) []*model.ToolCall   { return m.toolCalls }
 func (m *mockDP) GetTasks(_ string) []*model.Task       { return m.tasks }
 func (m *mockDP) GetPlugins() []*model.Plugin           { return m.plugins }
 func (m *mockDP) GetMCPServers() []*model.MCPServer     { return m.mcpServers }
+func (m *mockDP) GetMemories(_ string) []*model.Memory  { return m.memories }
 
 // newTestModel creates an AppModel pre-populated with test data for the given resource.
 // It wraps the AppModel in a thin coordinating model to populate Table rows from dp.

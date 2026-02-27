@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -87,6 +88,7 @@ type dataLoadedMsg struct {
 	tasks      []*model.Task
 	plugins    []*model.Plugin
 	mcpServers []*model.MCPServer
+	memories   []*model.Memory
 	resource   model.ResourceType
 }
 
@@ -101,6 +103,7 @@ type rootModel struct {
 	tasks      []*model.Task
 	plugins    []*model.Plugin
 	mcpServers []*model.MCPServer
+	memories   []*model.Memory
 
 	// Resource views (eagerly initialized in newRootModel)
 	projectsView *view.ResourceView[*model.Project]
@@ -110,6 +113,7 @@ type rootModel struct {
 	tasksView    *view.ResourceView[*model.Task]
 	pluginsView  *view.ResourceView[*model.Plugin]
 	mcpView      *view.ResourceView[*model.MCPServer]
+	memoriesView *view.ResourceView[*model.Memory]
 
 	// Static info (set once at startup)
 	userStr       string
@@ -132,6 +136,7 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		tasksView:     view.NewTasksView(0, 0),
 		pluginsView:   view.NewPluginsView(0, 0),
 		mcpView:       view.NewMCPView(0, 0),
+		memoriesView:  view.NewMemoriesView(0, 0),
 	}
 	rm.loadData()
 	return rm
@@ -177,6 +182,8 @@ func (rm *rootModel) loadData() {
 		rm.plugins = rm.dp.GetPlugins()
 	case model.ResourceMCP:
 		rm.mcpServers = rm.dp.GetMCPServers()
+	case model.ResourceMemory:
+		rm.memories = rm.dp.GetMemories(rm.app.SelectedProjectHash)
 	}
 	rm.syncView()
 }
@@ -214,6 +221,8 @@ func (rm *rootModel) syncView() {
 		rm.app.Table = rm.pluginsView.Sync(rm.plugins, w, h, sel, off, flt, false)
 	case model.ResourceMCP:
 		rm.app.Table = rm.mcpView.Sync(rm.mcpServers, w, h, sel, off, flt, false)
+	case model.ResourceMemory:
+		rm.app.Table = rm.memoriesView.Sync(rm.memories, w, h, sel, off, flt, false)
 	}
 }
 
@@ -227,6 +236,7 @@ func (rm *rootModel) updateInfo() {
 	rm.app.Info.User = rm.userStr
 	rm.app.Info.ClaudeVersion = rm.claudeVersion
 	rm.app.Info.AppVersion = AppVersion
+	rm.app.Info.MemoriesActive = rm.app.SelectedProjectHash != ""
 }
 
 func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -265,6 +275,8 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rm.plugins = msg.plugins
 			case model.ResourceMCP:
 				rm.mcpServers = msg.mcpServers
+			case model.ResourceMemory:
+				rm.memories = msg.memories
 			}
 			rm.syncView()
 		}
@@ -311,6 +323,8 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			msg.plugins = dp.GetPlugins()
 		case model.ResourceMCP:
 			msg.mcpServers = dp.GetMCPServers()
+		case model.ResourceMemory:
+			msg.memories = dp.GetMemories(projectHash)
 		}
 		return msg
 	}
@@ -403,6 +417,9 @@ func (d *demoDataProvider) GetTasks(sessionID string) []*model.Task {
 }
 func (d *demoDataProvider) GetPlugins() []*model.Plugin       { return d.plugins }
 func (d *demoDataProvider) GetMCPServers() []*model.MCPServer { return d.mcpServers }
+func (d *demoDataProvider) GetMemories(_ string) []*model.Memory {
+	return demo.GenerateMemories()
+}
 
 // --- Live Data Provider ---
 
@@ -584,6 +601,34 @@ func (l *liveDataProvider) GetMCPServers() []*model.MCPServer {
 		})
 	}
 	return servers
+}
+
+func (l *liveDataProvider) GetMemories(projectHash string) []*model.Memory {
+	if projectHash == "" {
+		return []*model.Memory{}
+	}
+	memDir := filepath.Join(l.claudeDir, projectHash, "memory")
+	entries, err := os.ReadDir(memDir)
+	if err != nil {
+		return []*model.Memory{}
+	}
+	var memories []*model.Memory
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".md" {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		memories = append(memories, &model.Memory{
+			Name:    e.Name(),
+			Path:    filepath.Join(memDir, e.Name()),
+			Size:    info.Size(),
+			ModTime: info.ModTime(),
+		})
+	}
+	return memories
 }
 
 // sessionFromInfo creates a Session model from a transcript SessionInfo using incremental parsing.

@@ -8,12 +8,13 @@ import (
 
 // InfoModel holds the top info panel data (k9s-style left column + right menu).
 type InfoModel struct {
-	Project       string // active project display name / path
-	Session       string // active session short ID
-	User          string // OS username
-	ClaudeVersion string // Claude Code binary version
-	AppVersion    string // claudeview binary version
-	Width         int
+	Project        string // active project display name / path
+	Session        string // active session short ID
+	User           string // OS username
+	ClaudeVersion  string // Claude Code binary version
+	AppVersion     string // claudeview binary version
+	Width          int
+	MemoriesActive bool // whether <M> memories jump is available
 }
 
 // Height returns the number of terminal lines rendered by ViewWithMenu.
@@ -89,11 +90,14 @@ func (info InfoModel) ViewWithMenu(navItems, utilItems []MenuItem) string {
 	}
 	menuColW += 2 // trailing gap between menu columns
 
-	// Right column: t/p/m shortcuts.
+	// Right column: t/p/m shortcuts (+ M when a project is active).
 	jumpHints := []string{
 		StyleKey.Render("<t>") + StyleKeyDesc.Render(" tasks"),
 		StyleKey.Render("<p>") + StyleKeyDesc.Render(" plugins"),
 		StyleKey.Render("<m>") + StyleKeyDesc.Render(" mcps"),
+	}
+	if info.MemoriesActive {
+		jumpHints = append(jumpHints, StyleKey.Render("<M>")+StyleKeyDesc.Render(" memories"))
 	}
 	rightColW := 0
 	for _, h := range jumpHints {

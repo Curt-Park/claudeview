@@ -11,6 +11,7 @@ const (
 	ResourceTasks    ResourceType = "tasks"
 	ResourcePlugins  ResourceType = "plugins"
 	ResourceMCP      ResourceType = "mcp"
+	ResourceMemory   ResourceType = "memories"
 )
 
 // ResourceAliases maps shorthand commands to full resource names.
@@ -50,7 +51,7 @@ func ResolveResource(name string) (ResourceType, bool) {
 	}
 	switch ResourceType(name) {
 	case ResourceProjects, ResourceSessions, ResourceAgents,
-		ResourceTools, ResourceTasks, ResourcePlugins, ResourceMCP:
+		ResourceTools, ResourceTasks, ResourcePlugins, ResourceMCP, ResourceMemory:
 		return ResourceType(name), true
 	}
 	return "", false

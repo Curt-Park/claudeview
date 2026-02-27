@@ -81,6 +81,7 @@ type DataProvider interface {
 	GetTasks(sessionID string) []*model.Task
 	GetPlugins() []*model.Plugin
 	GetMCPServers() []*model.MCPServer
+	GetMemories(projectHash string) []*model.Memory
 }
 
 // NewAppModel creates a new application model.
@@ -154,6 +155,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "m":
 			m.jumpTo(model.ResourceMCP)
+			return m, nil
+		case "M":
+			if m.SelectedProjectHash != "" {
+				m.jumpTo(model.ResourceMemory)
+			}
 			return m, nil
 		}
 
@@ -232,7 +238,7 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 func (m *AppModel) navigateBack() {
 	// Flat resources jumped to via t/p/m: restore previous state
 	switch m.Resource {
-	case model.ResourceTasks, model.ResourcePlugins, model.ResourceMCP:
+	case model.ResourceTasks, model.ResourcePlugins, model.ResourceMCP, model.ResourceMemory:
 		if m.jumpFrom != nil {
 			m.Resource = m.jumpFrom.Resource
 			m.SelectedProjectHash = m.jumpFrom.SelectedProjectHash
