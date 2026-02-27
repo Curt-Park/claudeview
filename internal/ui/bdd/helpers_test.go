@@ -26,7 +26,6 @@ type mockDP struct {
 	projects   []*model.Project
 	sessions   []*model.Session
 	agents     []*model.Agent
-	toolCalls  []*model.ToolCall
 	tasks      []*model.Task
 	plugins    []*model.Plugin
 	mcpServers []*model.MCPServer
@@ -36,7 +35,6 @@ type mockDP struct {
 func (m *mockDP) GetProjects() []*model.Project         { return m.projects }
 func (m *mockDP) GetSessions(_ string) []*model.Session { return m.sessions }
 func (m *mockDP) GetAgents(_ string) []*model.Agent     { return m.agents }
-func (m *mockDP) GetTools(_ string) []*model.ToolCall   { return m.toolCalls }
 func (m *mockDP) GetTasks(_ string) []*model.Task       { return m.tasks }
 func (m *mockDP) GetPlugins() []*model.Plugin           { return m.plugins }
 func (m *mockDP) GetMCPServers() []*model.MCPServer     { return m.mcpServers }

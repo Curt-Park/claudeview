@@ -16,14 +16,12 @@ func TestResolveResource(t *testing.T) {
 		{"alias p", "p", model.ResourceProjects, true},
 		{"alias s", "s", model.ResourceSessions, true},
 		{"alias a", "a", model.ResourceAgents, true},
-		{"alias t", "t", model.ResourceTools, true},
 		{"alias tk", "tk", model.ResourceTasks, true},
 		{"alias pl", "pl", model.ResourcePlugins, true},
 		{"alias m", "m", model.ResourceMCP, true},
 		{"full name projects", "projects", model.ResourceProjects, true},
 		{"full name sessions", "sessions", model.ResourceSessions, true},
 		{"full name agents", "agents", model.ResourceAgents, true},
-		{"full name tools", "tools", model.ResourceTools, true},
 		{"full name tasks", "tasks", model.ResourceTasks, true},
 		{"full name plugins", "plugins", model.ResourcePlugins, true},
 		{"full name mcp", "mcp", model.ResourceMCP, true},
@@ -48,7 +46,7 @@ func TestAllResourceNames(t *testing.T) {
 		t.Fatal("AllResourceNames() returned empty slice")
 	}
 
-	expected := []string{"projects", "sessions", "agents", "tools", "tasks", "plugins", "mcp"}
+	expected := []string{"projects", "sessions", "agents", "tasks", "plugins", "mcp"}
 	nameSet := make(map[string]bool, len(names))
 	for _, n := range names {
 		nameSet[n] = true

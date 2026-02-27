@@ -31,10 +31,7 @@ func TableNavItems(rt model.ResourceType) []MenuItem {
 		items = append(items, MenuItem{Key: "enter", Desc: "see agents"})
 		items = append(items, MenuItem{Key: "esc", Desc: "see projects"})
 	case model.ResourceAgents:
-		items = append(items, MenuItem{Key: "enter", Desc: "see tools"})
 		items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
-	case model.ResourceTools:
-		items = append(items, MenuItem{Key: "esc", Desc: "see agents"})
 	default:
 		items = append(items, MenuItem{Key: "esc", Desc: "back"})
 	}

@@ -1,8 +1,6 @@
 package view
 
 import (
-	"fmt"
-
 	"github.com/Curt-Park/claudeview/internal/model"
 	"github.com/Curt-Park/claudeview/internal/ui"
 )
@@ -11,7 +9,6 @@ var agentColumnsBase = []ui.Column{
 	{Title: "NAME", Width: 10, Flex: true, MaxPercent: 0.20},
 	{Title: "TYPE", Width: 16},
 	{Title: "STATUS", Width: 10},
-	{Title: "TOOLS", Width: 6},
 	{Title: "LAST ACTIVITY", Width: 20, Flex: true, MaxPercent: 0.35},
 }
 
@@ -20,7 +17,6 @@ var agentColumnsFlat = []ui.Column{
 	{Title: "NAME", Width: 10, Flex: true, MaxPercent: 0.20},
 	{Title: "TYPE", Width: 16},
 	{Title: "STATUS", Width: 10},
-	{Title: "TOOLS", Width: 6},
 	{Title: "LAST ACTIVITY", Width: 20, Flex: true, MaxPercent: 0.35},
 }
 
@@ -48,7 +44,6 @@ func agentRow(items []*model.Agent, i int, flatMode bool) ui.Row {
 		name,
 		string(a.Type),
 		statusStyle.Render(string(a.Status)),
-		fmt.Sprintf("%d", len(a.ToolCalls)),
 		a.LastActivity,
 	)
 	return ui.Row{Cells: cells, Data: a}

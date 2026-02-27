@@ -77,7 +77,6 @@ type DataProvider interface {
 	GetProjects() []*model.Project
 	GetSessions(projectHash string) []*model.Session
 	GetAgents(sessionID string) []*model.Agent
-	GetTools(agentID string) []*model.ToolCall
 	GetTasks(sessionID string) []*model.Task
 	GetPlugins() []*model.Plugin
 	GetMCPServers() []*model.MCPServer
@@ -264,13 +263,6 @@ func (m *AppModel) navigateBack() {
 	}
 	// Navigate up the resource hierarchy
 	switch m.Resource {
-	case model.ResourceTools:
-		m.SelectedAgentID = ""
-		m.Crumbs.Pop()
-		m.Resource = model.ResourceAgents
-		m.ViewMode = ModeTable
-		m.Menu.NavItems = TableNavItems(m.Resource)
-		m.Menu.UtilItems = TableUtilItems(m.Resource)
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
 		m.Crumbs.Pop()
@@ -304,11 +296,6 @@ func (m *AppModel) drillDown() {
 			m.SelectedSessionID = s.ID
 		}
 		m.drillInto(model.ResourceAgents)
-	case model.ResourceAgents:
-		if a, ok := row.Data.(*model.Agent); ok {
-			m.SelectedAgentID = a.ID
-		}
-		m.drillInto(model.ResourceTools)
 	}
 }
 

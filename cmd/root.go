@@ -84,7 +84,6 @@ type dataLoadedMsg struct {
 	projects   []*model.Project
 	sessions   []*model.Session
 	agents     []*model.Agent
-	toolCalls  []*model.ToolCall
 	tasks      []*model.Task
 	plugins    []*model.Plugin
 	mcpServers []*model.MCPServer
@@ -99,7 +98,6 @@ type rootModel struct {
 	projects   []*model.Project
 	sessions   []*model.Session
 	agents     []*model.Agent
-	toolCalls  []*model.ToolCall
 	tasks      []*model.Task
 	plugins    []*model.Plugin
 	mcpServers []*model.MCPServer
@@ -109,7 +107,6 @@ type rootModel struct {
 	projectsView *view.ResourceView[*model.Project]
 	sessionsView *view.ResourceView[*model.Session]
 	agentsView   *view.ResourceView[*model.Agent]
-	toolsView    *view.ResourceView[*model.ToolCall]
 	tasksView    *view.ResourceView[*model.Task]
 	pluginsView  *view.ResourceView[*model.Plugin]
 	mcpView      *view.ResourceView[*model.MCPServer]
@@ -132,7 +129,6 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		projectsView:  view.NewProjectsView(0, 0),
 		sessionsView:  view.NewSessionsView(0, 0),
 		agentsView:    view.NewAgentsView(0, 0),
-		toolsView:     view.NewToolsView(0, 0),
 		tasksView:     view.NewTasksView(0, 0),
 		pluginsView:   view.NewPluginsView(0, 0),
 		mcpView:       view.NewMCPView(0, 0),
@@ -174,8 +170,6 @@ func (rm *rootModel) loadData() {
 		rm.sessions = rm.dp.GetSessions(rm.app.SelectedProjectHash)
 	case model.ResourceAgents:
 		rm.agents = rm.dp.GetAgents(rm.app.SelectedSessionID)
-	case model.ResourceTools:
-		rm.toolCalls = rm.dp.GetTools(rm.app.SelectedAgentID)
 	case model.ResourceTasks:
 		rm.tasks = rm.dp.GetTasks(rm.app.SelectedSessionID)
 	case model.ResourcePlugins:
@@ -213,8 +207,6 @@ func (rm *rootModel) syncView() {
 		rm.app.Table = rm.sessionsView.Sync(rm.sessions, w, h, sel, off, flt, rm.app.SelectedProjectHash == "")
 	case model.ResourceAgents:
 		rm.app.Table = rm.agentsView.Sync(rm.agents, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
-	case model.ResourceTools:
-		rm.app.Table = rm.toolsView.Sync(rm.toolCalls, w, h, sel, off, flt, rm.app.SelectedAgentID == "")
 	case model.ResourceTasks:
 		rm.app.Table = rm.tasksView.Sync(rm.tasks, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
 	case model.ResourcePlugins:
@@ -267,8 +259,6 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rm.sessions = msg.sessions
 			case model.ResourceAgents:
 				rm.agents = msg.agents
-			case model.ResourceTools:
-				rm.toolCalls = msg.toolCalls
 			case model.ResourceTasks:
 				rm.tasks = msg.tasks
 			case model.ResourcePlugins:
@@ -304,7 +294,6 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 	resource := rm.app.Resource
 	projectHash := rm.app.SelectedProjectHash
 	sessionID := rm.app.SelectedSessionID
-	agentID := rm.app.SelectedAgentID
 	dp := rm.dp
 	return func() tea.Msg {
 		msg := dataLoadedMsg{resource: resource}
@@ -315,8 +304,6 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			msg.sessions = dp.GetSessions(projectHash)
 		case model.ResourceAgents:
 			msg.agents = dp.GetAgents(sessionID)
-		case model.ResourceTools:
-			msg.toolCalls = dp.GetTools(agentID)
 		case model.ResourceTasks:
 			msg.tasks = dp.GetTasks(sessionID)
 		case model.ResourcePlugins:
@@ -381,29 +368,6 @@ func (d *demoDataProvider) GetAgents(sessionID string) []*model.Agent {
 		}
 	}
 	return []*model.Agent{}
-}
-func (d *demoDataProvider) GetTools(agentID string) []*model.ToolCall {
-	if agentID == "" {
-		var all []*model.ToolCall
-		for _, p := range d.projects {
-			for _, s := range p.Sessions {
-				for _, a := range s.Agents {
-					all = append(all, a.ToolCalls...)
-				}
-			}
-		}
-		return all
-	}
-	for _, p := range d.projects {
-		for _, s := range p.Sessions {
-			for _, a := range s.Agents {
-				if a.ID == agentID {
-					return a.ToolCalls
-				}
-			}
-		}
-	}
-	return []*model.ToolCall{}
 }
 func (d *demoDataProvider) GetTasks(sessionID string) []*model.Task {
 	if len(d.projects) > 0 && len(d.projects[0].Sessions) > 0 {
@@ -507,23 +471,6 @@ func (l *liveDataProvider) GetAgents(sessionID string) []*model.Agent {
 		}
 	}
 	return []*model.Agent{}
-}
-
-func (l *liveDataProvider) GetTools(agentID string) []*model.ToolCall {
-	agents := l.GetAgents(l.currentSession)
-	if agentID == "" {
-		var all []*model.ToolCall
-		for _, a := range agents {
-			all = append(all, a.ToolCalls...)
-		}
-		return all
-	}
-	for _, a := range agents {
-		if a.ID == agentID {
-			return a.ToolCalls
-		}
-	}
-	return []*model.ToolCall{}
 }
 
 func (l *liveDataProvider) GetTasks(sessionID string) []*model.Task {

@@ -7,7 +7,6 @@ const (
 	ResourceProjects ResourceType = "projects"
 	ResourceSessions ResourceType = "sessions"
 	ResourceAgents   ResourceType = "agents"
-	ResourceTools    ResourceType = "tools"
 	ResourceTasks    ResourceType = "tasks"
 	ResourcePlugins  ResourceType = "plugins"
 	ResourceMCP      ResourceType = "mcp"
@@ -22,8 +21,6 @@ var ResourceAliases = map[string]ResourceType{
 	"session": ResourceSessions,
 	"a":       ResourceAgents,
 	"agent":   ResourceAgents,
-	"t":       ResourceTools,
-	"tool":    ResourceTools,
 	"tk":      ResourceTasks,
 	"task":    ResourceTasks,
 	"pl":      ResourcePlugins,
@@ -37,7 +34,6 @@ func AllResourceNames() []string {
 		string(ResourceProjects), "p",
 		string(ResourceSessions), "s",
 		string(ResourceAgents), "a",
-		string(ResourceTools), "t",
 		string(ResourceTasks), "tk",
 		string(ResourcePlugins), "pl",
 		string(ResourceMCP), "m",
@@ -51,7 +47,7 @@ func ResolveResource(name string) (ResourceType, bool) {
 	}
 	switch ResourceType(name) {
 	case ResourceProjects, ResourceSessions, ResourceAgents,
-		ResourceTools, ResourceTasks, ResourcePlugins, ResourceMCP, ResourceMemory:
+		ResourceTasks, ResourcePlugins, ResourceMCP, ResourceMemory:
 		return ResourceType(name), true
 	}
 	return "", false
