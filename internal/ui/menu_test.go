@@ -8,28 +8,43 @@ import (
 )
 
 func TestTableNavItems(t *testing.T) {
-	// Sessions: enter + esc in nav items
+	// Sessions: enter + esc with specific descriptions
 	nav := ui.TableNavItems(model.ResourceSessions)
 	if len(nav) == 0 {
 		t.Fatal("TableNavItems returned empty slice")
 	}
-	hasEnter, hasEsc := false, false
+	enterDesc, escDesc := "", ""
 	for _, item := range nav {
 		if item.Key == "enter" {
-			hasEnter = true
+			enterDesc = item.Desc
 		}
 		if item.Key == "esc" {
-			hasEsc = true
+			escDesc = item.Desc
 		}
 	}
-	if !hasEnter {
+	if enterDesc == "" {
 		t.Error("TableNavItems(sessions): missing 'enter' key")
 	}
-	if !hasEsc {
+	if escDesc == "" {
 		t.Error("TableNavItems(sessions): missing 'esc' key")
 	}
 
-	// Tools: no enter, but has esc
+	// Projects: enter present, no esc (root level)
+	projNav := ui.TableNavItems(model.ResourceProjects)
+	hasEnter := false
+	for _, item := range projNav {
+		if item.Key == "esc" {
+			t.Error("TableNavItems(projects): unexpected 'esc' key (root level)")
+		}
+		if item.Key == "enter" {
+			hasEnter = true
+		}
+	}
+	if !hasEnter {
+		t.Error("TableNavItems(projects): missing 'enter' key")
+	}
+
+	// Tools: esc present, no enter
 	toolNav := ui.TableNavItems(model.ResourceTools)
 	hasEscTools := false
 	for _, item := range toolNav {
@@ -43,69 +58,21 @@ func TestTableNavItems(t *testing.T) {
 	if !hasEscTools {
 		t.Error("TableNavItems(tools): missing 'esc' key")
 	}
-
-	// Projects: no esc (root level, nothing to go back to)
-	projNav := ui.TableNavItems(model.ResourceProjects)
-	for _, item := range projNav {
-		if item.Key == "esc" {
-			t.Error("TableNavItems(projects): unexpected 'esc' key (root level)")
-		}
-	}
 }
 
-func TestTableUtilItems(t *testing.T) {
-	// Sessions: logs key present, no esc (moved to nav)
-	util := ui.TableUtilItems(model.ResourceSessions)
-	if len(util) == 0 {
-		t.Fatal("TableUtilItems returned empty slice")
-	}
-	hasLogs := false
-	for _, item := range util {
-		if item.Key == "l" {
-			hasLogs = true
+func TestTableUtilItemsHasFilter(t *testing.T) {
+	for _, rt := range []model.ResourceType{
+		model.ResourceSessions, model.ResourceTools, model.ResourceProjects,
+	} {
+		util := ui.TableUtilItems(rt)
+		hasFilter := false
+		for _, item := range util {
+			if item.Key == "/" {
+				hasFilter = true
+			}
 		}
-		if item.Key == "esc" {
-			t.Error("TableUtilItems: unexpected 'esc' key (should be in nav)")
+		if !hasFilter {
+			t.Errorf("TableUtilItems(%s): missing '/' (filter) key", rt)
 		}
-	}
-	if !hasLogs {
-		t.Error("TableUtilItems(sessions): missing 'l' (logs) key")
-	}
-
-	// Tools: no logs
-	toolUtil := ui.TableUtilItems(model.ResourceTools)
-	for _, item := range toolUtil {
-		if item.Key == "l" {
-			t.Error("TableUtilItems(tools): unexpected 'l' key")
-		}
-	}
-}
-
-func TestLogNavItems(t *testing.T) {
-	items := ui.LogNavItems()
-	if len(items) == 0 {
-		t.Fatal("LogNavItems returned empty slice")
-	}
-}
-
-func TestLogUtilItems(t *testing.T) {
-	items := ui.LogUtilItems()
-	if len(items) == 0 {
-		t.Fatal("LogUtilItems returned empty slice")
-	}
-	hasFollow, hasFilter := false, false
-	for _, item := range items {
-		if item.Key == "f" {
-			hasFollow = true
-		}
-		if item.Key == "/" {
-			hasFilter = true
-		}
-	}
-	if !hasFollow {
-		t.Error("LogUtilItems: missing 'f' (follow) key")
-	}
-	if !hasFilter {
-		t.Error("LogUtilItems: missing '/' (filter) key")
 	}
 }

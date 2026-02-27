@@ -16,7 +16,6 @@ type ViewMode int
 
 const (
 	ModeTable ViewMode = iota
-	ModeLog            // l key
 )
 
 // TickMsg is sent on each timer tick for animations.
@@ -24,9 +23,6 @@ type TickMsg time.Time
 
 // RefreshMsg signals data has been refreshed.
 type RefreshMsg struct{}
-
-// LogRequestMsg signals that the log view should be populated.
-type LogRequestMsg struct{}
 
 // AppModel is the top-level Bubble Tea model.
 type AppModel struct {
@@ -45,7 +41,6 @@ type AppModel struct {
 	ViewMode ViewMode
 	Resource model.ResourceType
 	Table    TableView
-	Log      LogView
 
 	// Navigation context (set on drill-down)
 	SelectedProjectHash string
@@ -163,11 +158,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// View-specific keys
-		switch m.ViewMode {
-		case ModeTable:
+		if m.ViewMode == ModeTable {
 			return m.updateTable(msg)
-		case ModeLog:
-			return m.updateLog(msg)
 		}
 	}
 
@@ -181,7 +173,6 @@ func (m AppModel) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Filter.Deactivate()
 		m.Filter.Input = ""
 		m.Table.Filter = ""
-		m.Log.Filter = ""
 	case "enter":
 		m.inFilter = false
 		m.Filter.Deactivate()
@@ -189,13 +180,11 @@ func (m AppModel) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Filter.Backspace()
 		m.Table.Filter = m.Filter.Input
 		m.Table.Selected = 0
-		m.Log.Filter = m.Filter.Input
 	default:
 		if len(msg.Runes) == 1 {
 			m.Filter.AddChar(msg.Runes[0])
 			m.Table.Filter = m.Filter.Input
 			m.Table.Selected = 0
-			m.Log.Filter = m.Filter.Input
 		}
 	}
 	return m, nil
@@ -212,14 +201,6 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		m.drillDown()
-	case "l":
-		if ResourceHasLog(m.Resource) {
-			m.ViewMode = ModeLog
-			m.Menu.NavItems = LogNavItems()
-			m.Menu.UtilItems = LogUtilItems()
-			m.refreshLog()
-			return m, func() tea.Msg { return LogRequestMsg{} }
-		}
 	default:
 		m.Table.Update(msg)
 	}
@@ -248,24 +229,7 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 	m.Table.Filter = ""
 }
 
-func (m AppModel) updateLog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
-		m.ViewMode = ModeTable
-		m.Menu.NavItems = TableNavItems(m.Resource)
-		m.Menu.UtilItems = TableUtilItems(m.Resource)
-		return m, nil
-	}
-	m.Log.Update(msg)
-	return m, nil
-}
-
 func (m *AppModel) navigateBack() {
-	if m.ViewMode != ModeTable {
-		m.ViewMode = ModeTable
-		m.Menu.NavItems = TableNavItems(m.Resource)
-		m.Menu.UtilItems = TableUtilItems(m.Resource)
-		return
-	}
 	// Flat resources jumped to via t/p/m: restore previous state
 	switch m.Resource {
 	case model.ResourceTasks, model.ResourcePlugins, model.ResourceMCP:
@@ -352,10 +316,6 @@ func (m *AppModel) drillInto(rt model.ResourceType) {
 	m.Filter.Input = ""
 }
 
-func (m *AppModel) refreshLog() {
-	m.Log = NewLogView(string(m.Resource), m.contentWidth(), m.contentHeight())
-}
-
 func (m *AppModel) updateSizes() {
 	w := m.contentWidth()
 	h := m.contentHeight()
@@ -365,8 +325,6 @@ func (m *AppModel) updateSizes() {
 	m.Filter.Width = w
 	m.Table.Width = w
 	m.Table.Height = h
-	m.Log.Width = w
-	m.Log.Height = h
 }
 
 // ContentHeight returns the number of terminal lines available for content.
@@ -408,13 +366,7 @@ func (m AppModel) View() string {
 	titleStr := m.renderTitleBar()
 
 	// --- 3. Content ---
-	var contentStr string
-	switch m.ViewMode {
-	case ModeTable:
-		contentStr = m.Table.View()
-	case ModeLog:
-		contentStr = m.Log.View()
-	}
+	contentStr := m.Table.View()
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
 	if limit := m.contentHeight(); len(rawLines) > limit {
 		rawLines = rawLines[:limit]

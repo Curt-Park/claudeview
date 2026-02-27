@@ -269,9 +269,6 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rm.syncView()
 		}
 
-	case ui.LogRequestMsg:
-		rm.populateLog()
-
 	}
 
 	// Update app model — must always run so AppModel can re-schedule tick()
@@ -288,79 +285,6 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return rm, tea.Batch(cmd, extraCmd)
 	}
 	return rm, cmd
-}
-
-func (rm *rootModel) populateLog() {
-	row := rm.app.Table.SelectedRow()
-	if row == nil {
-		return
-	}
-
-	var filePath string
-	switch rm.app.Resource {
-	case model.ResourceSessions:
-		if s, ok := row.Data.(*model.Session); ok {
-			filePath = s.FilePath
-		}
-	case model.ResourceAgents:
-		if a, ok := row.Data.(*model.Agent); ok {
-			filePath = a.FilePath
-		}
-	}
-
-	if filePath == "" {
-		rm.app.Log.SetLines([]ui.LogLine{{Text: "(no transcript file for this resource)", Style: "normal"}})
-		return
-	}
-
-	parsed, err := transcript.ParseFile(filePath)
-	if err != nil {
-		rm.app.Log.SetLines([]ui.LogLine{{Text: fmt.Sprintf("error reading transcript: %v", err), Style: "normal"}})
-		return
-	}
-
-	var logLines []ui.LogLine
-	for _, turn := range parsed.Turns {
-		ts := ""
-		if !turn.Timestamp.IsZero() {
-			ts = turn.Timestamp.Format("15:04:05")
-		}
-		header := fmt.Sprintf("[%s] %s", ts, turn.Role)
-		logLines = append(logLines, ui.LogLine{Text: header, Style: "time"})
-
-		if turn.Thinking != "" {
-			for line := range strings.SplitSeq(turn.Thinking, "\n") {
-				logLines = append(logLines, ui.LogLine{Text: "  <think> " + line, Style: "think"})
-			}
-		}
-		if turn.Text != "" {
-			for line := range strings.SplitSeq(turn.Text, "\n") {
-				logLines = append(logLines, ui.LogLine{Text: "  " + line, Style: "text"})
-			}
-		}
-		for _, tc := range turn.ToolCalls {
-			logLines = append(logLines, ui.LogLine{Text: fmt.Sprintf("  ► %s", tc.Name), Style: "tool"})
-			if len(tc.Input) > 0 && string(tc.Input) != "null" {
-				input := string(tc.Input)
-				if len(input) > 120 {
-					input = input[:119] + "…"
-				}
-				logLines = append(logLines, ui.LogLine{Text: "    input: " + input, Style: "tool"})
-			}
-			if len(tc.Result) > 0 && string(tc.Result) != "null" {
-				result := string(tc.Result)
-				if len(result) > 120 {
-					result = result[:119] + "…"
-				}
-				logLines = append(logLines, ui.LogLine{Text: "    result: " + result, Style: "result"})
-			}
-		}
-	}
-
-	if len(logLines) == 0 {
-		logLines = []ui.LogLine{{Text: "(empty transcript)", Style: "normal"}}
-	}
-	rm.app.Log.SetLines(logLines)
 }
 
 // loadDataAsync returns a tea.Cmd that loads data in a background goroutine.

@@ -24,8 +24,8 @@ func TestInfoPanelMenuShownForSessions(t *testing.T) {
 	tm := newTestModel(t, model.ResourceSessions, dp, sessionRows(2))
 	t.Cleanup(func() { _ = tm.Quit() })
 
-	// Sessions view should show enter/logs menu items
+	// Sessions view should show enter and esc menu items
 	waitForOutput(t, tm, func(bts []byte) bool {
-		return containsStr("<enter>")(bts) && containsStr("<l>")(bts)
+		return containsStr("<enter>")(bts) && containsStr("<esc>")(bts)
 	})
 }
