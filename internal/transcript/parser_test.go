@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseFile(t *testing.T) {
-	result, err := transcript.ParseFile("../../testdata/sample_transcript.jsonl")
+	result, err := transcript.ParseFile("testdata/sample_transcript.jsonl")
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
 	}
