@@ -34,8 +34,9 @@ type AppModel struct {
 	Filter FilterModel
 
 	// Content
-	Resource model.ResourceType
-	Table    TableView
+	Resource      model.ResourceType
+	Table         TableView
+	ContentOffset int // scroll offset for content-only views
 
 	// Navigation context (set on drill-down)
 	SelectedProjectHash string
@@ -79,6 +80,12 @@ func isSubView(rt model.ResourceType) bool {
 	return rt == model.ResourcePluginDetail ||
 		rt == model.ResourcePluginItemDetail ||
 		rt == model.ResourceMemoryDetail
+}
+
+// isContentView returns true for views that render flat text (not a table).
+// These views use ContentOffset for scrolling instead of Table navigation.
+func isContentView(rt model.ResourceType) bool {
+	return rt == model.ResourcePluginItemDetail || rt == model.ResourceMemoryDetail
 }
 
 // DataProvider is the interface for fetching resource data.

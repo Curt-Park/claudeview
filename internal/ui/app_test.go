@@ -426,6 +426,13 @@ func TestMKeyBlockedInPluginItemDetail(t *testing.T) {
 	}
 }
 
+func TestContentOffsetFieldExists(t *testing.T) {
+	app := newApp(model.ResourcePluginItemDetail)
+	if app.ContentOffset != 0 {
+		t.Errorf("expected ContentOffset=0, got %d", app.ContentOffset)
+	}
+}
+
 func TestJumpPreservesFilterStack(t *testing.T) {
 	p := &model.Project{Hash: "proj-abc123"}
 	s := &model.Session{ID: "sess-xyz789"}
