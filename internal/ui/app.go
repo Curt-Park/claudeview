@@ -472,6 +472,20 @@ func (m AppModel) View() string {
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
 	limit := m.contentHeight()
+	// For content-only views, apply scroll offset (capped to actual max).
+	if isContentView(m.Resource) {
+		maxOffset := len(rawLines) - limit
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		offset := m.ContentOffset
+		if offset > maxOffset {
+			offset = maxOffset
+		}
+		if offset > 0 {
+			rawLines = rawLines[offset:]
+		}
+	}
 	if len(rawLines) > limit {
 		rawLines = rawLines[:limit]
 	}

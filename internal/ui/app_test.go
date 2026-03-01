@@ -1,6 +1,10 @@
 package ui_test
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -506,6 +510,35 @@ func TestScrollJDoesNotMoveTableInContentView(t *testing.T) {
 
 	if app.Table.Selected != 0 {
 		t.Errorf("expected Table.Selected unchanged (0) in content view after j, got %d", app.Table.Selected)
+	}
+}
+
+func TestViewAppliesContentOffset(t *testing.T) {
+	app := newApp(model.ResourceMemoryDetail)
+	app.Width = termWidth
+	app.Height = termHeight
+	app.ContentOffset = 2
+
+	tmpFile := filepath.Join(t.TempDir(), "mem.md")
+	// Build enough lines to exceed contentHeight so scrolling is not capped to 0.
+	// ContentHeight ≈ termHeight - chrome (~8 rows), so 50 lines is always enough.
+	var sb strings.Builder
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&sb, "line%d\n", i)
+	}
+	content := strings.TrimRight(sb.String(), "\n")
+	if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	app.SelectedMemory = &model.Memory{Path: tmpFile}
+
+	rendered := app.View()
+
+	if strings.Contains(rendered, "line0") {
+		t.Error("expected line0 to be scrolled off, but it appears in output")
+	}
+	if !strings.Contains(rendered, "line2") {
+		t.Error("expected line2 (at offset 2) to appear in output")
 	}
 }
 
