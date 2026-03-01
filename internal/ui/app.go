@@ -305,6 +305,7 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
 	m.Table.Filter = ""
+	m.ContentOffset = 0
 }
 
 // popFilter restores the parent view's filter from filterStack.
@@ -333,6 +334,7 @@ func (m *AppModel) navigateBack() {
 			m.Filter.Input = m.jumpFrom.Filter
 			m.filterStack = m.jumpFrom.FilterStack
 			m.jumpFrom = nil
+			m.ContentOffset = 0
 			m.refreshMenu()
 		} else {
 			// No saved state (e.g. started directly on this resource): go to projects.
@@ -341,11 +343,13 @@ func (m *AppModel) navigateBack() {
 			m.SelectedSessionID = ""
 			m.SelectedAgentID = ""
 			m.Crumbs.Reset(string(model.ResourceProjects))
+			m.ContentOffset = 0
 			m.refreshMenu()
 		}
 		return
 	}
 	// Navigate up the resource hierarchy
+	m.ContentOffset = 0
 	switch m.Resource {
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
@@ -408,6 +412,7 @@ func (m *AppModel) drillInto(rt model.ResourceType) {
 	m.Crumbs.Push(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
+	m.ContentOffset = 0
 	m.refreshMenu()
 }
 

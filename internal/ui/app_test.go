@@ -542,6 +542,44 @@ func TestViewAppliesContentOffset(t *testing.T) {
 	}
 }
 
+func TestContentOffsetResetOnDrillInto(t *testing.T) {
+	mem := &model.Memory{Name: "MEMORY.md", Path: "/tmp/MEMORY.md"}
+	app := newApp(model.ResourceMemory)
+	app.Table.SetRows([]ui.Row{{Cells: []string{"MEMORY.md", "", "1 KB", "1h"}, Data: mem}})
+	app.ContentOffset = 99 // simulate stale offset
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // drillInto memory-detail
+
+	if app.ContentOffset != 0 {
+		t.Errorf("expected ContentOffset reset to 0 after drillInto, got %d", app.ContentOffset)
+	}
+}
+
+func TestContentOffsetResetOnNavigateBack(t *testing.T) {
+	mem := &model.Memory{Name: "MEMORY.md", Path: "/tmp/MEMORY.md"}
+	app := newApp(model.ResourceMemory)
+	app.Table.SetRows([]ui.Row{{Cells: []string{"MEMORY.md", "", "1 KB", "1h"}, Data: mem}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // → memory-detail
+	app.ContentOffset = 15
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc}) // navigateBack → memory
+
+	if app.ContentOffset != 0 {
+		t.Errorf("expected ContentOffset reset to 0 after navigateBack, got %d", app.ContentOffset)
+	}
+}
+
+func TestContentOffsetResetOnJumpTo(t *testing.T) {
+	app := newApp(model.ResourceProjects)
+	app.ContentOffset = 7
+
+	app = updateApp(app, keyMsg("p")) // jumpTo plugins
+
+	if app.ContentOffset != 0 {
+		t.Errorf("expected ContentOffset reset to 0 after jumpTo, got %d", app.ContentOffset)
+	}
+}
+
 func TestJumpPreservesFilterStack(t *testing.T) {
 	p := &model.Project{Hash: "proj-abc123"}
 	s := &model.Session{ID: "sess-xyz789"}
