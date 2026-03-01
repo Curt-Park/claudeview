@@ -115,6 +115,10 @@ type rootModel struct {
 
 	// Async loading state
 	loading bool
+
+	// Per-resource cursor state: each view remembers its own Selected/Offset.
+	cursor       map[model.ResourceType]struct{ sel, off int }
+	lastResource model.ResourceType
 }
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
@@ -129,6 +133,8 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		pluginsView:     view.NewPluginsView(0, 0),
 		pluginItemsView: view.NewPluginItemsView(0, 0),
 		memoriesView:    view.NewMemoriesView(0, 0),
+		cursor:          make(map[model.ResourceType]struct{ sel, off int }),
+		lastResource:    app.Resource,
 	}
 	rm.loadData()
 	return rm
@@ -190,26 +196,30 @@ func (rm *rootModel) syncView() {
 
 	rm.updateInfo()
 
-	// Preserve the user's cursor/scroll/filter state across rebuilds so that
-	// RefreshMsg and WindowSizeMsg don't reset the selection to row 0.
-	sel := rm.app.Table.Selected
-	off := rm.app.Table.Offset
+	// Save cursor position of the view we are leaving (or refreshing).
+	rm.cursor[rm.lastResource] = struct{ sel, off int }{rm.app.Table.Selected, rm.app.Table.Offset}
+
+	// Restore cursor for the resource now being displayed.
+	rt := rm.app.Resource
+	cur := rm.cursor[rt] // zero value {0, 0} on first visit
 	flt := rm.app.Table.Filter
 
-	switch rm.app.Resource {
+	switch rt {
 	case model.ResourceProjects:
-		rm.app.Table = rm.projectsView.Sync(rm.projects, w, h, sel, off, flt, false)
+		rm.app.Table = rm.projectsView.Sync(rm.projects, w, h, cur.sel, cur.off, flt, false)
 	case model.ResourceSessions:
-		rm.app.Table = rm.sessionsView.Sync(rm.sessions, w, h, sel, off, flt, rm.app.SelectedProjectHash == "")
+		rm.app.Table = rm.sessionsView.Sync(rm.sessions, w, h, cur.sel, cur.off, flt, rm.app.SelectedProjectHash == "")
 	case model.ResourceAgents:
-		rm.app.Table = rm.agentsView.Sync(rm.agents, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
+		rm.app.Table = rm.agentsView.Sync(rm.agents, w, h, cur.sel, cur.off, flt, rm.app.SelectedSessionID == "")
 	case model.ResourcePlugins:
-		rm.app.Table = rm.pluginsView.Sync(rm.plugins, w, h, sel, off, flt, false)
+		rm.app.Table = rm.pluginsView.Sync(rm.plugins, w, h, cur.sel, cur.off, flt, false)
 	case model.ResourcePluginDetail:
-		rm.app.Table = rm.pluginItemsView.Sync(rm.pluginItems, w, h, sel, off, flt, false)
+		rm.app.Table = rm.pluginItemsView.Sync(rm.pluginItems, w, h, cur.sel, cur.off, flt, false)
 	case model.ResourceMemory:
-		rm.app.Table = rm.memoriesView.Sync(rm.memories, w, h, sel, off, flt, false)
+		rm.app.Table = rm.memoriesView.Sync(rm.memories, w, h, cur.sel, cur.off, flt, false)
 	}
+
+	rm.lastResource = rt
 }
 
 func (rm *rootModel) updateInfo() {
