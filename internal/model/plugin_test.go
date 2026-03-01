@@ -3,6 +3,7 @@ package model_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Curt-Park/claudeview/internal/model"
@@ -264,6 +265,90 @@ func TestListMCPs(t *testing.T) {
 	got := model.ListMCPs(base)
 	if len(got) != 2 {
 		t.Fatalf("ListMCPs() = %v, want 2 items", got)
+	}
+}
+
+func TestListPluginItems(t *testing.T) {
+	base := makeTempDir(t)
+
+	// Create a skill
+	skillDir := filepath.Join(base, "skills", "debug")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(skillDir, "debug.md"))
+
+	// Create a command
+	cmdDir := filepath.Join(base, "commands")
+	if err := os.Mkdir(cmdDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(cmdDir, "commit.md"))
+
+	items := model.ListPluginItems(base)
+	if len(items) != 2 {
+		t.Fatalf("ListPluginItems() returned %d items, want 2", len(items))
+	}
+	categories := make(map[string]bool)
+	for _, item := range items {
+		categories[item.Category] = true
+		if item.CacheDir != base {
+			t.Errorf("expected CacheDir=%q, got %q", base, item.CacheDir)
+		}
+	}
+	if !categories["skill"] {
+		t.Error("expected a skill item")
+	}
+	if !categories["command"] {
+		t.Error("expected a command item")
+	}
+}
+
+func TestReadPluginItemContent_Skill(t *testing.T) {
+	base := makeTempDir(t)
+	skillDir := filepath.Join(base, "skills", "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "my-skill.md"), []byte("skill content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: base}
+	got := model.ReadPluginItemContent(item)
+	if got != "skill content" {
+		t.Errorf("ReadPluginItemContent() = %q, want %q", got, "skill content")
+	}
+}
+
+func TestReadPluginItemContent_Command(t *testing.T) {
+	base := makeTempDir(t)
+	cmdDir := filepath.Join(base, "commands")
+	if err := os.Mkdir(cmdDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cmdDir, "commit.md"), []byte("commit docs"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "commit", Category: "command", CacheDir: base}
+	got := model.ReadPluginItemContent(item)
+	if got != "commit docs" {
+		t.Errorf("ReadPluginItemContent() = %q, want %q", got, "commit docs")
+	}
+}
+
+func TestReadPluginItemContent_MCPFromJSON(t *testing.T) {
+	base := makeTempDir(t)
+	content := `{"mcpServers":{"my-server":{"command":"npx","args":["server"]}}}`
+	if err := os.WriteFile(filepath.Join(base, ".mcp.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "my-server", Category: "mcp", CacheDir: base}
+	got := model.ReadPluginItemContent(item)
+	if !strings.Contains(got, "npx") {
+		t.Errorf("expected MCP content to contain server config, got %q", got)
 	}
 }
 

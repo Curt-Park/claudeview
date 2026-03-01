@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -144,6 +145,107 @@ func ListMCPs(cacheDir string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// PluginItem represents a single skill, command, hook, agent, or MCP within a plugin.
+type PluginItem struct {
+	Name     string
+	Category string // "skill", "command", "hook", "agent", "mcp"
+	CacheDir string
+}
+
+// ListPluginItems aggregates all items from all categories for a plugin.
+func ListPluginItems(cacheDir string) []*PluginItem {
+	var items []*PluginItem
+	for _, name := range ListSkills(cacheDir) {
+		items = append(items, &PluginItem{Name: name, Category: "skill", CacheDir: cacheDir})
+	}
+	for _, name := range ListCommands(cacheDir) {
+		items = append(items, &PluginItem{Name: name, Category: "command", CacheDir: cacheDir})
+	}
+	for _, name := range ListHooks(cacheDir) {
+		items = append(items, &PluginItem{Name: name, Category: "hook", CacheDir: cacheDir})
+	}
+	for _, name := range ListAgents(cacheDir) {
+		items = append(items, &PluginItem{Name: name, Category: "agent", CacheDir: cacheDir})
+	}
+	for _, name := range ListMCPs(cacheDir) {
+		items = append(items, &PluginItem{Name: name, Category: "mcp", CacheDir: cacheDir})
+	}
+	return items
+}
+
+// ReadPluginItemContent returns the textual content for a plugin item.
+func ReadPluginItemContent(item *PluginItem) string {
+	cd := contentDir(item.CacheDir)
+	switch item.Category {
+	case "skill":
+		// Find first .md file in skills/<name>/
+		skillDir := filepath.Join(cd, "skills", item.Name)
+		entries, err := os.ReadDir(skillDir)
+		if err != nil {
+			return fmt.Sprintf("error reading skill directory: %v", err)
+		}
+		for _, e := range entries {
+			if !e.IsDir() && filepath.Ext(e.Name()) == ".md" {
+				data, err := os.ReadFile(filepath.Join(skillDir, e.Name()))
+				if err != nil {
+					return fmt.Sprintf("error reading %s: %v", e.Name(), err)
+				}
+				return string(data)
+			}
+		}
+		return "(no content found)"
+	case "command":
+		data, err := os.ReadFile(filepath.Join(cd, "commands", item.Name+".md"))
+		if err != nil {
+			return fmt.Sprintf("error reading command: %v", err)
+		}
+		return string(data)
+	case "hook":
+		// Try hooks.json first
+		hooksDir := filepath.Join(cd, "hooks")
+		jsonPath := filepath.Join(hooksDir, "hooks.json")
+		if data, err := os.ReadFile(jsonPath); err == nil {
+			var wrapper struct {
+				Hooks map[string]json.RawMessage `json:"hooks"`
+			}
+			if err := json.Unmarshal(data, &wrapper); err == nil {
+				if raw, ok := wrapper.Hooks[item.Name]; ok {
+					return string(raw)
+				}
+			}
+		}
+		// Fall back to file in hooks/
+		entries, err := os.ReadDir(hooksDir)
+		if err != nil {
+			return fmt.Sprintf("error reading hooks directory: %v", err)
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())) == item.Name {
+				data, err := os.ReadFile(filepath.Join(hooksDir, e.Name()))
+				if err != nil {
+					return fmt.Sprintf("error reading hook file: %v", err)
+				}
+				return string(data)
+			}
+		}
+		return "(no content found)"
+	case "agent":
+		data, err := os.ReadFile(filepath.Join(cd, "agents", item.Name+".md"))
+		if err != nil {
+			return fmt.Sprintf("error reading agent: %v", err)
+		}
+		return string(data)
+	case "mcp":
+		servers := mcpServers(item.CacheDir)
+		if raw, ok := servers[item.Name]; ok {
+			return string(raw)
+		}
+		return "(no content found)"
+	default:
+		return "(unknown category)"
+	}
 }
 
 // listDirNames returns names of subdirectories in dir.

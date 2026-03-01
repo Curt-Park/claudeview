@@ -81,30 +81,33 @@ func run(cmd *cobra.Command, args []string) error {
 
 // dataLoadedMsg carries freshly loaded data back to the UI goroutine.
 type dataLoadedMsg struct {
-	projects []*model.Project
-	sessions []*model.Session
-	agents   []*model.Agent
-	plugins  []*model.Plugin
-	memories []*model.Memory
-	resource model.ResourceType
+	projects    []*model.Project
+	sessions    []*model.Session
+	agents      []*model.Agent
+	plugins     []*model.Plugin
+	pluginItems []*model.PluginItem
+	memories    []*model.Memory
+	resource    model.ResourceType
 }
 
 // rootModel wraps AppModel and manages actual resource data.
 type rootModel struct {
-	app      ui.AppModel
-	dp       ui.DataProvider
-	projects []*model.Project
-	sessions []*model.Session
-	agents   []*model.Agent
-	plugins  []*model.Plugin
-	memories []*model.Memory
+	app         ui.AppModel
+	dp          ui.DataProvider
+	projects    []*model.Project
+	sessions    []*model.Session
+	agents      []*model.Agent
+	plugins     []*model.Plugin
+	pluginItems []*model.PluginItem
+	memories    []*model.Memory
 
 	// Resource views (eagerly initialized in newRootModel)
-	projectsView *view.ResourceView[*model.Project]
-	sessionsView *view.ResourceView[*model.Session]
-	agentsView   *view.ResourceView[*model.Agent]
-	pluginsView  *view.ResourceView[*model.Plugin]
-	memoriesView *view.ResourceView[*model.Memory]
+	projectsView    *view.ResourceView[*model.Project]
+	sessionsView    *view.ResourceView[*model.Session]
+	agentsView      *view.ResourceView[*model.Agent]
+	pluginsView     *view.ResourceView[*model.Plugin]
+	pluginItemsView *view.ResourceView[*model.PluginItem]
+	memoriesView    *view.ResourceView[*model.Memory]
 
 	// Static info (set once at startup)
 	userStr       string
@@ -116,15 +119,16 @@ type rootModel struct {
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 	rm := &rootModel{
-		app:           app,
-		dp:            dp,
-		userStr:       currentUser(),
-		claudeVersion: detectClaudeVersion(),
-		projectsView:  view.NewProjectsView(0, 0),
-		sessionsView:  view.NewSessionsView(0, 0),
-		agentsView:    view.NewAgentsView(0, 0),
-		pluginsView:   view.NewPluginsView(0, 0),
-		memoriesView:  view.NewMemoriesView(0, 0),
+		app:             app,
+		dp:              dp,
+		userStr:         currentUser(),
+		claudeVersion:   detectClaudeVersion(),
+		projectsView:    view.NewProjectsView(0, 0),
+		sessionsView:    view.NewSessionsView(0, 0),
+		agentsView:      view.NewAgentsView(0, 0),
+		pluginsView:     view.NewPluginsView(0, 0),
+		pluginItemsView: view.NewPluginItemsView(0, 0),
+		memoriesView:    view.NewMemoriesView(0, 0),
 	}
 	rm.loadData()
 	return rm
@@ -164,6 +168,10 @@ func (rm *rootModel) loadData() {
 		rm.agents = rm.dp.GetAgents(rm.app.SelectedSessionID)
 	case model.ResourcePlugins:
 		rm.plugins = rm.dp.GetPlugins(rm.app.SelectedProjectHash)
+	case model.ResourcePluginDetail:
+		if rm.app.SelectedPlugin != nil {
+			rm.pluginItems = model.ListPluginItems(rm.app.SelectedPlugin.CacheDir)
+		}
 	case model.ResourceMemory:
 		rm.memories = rm.dp.GetMemories(rm.app.SelectedProjectHash)
 	}
@@ -197,6 +205,8 @@ func (rm *rootModel) syncView() {
 		rm.app.Table = rm.agentsView.Sync(rm.agents, w, h, sel, off, flt, rm.app.SelectedSessionID == "")
 	case model.ResourcePlugins:
 		rm.app.Table = rm.pluginsView.Sync(rm.plugins, w, h, sel, off, flt, false)
+	case model.ResourcePluginDetail:
+		rm.app.Table = rm.pluginItemsView.Sync(rm.pluginItems, w, h, sel, off, flt, false)
 	case model.ResourceMemory:
 		rm.app.Table = rm.memoriesView.Sync(rm.memories, w, h, sel, off, flt, false)
 	}
@@ -242,6 +252,8 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rm.agents = msg.agents
 			case model.ResourcePlugins:
 				rm.plugins = msg.plugins
+			case model.ResourcePluginDetail:
+				rm.pluginItems = msg.pluginItems
 			case model.ResourceMemory:
 				rm.memories = msg.memories
 			}
@@ -271,6 +283,7 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 	resource := rm.app.Resource
 	projectHash := rm.app.SelectedProjectHash
 	sessionID := rm.app.SelectedSessionID
+	selectedPlugin := rm.app.SelectedPlugin
 	dp := rm.dp
 	return func() tea.Msg {
 		msg := dataLoadedMsg{resource: resource}
@@ -283,6 +296,10 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			msg.agents = dp.GetAgents(sessionID)
 		case model.ResourcePlugins:
 			msg.plugins = dp.GetPlugins(projectHash)
+		case model.ResourcePluginDetail:
+			if selectedPlugin != nil {
+				msg.pluginItems = model.ListPluginItems(selectedPlugin.CacheDir)
+			}
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
 		}

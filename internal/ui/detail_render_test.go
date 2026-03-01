@@ -10,43 +10,41 @@ import (
 	"github.com/Curt-Park/claudeview/internal/ui"
 )
 
-func TestRenderPluginDetail_Nil(t *testing.T) {
-	got := ui.RenderPluginDetail(nil)
+func TestRenderPluginItemDetail_Nil(t *testing.T) {
+	got := ui.RenderPluginItemDetail(nil)
 	if got != "" {
-		t.Errorf("expected empty string for nil plugin, got %q", got)
+		t.Errorf("expected empty string for nil item, got %q", got)
 	}
 }
 
-func TestRenderPluginDetail_ShowsNameAndVersion(t *testing.T) {
-	p := &model.Plugin{
-		Name:     "superpowers",
-		Version:  "1.0",
-		Scope:    "user",
-		CacheDir: t.TempDir(),
-	}
-	got := ui.RenderPluginDetail(p)
-	if !strings.Contains(got, "superpowers") {
-		t.Errorf("expected output to contain %q, got %q", "superpowers", got)
-	}
-	if !strings.Contains(got, "1.0") {
-		t.Errorf("expected output to contain %q, got %q", "1.0", got)
-	}
-}
-
-func TestRenderPluginDetail_ShowsSkills(t *testing.T) {
+func TestRenderPluginItemDetail_ShowsSkillContent(t *testing.T) {
 	cacheDir := t.TempDir()
-	skillsDir := filepath.Join(cacheDir, "skills")
-	if err := os.MkdirAll(filepath.Join(skillsDir, "foo"), 0o755); err != nil {
-		t.Fatalf("failed to create skills/foo: %v", err)
+	skillDir := filepath.Join(cacheDir, "skills", "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("failed to create skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "my-skill.md"), []byte("# My Skill\nDoes things."), 0o644); err != nil {
+		t.Fatalf("failed to write skill file: %v", err)
 	}
 
-	p := &model.Plugin{
-		Name:     "myplugin",
-		CacheDir: cacheDir,
+	item := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: cacheDir}
+	got := ui.RenderPluginItemDetail(item)
+	if !strings.Contains(got, "my-skill") {
+		t.Errorf("expected output to contain item name %q, got %q", "my-skill", got)
 	}
-	got := ui.RenderPluginDetail(p)
-	if !strings.Contains(got, "foo") {
-		t.Errorf("expected output to contain skill %q, got %q", "foo", got)
+	if !strings.Contains(got, "skill") {
+		t.Errorf("expected output to contain category %q, got %q", "skill", got)
+	}
+	if !strings.Contains(got, "Does things.") {
+		t.Errorf("expected output to contain skill content, got %q", got)
+	}
+}
+
+func TestRenderPluginItemDetail_ErrorOnMissingContent(t *testing.T) {
+	item := &model.PluginItem{Name: "missing-skill", Category: "skill", CacheDir: t.TempDir()}
+	got := ui.RenderPluginItemDetail(item)
+	if !strings.Contains(strings.ToLower(got), "error") && !strings.Contains(got, "no content") {
+		t.Errorf("expected output to indicate error or missing content, got %q", got)
 	}
 }
 
