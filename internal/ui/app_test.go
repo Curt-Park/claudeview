@@ -433,6 +433,82 @@ func TestContentOffsetFieldExists(t *testing.T) {
 	}
 }
 
+func TestScrollDownInPluginItemDetail(t *testing.T) {
+	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePluginItemDetail)
+	app.Table.SetRows([]ui.Row{{Cells: []string{"skill", "my-skill"}, Data: pi}})
+	app.SelectedPluginItem = pi
+
+	app = updateApp(app, keyMsg("j"))
+
+	if app.ContentOffset != 1 {
+		t.Errorf("expected ContentOffset=1 after j, got %d", app.ContentOffset)
+	}
+}
+
+func TestScrollUpFloorInPluginItemDetail(t *testing.T) {
+	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePluginItemDetail)
+	app.SelectedPluginItem = pi
+	app.ContentOffset = 0
+
+	app = updateApp(app, keyMsg("k"))
+
+	if app.ContentOffset != 0 {
+		t.Errorf("expected ContentOffset=0 (floor) after k at 0, got %d", app.ContentOffset)
+	}
+}
+
+func TestScrollUpDecrementsInPluginItemDetail(t *testing.T) {
+	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePluginItemDetail)
+	app.SelectedPluginItem = pi
+	app.ContentOffset = 5
+
+	app = updateApp(app, keyMsg("k"))
+
+	if app.ContentOffset != 4 {
+		t.Errorf("expected ContentOffset=4 after k from 5, got %d", app.ContentOffset)
+	}
+}
+
+func TestScrollGotoTopInContentView(t *testing.T) {
+	app := newApp(model.ResourceMemoryDetail)
+	app.ContentOffset = 42
+
+	app = updateApp(app, keyMsg("g"))
+
+	if app.ContentOffset != 0 {
+		t.Errorf("expected ContentOffset=0 after g, got %d", app.ContentOffset)
+	}
+}
+
+func TestScrollGotoBottomSetsLargeValue(t *testing.T) {
+	app := newApp(model.ResourceMemoryDetail)
+	app.ContentOffset = 0
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+
+	if app.ContentOffset <= 100 {
+		t.Errorf("expected large ContentOffset after G, got %d", app.ContentOffset)
+	}
+}
+
+func TestScrollJDoesNotMoveTableInContentView(t *testing.T) {
+	app := newApp(model.ResourceMemoryDetail)
+	app.Table.SetRows([]ui.Row{
+		{Cells: []string{"a"}, Data: nil},
+		{Cells: []string{"b"}, Data: nil},
+	})
+	app.Table.Selected = 0
+
+	app = updateApp(app, keyMsg("j"))
+
+	if app.Table.Selected != 0 {
+		t.Errorf("expected Table.Selected unchanged (0) in content view after j, got %d", app.Table.Selected)
+	}
+}
+
 func TestJumpPreservesFilterStack(t *testing.T) {
 	p := &model.Project{Hash: "proj-abc123"}
 	s := &model.Session{ID: "sess-xyz789"}

@@ -82,6 +82,12 @@ func isSubView(rt model.ResourceType) bool {
 		rt == model.ResourceMemoryDetail
 }
 
+// isContentView returns true for views that render flat text (not a table).
+// These views use ContentOffset for scrolling instead of Table navigation.
+func isContentView(rt model.ResourceType) bool {
+	return rt == model.ResourcePluginItemDetail || rt == model.ResourceMemoryDetail
+}
+
 // DataProvider is the interface for fetching resource data.
 type DataProvider interface {
 	GetProjects() []*model.Project
@@ -232,9 +238,39 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Menu.ClearHighlight()
 		m.drillDown()
 	default:
-		m.Table.Update(msg)
+		if isContentView(m.Resource) {
+			m.updateContentScroll(msg)
+		} else {
+			m.Table.Update(msg)
+		}
 	}
 	return m, nil
+}
+
+// updateContentScroll handles movement keys for content-only views (plugin-item-detail,
+// memory-detail). It adjusts ContentOffset; View() caps it to actual content length.
+func (m *AppModel) updateContentScroll(msg tea.KeyMsg) {
+	half := m.contentHeight() / 2
+	switch msg.String() {
+	case "j":
+		m.ContentOffset++
+	case "k":
+		if m.ContentOffset > 0 {
+			m.ContentOffset--
+		}
+	case "G":
+		m.ContentOffset = 1 << 30 // View() caps to actual max
+	case "g":
+		m.ContentOffset = 0
+	case "ctrl+d":
+		m.ContentOffset += half
+	case "ctrl+u":
+		if m.ContentOffset >= half {
+			m.ContentOffset -= half
+		} else {
+			m.ContentOffset = 0
+		}
+	}
 }
 
 // refreshMenu updates the menu nav and util items based on current state.
