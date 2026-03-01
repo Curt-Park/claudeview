@@ -258,6 +258,146 @@ func TestEscFromPluginDetailRestoresFilter(t *testing.T) {
 	}
 }
 
+func TestFilterActivatesInPluginDetail(t *testing.T) {
+	p := &model.Plugin{Name: "superpowers", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePlugins)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"superpowers", "1.0", "user", "enabled", "0", "0", "0", "0", "0", ""},
+		Data:  p,
+	}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // drill into plugin-detail
+
+	app = updateApp(app, keyMsg("/"))
+
+	if !app.Filter.Active {
+		t.Error("expected filter to activate in plugin-detail, but it did not")
+	}
+}
+
+func TestFilterTypingUpdatesPluginDetailView(t *testing.T) {
+	p := &model.Plugin{Name: "superpowers", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePlugins)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"superpowers", "1.0", "user", "enabled", "0", "0", "0", "0", "0", ""},
+		Data:  p,
+	}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+	app = updateApp(app, keyMsg("/"))
+	app = updateApp(app, keyMsg("d"))
+	app = updateApp(app, keyMsg("e"))
+	app = updateApp(app, keyMsg("b"))
+
+	if app.Table.Filter != "deb" {
+		t.Errorf("expected Table.Filter=%q after typing, got %q", "deb", app.Table.Filter)
+	}
+}
+
+func TestFilterKeyIgnoredInMemoryDetail(t *testing.T) {
+	m := &model.Memory{Name: "MEMORY.md", Path: "/tmp/MEMORY.md"}
+	app := newApp(model.ResourceMemory)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"MEMORY.md", "", "1 KB", "1h"},
+		Data:  m,
+	}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // drill into memory-detail
+
+	app = updateApp(app, keyMsg("/"))
+
+	if app.Filter.Active {
+		t.Error("expected filter to remain inactive in memory-detail, but it was activated")
+	}
+}
+
+func TestDrilldownPluginDetailToItemDetail(t *testing.T) {
+	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePluginDetail)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"skill", "my-skill"},
+		Data:  pi,
+	}})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.Resource != model.ResourcePluginItemDetail {
+		t.Errorf("expected resource=plugin-item-detail after Enter on plugin item, got %s", app.Resource)
+	}
+	if app.SelectedPluginItem != pi {
+		t.Errorf("expected SelectedPluginItem set after Enter")
+	}
+}
+
+func TestEscFromPluginItemDetailReturnsToPluginDetail(t *testing.T) {
+	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePluginDetail)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"skill", "my-skill"},
+		Data:  pi,
+	}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if app.Resource != model.ResourcePluginDetail {
+		t.Errorf("expected resource=plugin-detail after Esc from plugin-item-detail, got %s", app.Resource)
+	}
+}
+
+func TestFilterKeyIgnoredInPluginItemDetail(t *testing.T) {
+	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePluginDetail)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{"skill", "my-skill"},
+		Data:  pi,
+	}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // drill into plugin-item-detail
+
+	app = updateApp(app, keyMsg("/"))
+
+	if app.Filter.Active {
+		t.Error("expected filter to remain inactive in plugin-item-detail, but it was activated")
+	}
+}
+
+func TestPKeyBlockedInPluginDetail(t *testing.T) {
+	p := &model.Plugin{Name: "myplugin", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePlugins)
+	app.Table.SetRows([]ui.Row{{Cells: []string{"myplugin", "1.0", "user", "enabled", "0", "0", "0", "0", "0", ""}, Data: p}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // → plugin-detail
+
+	app = updateApp(app, keyMsg("p"))
+
+	if app.Resource != model.ResourcePluginDetail {
+		t.Errorf("expected to stay on plugin-detail after p, got %s", app.Resource)
+	}
+}
+
+func TestPKeyBlockedInPluginItemDetail(t *testing.T) {
+	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePluginDetail)
+	app.Table.SetRows([]ui.Row{{Cells: []string{"skill", "my-skill"}, Data: pi}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // → plugin-item-detail
+
+	app = updateApp(app, keyMsg("p"))
+
+	if app.Resource != model.ResourcePluginItemDetail {
+		t.Errorf("expected to stay on plugin-item-detail after p, got %s", app.Resource)
+	}
+}
+
+func TestMKeyBlockedInMemoryDetail(t *testing.T) {
+	mem := &model.Memory{Name: "MEMORY.md", Path: "/tmp/MEMORY.md"}
+	app := newApp(model.ResourceMemory)
+	app.SelectedProjectHash = "proj-abc"
+	app.Table.SetRows([]ui.Row{{Cells: []string{"MEMORY.md", "", "1 KB", "1h"}, Data: mem}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // → memory-detail
+
+	app = updateApp(app, keyMsg("m"))
+
+	if app.Resource != model.ResourceMemoryDetail {
+		t.Errorf("expected to stay on memory-detail after m, got %s", app.Resource)
+	}
+}
+
 func TestJumpPreservesFilterStack(t *testing.T) {
 	p := &model.Project{Hash: "proj-abc123"}
 	s := &model.Session{ID: "sess-xyz789"}

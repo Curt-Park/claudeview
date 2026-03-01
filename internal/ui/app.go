@@ -42,6 +42,7 @@ type AppModel struct {
 	SelectedSessionID   string
 	SelectedAgentID     string
 	SelectedPlugin      *model.Plugin
+	SelectedPluginItem  *model.PluginItem
 	SelectedMemory      *model.Memory
 
 	// Data providers (injected from outside)
@@ -69,6 +70,15 @@ type jumpFromState struct {
 	Crumbs              CrumbsModel
 	Filter              string
 	FilterStack         []string
+}
+
+// isSubView returns true for views nested under plugins or memory
+// (plugin-detail, plugin-item-detail, memory-detail).
+// p/m jump keys are blocked in these views to preserve navigation context.
+func isSubView(rt model.ResourceType) bool {
+	return rt == model.ResourcePluginDetail ||
+		rt == model.ResourcePluginItemDetail ||
+		rt == model.ResourceMemoryDetail
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -151,15 +161,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global keys (work in all view modes)
 		switch msg.String() {
 		case "/":
-			m.inFilter = true
-			m.Filter.Activate()
-			m.refreshMenu()
+			if m.Resource != model.ResourceMemoryDetail && m.Resource != model.ResourcePluginItemDetail {
+				m.inFilter = true
+				m.Filter.Activate()
+				m.refreshMenu()
+			}
 			return m, highlightCmd
 		case "p":
-			m.jumpTo(model.ResourcePlugins)
+			if !isSubView(m.Resource) {
+				m.jumpTo(model.ResourcePlugins)
+			}
 			return m, highlightCmd
 		case "m":
-			if m.SelectedProjectHash != "" {
+			if m.SelectedProjectHash != "" && !isSubView(m.Resource) {
 				m.jumpTo(model.ResourceMemory)
 			}
 			return m, highlightCmd
@@ -307,6 +321,9 @@ func (m *AppModel) navigateBack() {
 	case model.ResourcePluginDetail:
 		m.popFilter()
 		m.switchResource(model.ResourcePlugins)
+	case model.ResourcePluginItemDetail:
+		m.popFilter()
+		m.switchResource(model.ResourcePluginDetail)
 	case model.ResourceMemoryDetail:
 		m.popFilter()
 		m.switchResource(model.ResourceMemory)
@@ -334,6 +351,11 @@ func (m *AppModel) drillDown() {
 			m.SelectedPlugin = p
 		}
 		m.drillInto(model.ResourcePluginDetail)
+	case model.ResourcePluginDetail:
+		if pi, ok := row.Data.(*model.PluginItem); ok {
+			m.SelectedPluginItem = pi
+		}
+		m.drillInto(model.ResourcePluginItemDetail)
 	case model.ResourceMemory:
 		if mem, ok := row.Data.(*model.Memory); ok {
 			m.SelectedMemory = mem
@@ -404,8 +426,8 @@ func (m AppModel) View() string {
 	// --- 3. Content ---
 	var contentStr string
 	switch m.Resource {
-	case model.ResourcePluginDetail:
-		contentStr = RenderPluginDetail(m.SelectedPlugin)
+	case model.ResourcePluginItemDetail:
+		contentStr = RenderPluginItemDetail(m.SelectedPluginItem)
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory)
 	default:
