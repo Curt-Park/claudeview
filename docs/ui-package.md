@@ -14,7 +14,7 @@ Implements the Bubble Tea application model and all reusable chrome components.
 |-----------------------|----------------------------------------------------------------|
 | `app.go`              | `AppModel` — root Bubble Tea model; key events, layout, mode   |
 | `table_view.go`       | `TableView` — scrollable table with filter, selection          |
-| `detail_render.go`    | `RenderPluginDetail`, `RenderMemoryDetail` — string renderers  |
+| `detail_render.go`    | `RenderPluginItemDetail`, `RenderMemoryDetail` — string renderers |
 | `header.go`           | Info panel (5-column layout: info, nav, util, shortcuts, quit) |
 | `menu.go`             | `MenuModel` — nav/util item lists and key highlight state      |
 | `crumbs.go`           | `CrumbsModel` — breadcrumb trail                               |
@@ -31,7 +31,7 @@ Implements the Bubble Tea application model and all reusable chrome components.
 - `Info`, `Menu`, `Crumbs`, `Flash`, `Filter` — chrome components
 - `Width`, `Height` — terminal dimensions
 - `SelectedProjectHash`, `SelectedSessionID`, `SelectedAgentID` — drill-down context
-- `SelectedPlugin`, `SelectedMemory` — detail view context
+- `SelectedPlugin`, `SelectedPluginItem`, `SelectedMemory` — detail view context
 - `inFilter bool` — filter input mode flag
 - `filterStack []string` — saved parent filters across drill-downs
 - `jumpFrom *jumpFromState` — saved state for esc-to-restore after p/m jump

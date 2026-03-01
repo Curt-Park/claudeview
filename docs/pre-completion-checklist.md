@@ -9,7 +9,7 @@ tags: [testing, ci, make, pre-completion, quality-gate]
 Run the following commands in order and confirm all pass before finishing any task:
 
 ```bash
-make fmt    # Format all Go source files (gofmt + goimports)
+make fmt    # Format all Go source files (go fmt ./...)
 make lint   # Static analysis via golangci-lint — enforce style and catch bugs early
 make test   # Run all tests with race detector — unit and render integration tests
 ```
@@ -19,4 +19,5 @@ make test   # Run all tests with race detector — unit and render integration t
 ## Related
 
 - [[refactoring-standards]]
+- [[test-suite]]
 - [[ui-spec]]

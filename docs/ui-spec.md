@@ -73,7 +73,7 @@ Panel height: `max(5, 1 + max(navCount, utilCount))`
 - `<p>` plugins — visible when not in plugins/memories/detail view
 - `<m>` memories — visible only when a project is selected AND not in plugins/memories/detail view
 
-Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`, or `memory-detail`.
+Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`, `plugin-item-detail`, or `memory-detail`.
 
 ---
 
@@ -158,10 +158,19 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 - `enter`: drill down; `/`: filter; `esc`: clear filter or navigate back
 - Rows updated within 5 seconds highlighted ("hot" state)
 
-### 2. Plugin Detail
+### 2. Plugin Detail (navigable table)
 - Activated by `enter` on a Plugins row (resource → `plugin-detail`)
-- Shows plugin header + sections: Skills, Commands, Hooks, Agents, MCPs
+- Renders as a `ResourceView[*model.PluginItem]` navigable table with CATEGORY and NAME columns
+- Lists all items (skills, commands, hooks, agents, MCPs) for the selected plugin
+- `enter`: drill down to plugin-item-detail (resource → `plugin-item-detail`)
 - `esc`: return to Plugins table
+
+### 2a. Plugin Item Detail (content view)
+- Activated by `enter` on a Plugin Detail row (resource → `plugin-item-detail`)
+- Shows item header (name + category) and raw content (Markdown or JSON)
+- Rendered by `RenderPluginItemDetail` from `detail_render.go`
+- `j/k` / `ctrl+d/u`: scroll content
+- `esc`: return to Plugin Detail table
 
 ### 3. Memory Detail
 - Activated by `enter` on a Memories row (resource → `memory-detail`)
@@ -209,7 +218,7 @@ projects
   └─→ sessions (filtered by project)
         └─→ agents (filtered by session)  [leaf]
 
-[p] plugins  ──→  plugin-detail
+[p] plugins  ──→  plugin-detail  ──→  plugin-item-detail  [leaf]
 [m] memories ──→  memory-detail  (project context required)
 ```
 
@@ -220,7 +229,7 @@ projects
 ### Breadcrumb Examples
 ```
 projects > sessions > agents
-plugins > plugin-detail
+plugins > plugin-detail > plugin-item-detail
 memories > memory-detail
 ```
 
