@@ -352,6 +352,24 @@ func TestReadPluginItemContent_MCPFromJSON(t *testing.T) {
 	}
 }
 
+func TestReadPluginItemContent_MCPNormalizesIndentation(t *testing.T) {
+	base := makeTempDir(t)
+	// Indented JSON: the "my-server" value has extra leading spaces inherited from
+	// the parent structure. This mirrors real plugin .mcp.json files and was the
+	// source of the over-indentation bug.
+	content := "{\n  \"mcpServers\": {\n    \"my-server\": {\n      \"command\": \"npx\",\n      \"args\": [\"server\"]\n    }\n  }\n}"
+	if err := os.WriteFile(filepath.Join(base, ".mcp.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "my-server", Category: "mcp", CacheDir: base}
+	got := model.ReadPluginItemContent(item)
+	want := "{\n  \"command\": \"npx\",\n  \"args\": [\n    \"server\"\n  ]\n}"
+	if got != want {
+		t.Errorf("ReadPluginItemContent() indentation not normalized\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
 func TestCountMCPs(t *testing.T) {
 	t.Run("missing file returns 0", func(t *testing.T) {
 		if got := model.CountMCPs("/nonexistent/path"); got != 0 {

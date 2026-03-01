@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -212,7 +213,7 @@ func ReadPluginItemContent(item *PluginItem) string {
 			}
 			if err := json.Unmarshal(data, &wrapper); err == nil {
 				if raw, ok := wrapper.Hooks[item.Name]; ok {
-					return string(raw)
+					return normalizeJSON(raw)
 				}
 			}
 		}
@@ -240,7 +241,7 @@ func ReadPluginItemContent(item *PluginItem) string {
 	case "mcp":
 		servers := mcpServers(item.CacheDir)
 		if raw, ok := servers[item.Name]; ok {
-			return string(raw)
+			return normalizeJSON(raw)
 		}
 		return "(no content found)"
 	default:
@@ -319,4 +320,14 @@ func countFiles(dir, ext string) int {
 		}
 	}
 	return count
+}
+
+// normalizeJSON re-indents raw JSON bytes with consistent 2-space indentation,
+// stripping any original indentation carried over from the parent JSON structure.
+func normalizeJSON(raw json.RawMessage) string {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		return string(raw)
+	}
+	return buf.String()
 }
