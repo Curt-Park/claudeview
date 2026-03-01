@@ -34,14 +34,16 @@ type AppModel struct {
 	Filter FilterModel
 
 	// Content
-	Resource model.ResourceType
-	Table    TableView
+	Resource      model.ResourceType
+	Table         TableView
+	ContentOffset int // scroll offset for content-only views
 
 	// Navigation context (set on drill-down)
 	SelectedProjectHash string
 	SelectedSessionID   string
 	SelectedAgentID     string
 	SelectedPlugin      *model.Plugin
+	SelectedPluginItem  *model.PluginItem
 	SelectedMemory      *model.Memory
 
 	// Data providers (injected from outside)
@@ -69,6 +71,21 @@ type jumpFromState struct {
 	Crumbs              CrumbsModel
 	Filter              string
 	FilterStack         []string
+}
+
+// isSubView returns true for views nested under plugins or memory
+// (plugin-detail, plugin-item-detail, memory-detail).
+// p/m jump keys are blocked in these views to preserve navigation context.
+func isSubView(rt model.ResourceType) bool {
+	return rt == model.ResourcePluginDetail ||
+		rt == model.ResourcePluginItemDetail ||
+		rt == model.ResourceMemoryDetail
+}
+
+// isContentView returns true for views that render flat text (not a table).
+// These views use ContentOffset for scrolling instead of Table navigation.
+func isContentView(rt model.ResourceType) bool {
+	return rt == model.ResourcePluginItemDetail || rt == model.ResourceMemoryDetail
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -151,15 +168,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global keys (work in all view modes)
 		switch msg.String() {
 		case "/":
-			m.inFilter = true
-			m.Filter.Activate()
-			m.refreshMenu()
+			if m.Resource != model.ResourceMemoryDetail && m.Resource != model.ResourcePluginItemDetail {
+				m.inFilter = true
+				m.Filter.Activate()
+				m.refreshMenu()
+			}
 			return m, highlightCmd
 		case "p":
-			m.jumpTo(model.ResourcePlugins)
+			if !isSubView(m.Resource) {
+				m.jumpTo(model.ResourcePlugins)
+			}
 			return m, highlightCmd
 		case "m":
-			if m.SelectedProjectHash != "" {
+			if m.SelectedProjectHash != "" && !isSubView(m.Resource) {
 				m.jumpTo(model.ResourceMemory)
 			}
 			return m, highlightCmd
@@ -217,9 +238,64 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Menu.ClearHighlight()
 		m.drillDown()
 	default:
-		m.Table.Update(msg)
+		if isContentView(m.Resource) {
+			m.updateContentScroll(msg)
+		} else {
+			m.Table.Update(msg)
+		}
 	}
 	return m, nil
+}
+
+// contentMaxOffset returns the maximum scroll offset for the current content view.
+func (m AppModel) contentMaxOffset() int {
+	var contentStr string
+	switch m.Resource {
+	case model.ResourcePluginItemDetail:
+		contentStr = RenderPluginItemDetail(m.SelectedPluginItem)
+	case model.ResourceMemoryDetail:
+		contentStr = RenderMemoryDetail(m.SelectedMemory)
+	default:
+		return 0
+	}
+	lines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
+	if max := len(lines) - m.contentHeight(); max > 0 {
+		return max
+	}
+	return 0
+}
+
+// updateContentScroll handles movement keys for content-only views (plugin-item-detail,
+// memory-detail). It adjusts ContentOffset, capped to the actual content length.
+func (m *AppModel) updateContentScroll(msg tea.KeyMsg) {
+	half := m.contentHeight() / 2
+	cap := func() {
+		if max := m.contentMaxOffset(); m.ContentOffset > max {
+			m.ContentOffset = max
+		}
+	}
+	switch msg.String() {
+	case "j":
+		m.ContentOffset++
+		cap()
+	case "k":
+		if m.ContentOffset > 0 {
+			m.ContentOffset--
+		}
+	case "G":
+		m.ContentOffset = m.contentMaxOffset()
+	case "g":
+		m.ContentOffset = 0
+	case "ctrl+d":
+		m.ContentOffset += half
+		cap()
+	case "ctrl+u":
+		if m.ContentOffset >= half {
+			m.ContentOffset -= half
+		} else {
+			m.ContentOffset = 0
+		}
+	}
 }
 
 // refreshMenu updates the menu nav and util items based on current state.
@@ -254,6 +330,7 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
 	m.Table.Filter = ""
+	m.ContentOffset = 0
 }
 
 // popFilter restores the parent view's filter from filterStack.
@@ -282,6 +359,7 @@ func (m *AppModel) navigateBack() {
 			m.Filter.Input = m.jumpFrom.Filter
 			m.filterStack = m.jumpFrom.FilterStack
 			m.jumpFrom = nil
+			m.ContentOffset = 0
 			m.refreshMenu()
 		} else {
 			// No saved state (e.g. started directly on this resource): go to projects.
@@ -290,11 +368,13 @@ func (m *AppModel) navigateBack() {
 			m.SelectedSessionID = ""
 			m.SelectedAgentID = ""
 			m.Crumbs.Reset(string(model.ResourceProjects))
+			m.ContentOffset = 0
 			m.refreshMenu()
 		}
 		return
 	}
 	// Navigate up the resource hierarchy
+	m.ContentOffset = 0
 	switch m.Resource {
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
@@ -307,6 +387,9 @@ func (m *AppModel) navigateBack() {
 	case model.ResourcePluginDetail:
 		m.popFilter()
 		m.switchResource(model.ResourcePlugins)
+	case model.ResourcePluginItemDetail:
+		m.popFilter()
+		m.switchResource(model.ResourcePluginDetail)
 	case model.ResourceMemoryDetail:
 		m.popFilter()
 		m.switchResource(model.ResourceMemory)
@@ -334,6 +417,11 @@ func (m *AppModel) drillDown() {
 			m.SelectedPlugin = p
 		}
 		m.drillInto(model.ResourcePluginDetail)
+	case model.ResourcePluginDetail:
+		if pi, ok := row.Data.(*model.PluginItem); ok {
+			m.SelectedPluginItem = pi
+		}
+		m.drillInto(model.ResourcePluginItemDetail)
 	case model.ResourceMemory:
 		if mem, ok := row.Data.(*model.Memory); ok {
 			m.SelectedMemory = mem
@@ -349,6 +437,7 @@ func (m *AppModel) drillInto(rt model.ResourceType) {
 	m.Crumbs.Push(string(rt))
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
+	m.ContentOffset = 0
 	m.refreshMenu()
 }
 
@@ -396,6 +485,7 @@ func (m AppModel) View() string {
 	}
 
 	// --- 1. Info panel (7 lines) ---
+	m.Info.Resource = m.Resource // ensure jump-hint guard uses current resource
 	infoStr := m.Info.ViewWithMenu(m.Menu)
 
 	// --- 2. Resource title bar ---
@@ -404,8 +494,8 @@ func (m AppModel) View() string {
 	// --- 3. Content ---
 	var contentStr string
 	switch m.Resource {
-	case model.ResourcePluginDetail:
-		contentStr = RenderPluginDetail(m.SelectedPlugin)
+	case model.ResourcePluginItemDetail:
+		contentStr = RenderPluginItemDetail(m.SelectedPluginItem)
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory)
 	default:
@@ -413,6 +503,20 @@ func (m AppModel) View() string {
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
 	limit := m.contentHeight()
+	// For content-only views, apply scroll offset (capped to actual max).
+	if isContentView(m.Resource) {
+		maxOffset := len(rawLines) - limit
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		offset := m.ContentOffset
+		if offset > maxOffset {
+			offset = maxOffset
+		}
+		if offset > 0 {
+			rawLines = rawLines[offset:]
+		}
+	}
 	if len(rawLines) > limit {
 		rawLines = rawLines[:limit]
 	}

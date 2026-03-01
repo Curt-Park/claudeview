@@ -95,6 +95,69 @@ func TestTableNavItemsWithFilter(t *testing.T) {
 	}
 }
 
+func TestTableUtilItemsHasFilterInPluginDetail(t *testing.T) {
+	util := ui.TableUtilItems(model.ResourcePluginDetail)
+	hasFilter := false
+	for _, item := range util {
+		if item.Key == "/" {
+			hasFilter = true
+		}
+	}
+	if !hasFilter {
+		t.Error("TableUtilItems(plugin-detail): missing '/' filter key")
+	}
+}
+
+func TestTableUtilItemsNoFilterInMemoryDetail(t *testing.T) {
+	util := ui.TableUtilItems(model.ResourceMemoryDetail)
+	for _, item := range util {
+		if item.Key == "/" {
+			t.Error("TableUtilItems(memory-detail): should not expose '/' filter key")
+		}
+	}
+}
+
+func TestTableUtilItemsNoFilterInPluginItemDetail(t *testing.T) {
+	util := ui.TableUtilItems(model.ResourcePluginItemDetail)
+	for _, item := range util {
+		if item.Key == "/" {
+			t.Error("TableUtilItems(plugin-item-detail): should not expose '/' filter key")
+		}
+	}
+}
+
+func TestTableNavItemsPluginDetailHasEnterAndEsc(t *testing.T) {
+	nav := ui.TableNavItems(model.ResourcePluginDetail, false)
+	hasEnter, hasEsc := false, false
+	for _, item := range nav {
+		if item.Key == "enter" {
+			hasEnter = true
+		}
+		if item.Key == "esc" {
+			hasEsc = true
+		}
+	}
+	if !hasEnter {
+		t.Error("TableNavItems(plugin-detail): missing 'enter' key")
+	}
+	if !hasEsc {
+		t.Error("TableNavItems(plugin-detail): missing 'esc' key")
+	}
+}
+
+func TestTableNavItemsPluginItemDetailHasEsc(t *testing.T) {
+	nav := ui.TableNavItems(model.ResourcePluginItemDetail, false)
+	hasEsc := false
+	for _, item := range nav {
+		if item.Key == "esc" {
+			hasEsc = true
+		}
+	}
+	if !hasEsc {
+		t.Error("TableNavItems(plugin-item-detail): missing 'esc' key")
+	}
+}
+
 func TestSetHighlightMatchesCompoundKey(t *testing.T) {
 	menu := ui.MenuModel{
 		NavItems: []ui.MenuItem{

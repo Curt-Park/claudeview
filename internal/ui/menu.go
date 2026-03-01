@@ -100,6 +100,8 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 		// no enter hint
 	case model.ResourcePlugins:
 		items = append(items, MenuItem{Key: "enter", Desc: "detail"})
+	case model.ResourcePluginDetail:
+		items = append(items, MenuItem{Key: "enter", Desc: "detail"})
 	case model.ResourceMemory:
 		items = append(items, MenuItem{Key: "enter", Desc: "detail"})
 	}
@@ -113,7 +115,7 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 			items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
 		case model.ResourcePlugins, model.ResourceMemory:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
-		case model.ResourcePluginDetail, model.ResourceMemoryDetail:
+		case model.ResourcePluginDetail, model.ResourcePluginItemDetail, model.ResourceMemoryDetail:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
 			// ResourceProjects: no esc (root level)
 		}
@@ -122,7 +124,13 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 }
 
 // TableUtilItems returns utility menu items for the table view.
-func TableUtilItems(_ model.ResourceType) []MenuItem {
+// Content-only detail views (plugin-item-detail, memory-detail) have no filterable table,
+// so the filter key is omitted.
+func TableUtilItems(rt model.ResourceType) []MenuItem {
+	switch rt {
+	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail:
+		return nil
+	}
 	return []MenuItem{
 		{Key: "/", Desc: "filter"},
 	}

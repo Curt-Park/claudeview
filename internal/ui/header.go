@@ -104,7 +104,7 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 	// are hidden when either view is active.
 	var jumpHints []string
 	inPluginsOrMemories := info.Resource == model.ResourcePlugins || info.Resource == model.ResourceMemory ||
-		info.Resource == model.ResourcePluginDetail || info.Resource == model.ResourceMemoryDetail
+		isSubView(info.Resource)
 	if !inPluginsOrMemories {
 		jumpHints = append(jumpHints, renderJumpHint(menu, "p", "plugins"))
 	}
