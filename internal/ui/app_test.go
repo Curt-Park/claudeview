@@ -398,6 +398,34 @@ func TestMKeyBlockedInMemoryDetail(t *testing.T) {
 	}
 }
 
+func TestMKeyBlockedInPluginDetail(t *testing.T) {
+	p := &model.Plugin{Name: "myplugin", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePlugins)
+	app.SelectedProjectHash = "proj-abc"
+	app.Table.SetRows([]ui.Row{{Cells: []string{"myplugin", "1.0", "user", "enabled", "0", "0", "0", "0", "0", ""}, Data: p}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // → plugin-detail
+
+	app = updateApp(app, keyMsg("m"))
+
+	if app.Resource != model.ResourcePluginDetail {
+		t.Errorf("expected to stay on plugin-detail after m, got %s", app.Resource)
+	}
+}
+
+func TestMKeyBlockedInPluginItemDetail(t *testing.T) {
+	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
+	app := newApp(model.ResourcePluginDetail)
+	app.SelectedProjectHash = "proj-abc"
+	app.Table.SetRows([]ui.Row{{Cells: []string{"skill", "my-skill"}, Data: pi}})
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter}) // → plugin-item-detail
+
+	app = updateApp(app, keyMsg("m"))
+
+	if app.Resource != model.ResourcePluginItemDetail {
+		t.Errorf("expected to stay on plugin-item-detail after m, got %s", app.Resource)
+	}
+}
+
 func TestJumpPreservesFilterStack(t *testing.T) {
 	p := &model.Project{Hash: "proj-abc123"}
 	s := &model.Session{ID: "sess-xyz789"}
