@@ -438,10 +438,18 @@ func TestContentOffsetFieldExists(t *testing.T) {
 }
 
 func TestScrollDownInPluginItemDetail(t *testing.T) {
-	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
-	app := newApp(model.ResourcePluginItemDetail)
-	app.Table.SetRows([]ui.Row{{Cells: []string{"skill", "my-skill"}, Data: pi}})
-	app.SelectedPluginItem = pi
+	app := newApp(model.ResourceMemoryDetail)
+	app.Width = termWidth
+	app.Height = termHeight
+	tmpFile := filepath.Join(t.TempDir(), "mem.md")
+	var sb strings.Builder
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&sb, "line%d\n", i)
+	}
+	if err := os.WriteFile(tmpFile, []byte(strings.TrimRight(sb.String(), "\n")), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	app.SelectedMemory = &model.Memory{Path: tmpFile}
 
 	app = updateApp(app, keyMsg("j"))
 
@@ -464,9 +472,18 @@ func TestScrollUpFloorInPluginItemDetail(t *testing.T) {
 }
 
 func TestScrollUpDecrementsInPluginItemDetail(t *testing.T) {
-	pi := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: "/tmp"}
-	app := newApp(model.ResourcePluginItemDetail)
-	app.SelectedPluginItem = pi
+	app := newApp(model.ResourceMemoryDetail)
+	app.Width = termWidth
+	app.Height = termHeight
+	tmpFile := filepath.Join(t.TempDir(), "mem.md")
+	var sb strings.Builder
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&sb, "line%d\n", i)
+	}
+	if err := os.WriteFile(tmpFile, []byte(strings.TrimRight(sb.String(), "\n")), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	app.SelectedMemory = &model.Memory{Path: tmpFile}
 	app.ContentOffset = 5
 
 	app = updateApp(app, keyMsg("k"))
@@ -487,14 +504,55 @@ func TestScrollGotoTopInContentView(t *testing.T) {
 	}
 }
 
-func TestScrollGotoBottomSetsLargeValue(t *testing.T) {
+func TestScrollGotoBottomGoesToMax(t *testing.T) {
 	app := newApp(model.ResourceMemoryDetail)
-	app.ContentOffset = 0
+	app.Width = termWidth
+	app.Height = termHeight
+	tmpFile := filepath.Join(t.TempDir(), "mem.md")
+	var sb strings.Builder
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&sb, "line%d\n", i)
+	}
+	if err := os.WriteFile(tmpFile, []byte(strings.TrimRight(sb.String(), "\n")), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	app.SelectedMemory = &model.Memory{Path: tmpFile}
 
 	app = updateApp(app, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
 
-	if app.ContentOffset <= 100 {
-		t.Errorf("expected large ContentOffset after G, got %d", app.ContentOffset)
+	max := app.ContentOffset
+	if max <= 0 {
+		t.Errorf("expected ContentOffset > 0 after G with 50-line content, got %d", max)
+	}
+	// G is idempotent at the bottom.
+	app2 := updateApp(app, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	if app2.ContentOffset != max {
+		t.Errorf("expected G idempotent at bottom: got %d, want %d", app2.ContentOffset, max)
+	}
+}
+
+func TestScrollCtrlDCapsAtMax(t *testing.T) {
+	app := newApp(model.ResourceMemoryDetail)
+	app.Width = termWidth
+	app.Height = termHeight
+	tmpFile := filepath.Join(t.TempDir(), "mem.md")
+	var sb strings.Builder
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&sb, "line%d\n", i)
+	}
+	if err := os.WriteFile(tmpFile, []byte(strings.TrimRight(sb.String(), "\n")), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	app.SelectedMemory = &model.Memory{Path: tmpFile}
+
+	// Scroll to bottom via G.
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	max := app.ContentOffset
+
+	// ctrl+d at bottom must not exceed max.
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyCtrlD})
+	if app.ContentOffset != max {
+		t.Errorf("expected ContentOffset capped at %d after ctrl+d at bottom, got %d", max, app.ContentOffset)
 	}
 }
 
@@ -614,5 +672,21 @@ func TestJumpPreservesFilterStack(t *testing.T) {
 	}
 	if app.Table.Filter != "proj" {
 		t.Errorf("expected filter=%q after esc from sessions, got %q", "proj", app.Table.Filter)
+	}
+}
+
+func TestPluginItemDetailViewHidesJumpHints(t *testing.T) {
+	app := newApp(model.ResourcePluginItemDetail)
+	app.Width = termWidth
+	app.Height = termHeight
+	app.Info.MemoriesActive = true
+
+	rendered := app.View()
+
+	if strings.Contains(rendered, "plugins") {
+		t.Error("expected '<p> plugins' hint to be hidden in plugin-item-detail view")
+	}
+	if strings.Contains(rendered, "memories") {
+		t.Error("expected '<m> memories' hint to be hidden in plugin-item-detail view")
 	}
 }

@@ -247,23 +247,48 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// contentMaxOffset returns the maximum scroll offset for the current content view.
+func (m AppModel) contentMaxOffset() int {
+	var contentStr string
+	switch m.Resource {
+	case model.ResourcePluginItemDetail:
+		contentStr = RenderPluginItemDetail(m.SelectedPluginItem)
+	case model.ResourceMemoryDetail:
+		contentStr = RenderMemoryDetail(m.SelectedMemory)
+	default:
+		return 0
+	}
+	lines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
+	if max := len(lines) - m.contentHeight(); max > 0 {
+		return max
+	}
+	return 0
+}
+
 // updateContentScroll handles movement keys for content-only views (plugin-item-detail,
-// memory-detail). It adjusts ContentOffset; View() caps it to actual content length.
+// memory-detail). It adjusts ContentOffset, capped to the actual content length.
 func (m *AppModel) updateContentScroll(msg tea.KeyMsg) {
 	half := m.contentHeight() / 2
+	cap := func() {
+		if max := m.contentMaxOffset(); m.ContentOffset > max {
+			m.ContentOffset = max
+		}
+	}
 	switch msg.String() {
 	case "j":
 		m.ContentOffset++
+		cap()
 	case "k":
 		if m.ContentOffset > 0 {
 			m.ContentOffset--
 		}
 	case "G":
-		m.ContentOffset = 1 << 30 // View() caps to actual max
+		m.ContentOffset = m.contentMaxOffset()
 	case "g":
 		m.ContentOffset = 0
 	case "ctrl+d":
 		m.ContentOffset += half
+		cap()
 	case "ctrl+u":
 		if m.ContentOffset >= half {
 			m.ContentOffset -= half
@@ -460,6 +485,7 @@ func (m AppModel) View() string {
 	}
 
 	// --- 1. Info panel (7 lines) ---
+	m.Info.Resource = m.Resource // ensure jump-hint guard uses current resource
 	infoStr := m.Info.ViewWithMenu(m.Menu)
 
 	// --- 2. Resource title bar ---
