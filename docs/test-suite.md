@@ -14,7 +14,7 @@ Tests span four packages. `internal/ui` has the largest test surface (integratio
 |-------------------------|-------------------------------------------------------------|
 | `app_test.go`           | AppModel integration — key flows, navigation, state transitions |
 | `render_test.go`        | Full render output assertions / golden snapshots            |
-| `detail_render_test.go` | `RenderPluginDetail` and `RenderMemoryDetail` output        |
+| `detail_render_test.go` | `RenderPluginItemDetail` and `RenderMemoryDetail` output    |
 | `filter_test.go`        | `FilterModel` unit tests                                    |
 | `crumbs_test.go`        | `CrumbsModel` unit tests                                    |
 | `menu_test.go`          | `MenuModel` and nav hint unit tests                         |
@@ -25,7 +25,7 @@ Tests span four packages. `internal/ui` has the largest test surface (integratio
 | Package                | Files                                        | Count |
 |------------------------|----------------------------------------------|-------|
 | `internal/config`      | `settings_test.go`, `plugins_test.go`        | ~15   |
-| `internal/model`       | `agent_test.go`, `session_test.go`, `project_test.go`, `tool_call_test.go`, `plugin_test.go`, `resource_test.go` | ~28 |
+| `internal/model`       | `agent_test.go`, `session_test.go`, `project_test.go`, `tool_call_test.go`, `plugin_test.go`, `resource_test.go` | ~33 |
 | `internal/transcript`  | `scanner_test.go`, `parser_test.go`          | ~11   |
 
 ## Pattern

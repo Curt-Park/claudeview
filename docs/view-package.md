@@ -17,12 +17,13 @@ Resource-specific table renderers. One file per resource type plus shared helper
 | `sessions.go`     | columns + `sessionRow`; flat mode; subtitle line (model/cost/status) |
 | `agents.go`       | columns + `agentRow`; flat mode; tree prefix for subagents           |
 | `plugins.go`      | columns + `pluginRow`; scope, enabled/disabled, skill/cmd/hook counts|
+| `plugin_items.go` | columns + `pluginItemRow` for `ResourceView[*model.PluginItem]`; `NewPluginItemsView` |
 | `memories.go`     | columns + `memoryRow` for `ResourceView[*model.Memory]`              |
 | `helpers.go`      | Shared formatting utilities (`truncateHash`, `ShortID`)              |
 
 ## Generic ResourceView[T]
 
-All 5 resource views use the same generic type:
+All 6 resource views use the same generic type:
 
 ```go
 type RowBuilder[T any] func(items []T, index int, flatMode bool) ui.Row

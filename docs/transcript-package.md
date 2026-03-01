@@ -12,9 +12,8 @@ Reads Claude Code JSONL transcript files. Provides the data backbone for the liv
 
 | File        | Purpose                                                                           |
 |-------------|-----------------------------------------------------------------------------------|
-| `types.go`  | `ParsedTranscript`, `Turn`, `ToolCallEntry`, `SessionInfo`, `ProjectInfo`, `SessionAggregates`, `Usage` — intermediate parsing types |
-| `parser.go` | `ParseFile(path) (*ParsedTranscript, error)` — reads JSONL line by line; extracts turns, tool calls, cost, token usage |
-| `scanner.go`| `ScanProjects(claudeDir) ([]ProjectInfo, error)` — walks `~/.claude/projects/`; `ScanSubagents(dir) ([]SessionInfo, error)` |
+| `parser.go` | `ParsedTranscript`, `Turn`, `ToolCall`, `SessionAggregates`, `Usage` — intermediate parsing types; `ParseFile(path)`, `Parse(r)`, `ParseAggregatesIncremental(path, agg)` |
+| `scanner.go`| `SessionInfo`, `ProjectInfo` — directory scan types; `ScanProjects(claudeDir)`, `ScanSubagents(dir)`, `CountSubagents(dir)` |
 
 ## JSONL Format
 

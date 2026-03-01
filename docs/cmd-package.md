@@ -20,13 +20,36 @@ Wires all internal packages into a runnable Bubble Tea application. Contains the
 
 ```go
 type rootModel struct {
-    app      ui.AppModel
-    dp       ui.DataProvider
-    projects []*model.Project
+    // Data slices
+    app         ui.AppModel
+    dp          ui.DataProvider
+    projects    []*model.Project
+    sessions    []*model.Session
+    agents      []*model.Agent
+    plugins     []*model.Plugin
+    pluginItems []*model.PluginItem
+    memories    []*model.Memory
+
+    // Resource views (eagerly initialized)
+    projectsView    *view.ResourceView[*model.Project]
+    sessionsView    *view.ResourceView[*model.Session]
+    agentsView      *view.ResourceView[*model.Agent]
+    pluginsView     *view.ResourceView[*model.Plugin]
+    pluginItemsView *view.ResourceView[*model.PluginItem]
+    memoriesView    *view.ResourceView[*model.Memory]
+
+    // Static info (set once at startup)
+    userStr       string
+    claudeVersion string
+
+    // Async loading state
+    loading      bool
+    cursor       map[model.ResourceType]struct{ sel, off int }
+    lastResource model.ResourceType
 }
 ```
 
-On `Init`, it fires `loadDataAsync()` which reads the filesystem and sends a `dataLoadedMsg` back into the update loop. This keeps the initial render fast while data loads in the background.
+On `Init`, it fires `loadData()` synchronously, then async reloads via `loadDataAsync()` which sends a `dataLoadedMsg` back into the update loop. This keeps the initial render fast while data refreshes in the background.
 
 ## DataProvider Implementations
 
@@ -44,10 +67,10 @@ Both implement `ui.DataProvider`:
 
 ## Helper Functions
 
-- `parseAgentsFromSession(session, transcript)` — builds `[]*model.Agent` from parsed transcript
-- `populateToolCalls(agent, turns)` — fills agent's `ToolCalls` slice
-- `detectAgentType(agentID, turns)` — infers `AgentType` from transcript content
-- `mdTitle(text)` — extracts title from Markdown content
+- `parseAgentsFromSession(s *model.Session)` — builds `[]*model.Agent` by parsing the session's transcript and subagent transcripts
+- `populateToolCalls(agent *model.Agent, sessionID string, parsed *transcript.ParsedTranscript)` — fills agent's `ToolCalls` slice and sets `LastActivity`
+- `detectAgentType(id string)` — infers `AgentType` from the agent ID string
+- `mdTitle(path string)` — reads a Markdown file and returns the first `# Heading` text
 
 ## Related
 
