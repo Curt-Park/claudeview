@@ -82,12 +82,6 @@ func isSubView(rt model.ResourceType) bool {
 		rt == model.ResourceMemoryDetail
 }
 
-// isContentView returns true for views that render flat text (not a table).
-// These views use ContentOffset for scrolling instead of Table navigation.
-func isContentView(rt model.ResourceType) bool {
-	return rt == model.ResourcePluginItemDetail || rt == model.ResourceMemoryDetail
-}
-
 // DataProvider is the interface for fetching resource data.
 type DataProvider interface {
 	GetProjects() []*model.Project
