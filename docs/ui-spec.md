@@ -1,3 +1,9 @@
+---
+title: "claudeview UI Specification"
+type: concept
+tags: [spec, ui, navigation, keybindings, layout]
+---
+
 # claudeview UI Specification
 
 ## Overview
@@ -17,7 +23,7 @@ claudeview is a k9s-style terminal dashboard for Claude Code sessions. The UI co
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  CONTENT AREA  (dynamic height)                                             │
-│  [ Table | Log | Detail | YAML ]                                            │
+│  [ Table | Plugin Detail | Memory Detail ]                                  │
 │                                                                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ BREADCRUMBS (1 row): projects > sessions > agents                           │
@@ -31,46 +37,43 @@ claudeview is a k9s-style terminal dashboard for Claude Code sessions. The UI co
 
 ---
 
-## Info Panel (4 Columns)
+## Info Panel
 
-The info panel occupies 5+ rows and renders four columns side-by-side:
+The info panel occupies 5+ rows and renders five columns:
 
 ```
-Project:      <full-width path value>
-Session:      <value>   <j/k> up/down    </> filter    <t> tasks
-User:         <value>   <g/G> top/bot    <l> logs      <p> plugins
-Claude Code:  <value>   <ctrl+u/d> page  <d> detail    <m> mcps
-claudeview:   <value>   <enter> drill    <esc> back
+Project:      <full-width path — left-truncated if long>
+Session:      <value>   <j/k> down/up    </> filter    <p> plugins   <ctrl+c> quit
+User:         <value>   <G/g> bottom/top               <m> memories
+Claude Code:  <value>   <ctrl+d/u> page down/up
+claudeview:   <value>   <enter> (context)
+              ...       <esc> (context)
 ```
 
-(Exact items depend on the current view mode and resource type.)
+- **Col 0**: `labelW=14` + value; total ~32 chars
+- **Col 1**: nav commands (j/k, G/g, ctrl+d/u, enter/esc — context-sensitive)
+- **Col 2**: util commands (`/` filter)
+- **Col 3**: p/m jump shortcuts (context-sensitive)
+- **Col 4**: `ctrl+c quit` (first row only)
 
-### Column Widths
-- **Col 0 (info)**: 46 visible chars (14 label + 32 value)
-- **Col 1 (nav cmds)**: navigation commands (j/k, g/G, ctrl+u/d, enter)
-- **Col 2 (util cmds)**: utility commands (filter, follow, detail, logs, back)
-- **Col 3 (shortcuts)**: fixed jump shortcuts (t/p/m)
-
-The panel height expands dynamically: `max(5, 1 + max(navCount, utilCount))`.
+Panel height: `max(5, 1 + max(navCount, utilCount))`
 
 ### Context-Dependent Values
 
-| Field        | Projects level | Sessions level       | Agents+ level          |
-|--------------|----------------|----------------------|------------------------|
-| Project      | `--`           | selected project     | selected project       |
-| Session      | `--`           | `--`                 | selected session (8ch) |
-| User         | OS username    | OS username          | OS username            |
-| Claude Code  | CLI version    | CLI version          | CLI version            |
-| claudeview   | app version    | app version          | app version            |
-
-**Rule**: Project shows `--` at projects level; Session shows `--` until agents level.
+| Field        | Projects level | Sessions level   | Agents+ level          |
+|--------------|----------------|------------------|------------------------|
+| Project      | `--`           | selected project | selected project       |
+| Session      | `--`           | `--`             | selected session (8ch) |
+| User         | OS username    | OS username      | OS username            |
+| Claude Code  | CLI version    | CLI version      | CLI version            |
+| claudeview   | app version    | app version      | app version            |
 
 ### Jump Shortcuts (Col 3)
 
-Fixed shortcuts always visible in the right column:
-- `<t>` tasks — jump to tasks view
-- `<p>` plugins — jump to plugins view
-- `<m>` mcps — jump to MCP servers view
+- `<p>` plugins — visible when not in plugins/memories/detail view
+- `<m>` memories — visible only when a project is selected AND not in plugins/memories/detail view
+
+Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`, or `memory-detail`.
 
 ---
 
@@ -78,186 +81,123 @@ Fixed shortcuts always visible in the right column:
 
 ### 1. Projects
 
-| Column   | Width     | Description                     |
-|----------|-----------|---------------------------------|
-| NAME     | flex      | project hash (truncated)        |
-| SESSIONS | 8         | total session count             |
-| ACTIVE   | 6         | active session count            |
-| LAST SEEN| 10        | human-friendly age (e.g. `3d`)  |
+| Column      | Width          | Description                    |
+|-------------|----------------|--------------------------------|
+| NAME        | flex (max 55%) | project directory hash         |
+| SESSIONS    | 8              | total session count            |
+| LAST ACTIVE | 11             | human-friendly age (e.g. `3d`) |
 
 **Navigation**: Enter → Sessions (filtered to this project)
 
 ### 2. Sessions
 
-| Column  | Width | Description                                    |
-|---------|-------|------------------------------------------------|
-| PROJECT | 20    | parent project name (flat access only)         |
-| NAME    | 10    | session short ID (first 8 chars)               |
-| MODEL   | 16    | Claude model name (flex)                       |
-| STATUS  | 12    | colored status string                          |
-| AGENTS  | 6     | agent count                                    |
-| TOOLS   | 6     | total tool calls                               |
-| TOKENS  | 8     | total tokens (k-suffixed)                      |
-| COST    | 8     | `$X.XXXX` or `-`                               |
-| AGE     | 6     | time since last modification                   |
+| Column      | Width          | Description                                  |
+|-------------|----------------|----------------------------------------------|
+| PROJECT     | 20             | parent project hash (flat access only)       |
+| NAME        | 10             | session short ID (first 8 chars)             |
+| TOPIC       | flex (max 35%) | first line of session topic / summary        |
+| TURNS       | 6              | conversation turn count                      |
+| AGENTS      | 6              | agent count                                  |
+| TOKENS      | flex (max 25%) | token usage string (input + output)          |
+| LAST ACTIVE | 11             | time since last modification                 |
 
-**Note**: PROJECT column is only shown during flat access (via `t`/`p`/`m` jump shortcuts or when no project is selected). During drill-down from a project, PROJECT column is hidden.
+Each row optionally shows a **subtitle line** (dimmed) with model, cost, and status metadata, indented under TOPIC.
+
+**Note**: PROJECT column only shown in flat access (via `p`/`m` jump, or no project selected).
 
 **Navigation**: Enter → Agents (filtered to this session)
 
 ### 3. Agents
 
-| Column        | Width | Description                                |
-|---------------|-------|--------------------------------------------|
-| SESSION       | 12    | parent session short ID (flat access only) |
-| NAME          | 10    | tree-prefixed display name (flex, max 20%) |
-| TYPE          | 16    | agent type string                          |
-| STATUS        | 10    | colored status                             |
-| TOOLS         | 6     | tool call count                            |
-| LAST ACTIVITY | 20    | last tool name + input summary (flex)      |
+| Column        | Width          | Description                                |
+|---------------|----------------|--------------------------------------------|
+| SESSION       | 12             | parent session short ID (flat access only) |
+| NAME          | flex (max 20%) | tree-prefixed display name                 |
+| TYPE          | 16             | agent type string                          |
+| STATUS        | 10             | colored status                             |
+| LAST ACTIVITY | flex (max 35%) | last tool name + input summary             |
 
-**Navigation**: Enter → Tools (filtered to this agent)
+**Note**: SESSION column only shown in flat access. Agents is a **leaf** — `enter` has no effect.
 
-### 4. Tools (Tool Calls)
+### 4. Plugins
 
-| Column       | Width | Description                                   |
-|--------------|-------|-----------------------------------------------|
-| SESSION      | 10    | parent session short ID (flat access only)    |
-| AGENT        | 10    | parent agent short ID (flat access only)      |
-| TIME         | 10    | timestamp `HH:MM:SS`                          |
-| TOOL         | 10    | tool name                                     |
-| INPUT SUMMARY| 30    | first N chars of input JSON (flex)            |
-| RESULT       | 16    | result summary or `error` (red)               |
-| DURATION     | 10    | milliseconds or `--`                          |
+| Column    | Width          | Description                           |
+|-----------|----------------|---------------------------------------|
+| NAME      | flex (max 25%) | plugin name                           |
+| VERSION   | 10             | semver string                         |
+| SCOPE     | 8              | `user` / `project`                    |
+| STATUS    | 10             | `enabled` / `disabled` (colored)      |
+| SKILLS    | 7              | skill count                           |
+| COMMANDS  | 9              | command count                         |
+| HOOKS     | 6              | hook count                            |
+| AGENTS    | 7              | agent definition count                |
+| MCPS      | 5              | MCP server definition count           |
+| INSTALLED | 12             | installation date (YYYY-MM-DD)        |
 
-**Note**: SESSION and AGENT columns only shown during flat access.
+**Navigation**: Enter → Plugin Detail
 
-### 5. Tasks
+### 5. Memories
 
-| Column     | Width | Description                               |
-|------------|-------|-------------------------------------------|
-| SESSION    | 12    | parent session short ID (flat access only)|
-| ID         | 4     | task ID string                            |
-| STATUS     | 12    | icon + status string (colored)            |
-| SUBJECT    | 40    | task subject (flex)                       |
-| BLOCKED BY | 14    | comma-separated blocker IDs               |
+| Column   | Width          | Description            |
+|----------|----------------|------------------------|
+| NAME     | 18             | memory file name       |
+| TITLE    | flex (max 45%) | memory document title  |
+| SIZE     | 8              | file size string       |
+| MODIFIED | 11             | last modification date |
 
-### 6. Plugins
+**Note**: `<m>` jump requires a project to be selected.
 
-| Column    | Width | Description                          |
-|-----------|-------|--------------------------------------|
-| NAME      | 20    | plugin name (flex)                   |
-| VERSION   | 10    | semver string                        |
-| STATUS    | 10    | `enabled` / `disabled` (colored)     |
-| SKILLS    | 7     | skill count                          |
-| COMMANDS  | 9     | command count                        |
-| HOOKS     | 6     | hook count                           |
-| INSTALLED | 12    | installation date                    |
-
-### 7. MCP Servers
-
-| Column    | Width | Description                       |
-|-----------|-------|-----------------------------------|
-| NAME      | 16    | server name                       |
-| PLUGIN    | 14    | plugin name                       |
-| TRANSPORT | 10    | `stdio` / `http` / `sse`          |
-| TOOLS     | 6     | available tool count              |
-| COMMAND   | 40    | command + args (flex)             |
+**Navigation**: Enter → Memory Detail
 
 ---
 
-## View Modes
-
-The content area renders one of four modes:
+## Content Modes
 
 ### 1. Table (default)
-- Scrollable table with column headers
-- `j/k` or arrow keys: move selection
-- `g/G`: go to top/bottom
-- `ctrl+u/d` or `pgup/pgdn`: page up/down
-- `enter`: drill down
-- Filter applied: rows filtered by substring match (case-insensitive, all cells)
-- Selected row expands to show full multi-line content; collapses when cursor moves away
+- `j/k` / arrows: move selection; `g/G`: top/bottom; `ctrl+d/u` / `pgdn/pgup`: half-page
+- `enter`: drill down; `/`: filter; `esc`: clear filter or navigate back
+- Rows updated within 5 seconds highlighted ("hot" state)
 
-### 2. Log (`l` key)
-- Scrollable transcript log view for sessions/agents
-- Shows turns with role, timestamp, thinking, text, tool calls
-- `j/k`: scroll up/down; `g/G`: top/bottom; `ctrl+u/d`: page up/down
-- `f`: toggle follow mode (auto-scroll to newest)
-- `/`: filter log lines
-- `esc`: return to Table
+### 2. Plugin Detail
+- Activated by `enter` on a Plugins row (resource → `plugin-detail`)
+- Shows plugin header + sections: Skills, Commands, Hooks, Agents, MCPs
+- `esc`: return to Plugins table
 
-### 3. Detail (`d` key)
-- Resource-specific detail panel
-- Scrollable multi-line text
-- `j/k`: scroll; `g/G`: top/bottom; `ctrl+u/d`: page up/down
-- `esc`: return to Table
-
-### 4. YAML (`y` key)
-- JSON dump of selected row's data object
-- Same navigation as Detail
-- `esc`: return to Table
+### 3. Memory Detail
+- Activated by `enter` on a Memories row (resource → `memory-detail`)
+- Shows raw file content of the selected memory file
+- `esc`: return to Memories table
 
 ---
 
 ## Keybindings Reference
 
-### Global (all modes)
-| Key      | Action                            |
-|----------|-----------------------------------|
-| `ctrl+c` | quit immediately                  |
-| `/`      | enter filter mode                 |
-| `t`      | jump to tasks                     |
-| `p`      | jump to plugins                   |
-| `m`      | jump to MCPs                      |
+### Global
+| Key      | Action                                      |
+|----------|---------------------------------------------|
+| `ctrl+c` | quit immediately                            |
+| `/`      | enter filter mode                           |
+| `p`      | jump to plugins (always)                    |
+| `m`      | jump to memories (requires project context) |
 
 ### Table Mode
-| Key            | Action                                  |
-|----------------|-----------------------------------------|
-| `j` / `↓`      | move selection down                     |
-| `k` / `↑`      | move selection up                       |
-| `g`            | go to top                               |
-| `G`            | go to bottom                            |
-| `ctrl+d` / `pgdn` | page down (half page)               |
-| `ctrl+u` / `pgup` | page up (half page)                 |
-| `enter`        | drill down (projects→sessions→agents→tools) |
-| `l`            | log view                                |
-| `d`            | detail view                             |
-| `y`            | YAML/JSON dump view                     |
-| `esc`          | navigate back (or back to projects)     |
-
-### Log Mode
-| Key              | Action              |
-|------------------|---------------------|
-| `j` / `↓`        | scroll down         |
-| `k` / `↑`        | scroll up           |
-| `h` / `←`        | scroll left         |
-| `l` / `→`        | scroll right        |
-| `g`              | go to top           |
-| `G`              | go to bottom        |
-| `ctrl+u` / `pgup`| page up             |
-| `ctrl+d` / `pgdn`| page down           |
-| `f`              | toggle follow mode  |
-| `/`              | filter log lines    |
-| `esc`            | return to table     |
-
-### Detail / YAML Mode
-| Key              | Action              |
-|------------------|---------------------|
-| `j` / `↓`        | scroll down         |
-| `k` / `↑`        | scroll up           |
-| `g`              | go to top           |
-| `G`              | go to bottom        |
-| `ctrl+u` / `pgup`| page up             |
-| `ctrl+d` / `pgdn`| page down           |
-| `esc`            | return to table     |
+| Key               | Action                                                            |
+|-------------------|-------------------------------------------------------------------|
+| `j` / `↓`         | move selection down                                               |
+| `k` / `↑`         | move selection up                                                 |
+| `g`               | go to top                                                         |
+| `G`               | go to bottom                                                      |
+| `ctrl+d` / `pgdn` | page down (half page)                                             |
+| `ctrl+u` / `pgup` | page up (half page)                                               |
+| `enter`           | drill down (projects→sessions; sessions→agents; plugins/memories→detail) |
+| `esc`             | clear filter (if active); otherwise navigate back                 |
 
 ### Filter Mode (`/`)
 | Key        | Action                            |
 |------------|-----------------------------------|
-| typing     | live filter table rows            |
+| typing     | live filter rows                  |
 | `enter`    | confirm filter (stay in table)    |
-| `esc`      | clear filter and exit filter mode |
+| `esc`      | clear filter and exit             |
 | `backspace`| delete last character             |
 
 ---
@@ -267,52 +207,50 @@ The content area renders one of four modes:
 ```
 projects
   └─→ sessions (filtered by project)
-        └─→ agents (filtered by session)
-              └─→ tools (filtered by agent)
+        └─→ agents (filtered by session)  [leaf]
+
+[p] plugins  ──→  plugin-detail
+[m] memories ──→  memory-detail  (project context required)
 ```
 
-**Drill-down** (`enter`): moves deeper, pushing breadcrumb
-**Navigate back** (`esc`): pops breadcrumb, returns to parent
-**Flat access** (`t`/`p`/`m` jump shortcuts): always shows full unfiltered data with parent columns visible
+**Jump** (`p`/`m`): saves current state. `esc` restores it (resource, project, session, filter).
+
+**Filter stack**: parent filter saved on drill-down, restored on `esc` back.
 
 ### Breadcrumb Examples
 ```
-projects
-projects > sessions
 projects > sessions > agents
-projects > sessions > agents > tools
+plugins > plugin-detail
+memories > memory-detail
 ```
-
----
-
-## Filter (`/`) Behavior
-
-- Filters are applied as case-insensitive substring match across **all cells** in a row
-- Filter is shown in the title bar: `Sessions(my-filter)[3]`
-- Filter resets when switching resource or navigating back
 
 ---
 
 ## Status Bar
 
-The single status bar row shows (in priority order):
-1. **Filter mode**: `/my-filter` input
-2. **Flash message**: info (yellow) or error (red), with auto-expiry
+1. **Filter mode active**: shows `/my-filter` live input
+2. **Flash message**: info (yellow) or error (red), auto-expires
 
 ---
 
-## Test IDs
+## Test Coverage
 
-Each behavior maps to a BDD test in `internal/ui/bdd/`:
+Tests in `internal/ui/` (`package ui_test`):
 
-| Behavior                           | Test File              | Test ID Prefix       |
-|------------------------------------|------------------------|----------------------|
-| Initial render (projects table)    | `initial_test.go`      | `TestInitial`        |
-| Table navigation (j/k/g/G)         | `navigation_test.go`   | `TestNav`            |
-| Drill-down + breadcrumbs           | `drilldown_test.go`    | `TestDrilldown`      |
-| `/` filter                         | `filter_test.go`       | `TestFilter`         |
-| d/l/y/esc view mode switch         | `viewmode_test.go`     | `TestViewMode`       |
-| Info panel context values          | `info_context_test.go` | `TestInfoContext`    |
-| Parent columns (flat access)       | `parent_columns_test.go` | `TestParentCols`   |
-| Window resize                      | `resize_test.go`       | `TestResize`         |
-| Flash message display/expiry       | `flash_test.go`        | `TestFlash`          |
+| File                    | Coverage                                          |
+|-------------------------|---------------------------------------------------|
+| `app_test.go`           | AppModel integration — key flows, state transitions |
+| `render_test.go`        | Full render output / golden snapshots             |
+| `detail_render_test.go` | Plugin detail and memory detail rendering         |
+| `filter_test.go`        | Filter component unit tests                       |
+| `crumbs_test.go`        | Breadcrumb component unit tests                   |
+| `menu_test.go`          | Menu / nav hint unit tests                        |
+| `testhelpers_test.go`   | Shared helpers (mock DataProvider, key senders)   |
+
+---
+
+## Related
+
+- [[ui-package]] implements this spec (AppModel, keybindings, layout)
+- [[view-package]] implements column definitions and resource tables
+- [[pre-completion-checklist]] applies to all UI changes
