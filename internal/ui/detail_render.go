@@ -14,7 +14,17 @@ func RenderPluginItemDetail(item *model.PluginItem) string {
 	}
 	header := StyleTitle.Render(item.Name) + "  " + StyleDim.Render(item.Category)
 	content := model.ReadPluginItemContent(item)
-	return header + "\n\n" + content
+	result := header + "\n\n" + content
+	if item.Category == "hook" {
+		scripts := model.ReadHookCommandScripts(item)
+		if len(scripts) > 0 {
+			result += "\n\ncommand scripts below:\n"
+			for _, s := range scripts {
+				result += "\n" + StyleDim.Render("--- "+s.Path+" ---") + "\n" + s.Content
+			}
+		}
+	}
+	return result
 }
 
 // RenderMemoryDetail reads and returns the raw content of a memory file.

@@ -75,3 +75,56 @@ func TestRenderMemoryDetail_ErrorOnBadPath(t *testing.T) {
 		t.Errorf("expected output to contain %q for bad path, got %q", "error", got)
 	}
 }
+
+func TestRenderPluginItemDetail_Hook_ShowsCommandScripts(t *testing.T) {
+	cacheDir := t.TempDir()
+	hooksDir := filepath.Join(cacheDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
+
+	scriptContent := "#!/bin/bash\necho session-stop"
+	scriptPath := filepath.Join(hooksDir, "stop-hook.sh")
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0o755); err != nil {
+		t.Fatalf("failed to write script: %v", err)
+	}
+
+	hookJSON := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"` + scriptPath + `"}]}]}}`
+	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.json"), []byte(hookJSON), 0o644); err != nil {
+		t.Fatalf("failed to write hooks.json: %v", err)
+	}
+
+	item := &model.PluginItem{Name: "Stop", Category: "hook", CacheDir: cacheDir}
+	got := ui.RenderPluginItemDetail(item)
+
+	if !strings.Contains(got, "command scripts below") {
+		t.Errorf("expected 'command scripts below' section, got %q", got)
+	}
+	if !strings.Contains(got, "echo session-stop") {
+		t.Errorf("expected script content in output, got %q", got)
+	}
+}
+
+func TestRenderPluginItemDetail_Hook_NoScriptsShowsOnlyJSON(t *testing.T) {
+	cacheDir := t.TempDir()
+	hooksDir := filepath.Join(cacheDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
+
+	// Hook command references inline shell, not a script file
+	hookJSON := `{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"echo hello"}]}]}}`
+	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.json"), []byte(hookJSON), 0o644); err != nil {
+		t.Fatalf("failed to write hooks.json: %v", err)
+	}
+
+	item := &model.PluginItem{Name: "PreToolUse", Category: "hook", CacheDir: cacheDir}
+	got := ui.RenderPluginItemDetail(item)
+
+	if strings.Contains(got, "command scripts below") {
+		t.Errorf("expected no 'command scripts below' section for inline command, got %q", got)
+	}
+	if !strings.Contains(got, "PreToolUse") {
+		t.Errorf("expected hook name in output, got %q", got)
+	}
+}

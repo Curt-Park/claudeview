@@ -16,7 +16,7 @@ Core data models used across transcript parsing, config loading, UI rendering, a
 | `session.go`  | `Session` — ID, ProjectHash, FilePath, SubagentDir, Branch, FileSize, Topic, TokensByModel (`map[string]TokenCount`), AgentCount, ToolCallCount, Agents, NumTurns, StartTime, EndTime, ModTime; `TokenCount` struct (InputTokens, OutputTokens) |
 | `agent.go`    | `Agent` — ID, SessionID, Type (`AgentType`), Status, IsSubagent, ToolCalls, LastActivity |
 | `tool_call.go`| `ToolCall` — ID, SessionID, AgentID, Name, Input/Result (json.RawMessage), IsError, Timestamp; `InputSummary()` |
-| `plugin.go`   | `Plugin` — Name, Version, Scope, Marketplace, Enabled, InstalledAt, CacheDir, SkillCount, CommandCount, HookCount, AgentCount, MCPCount; `CountSkills/Commands/Hooks/Agents/MCPs(cacheDir)` + `List*` variants; `PluginItem` — Name, Category, CacheDir; `ListPluginItems(cacheDir)`, `ReadPluginItemContent(item)`, `normalizeJSON(raw)` |
+| `plugin.go`   | `Plugin` — Name, Version, Scope, Marketplace, Enabled, InstalledAt, CacheDir, SkillCount, CommandCount, HookCount, AgentCount, MCPCount; `CountSkills/Commands/Hooks/Agents/MCPs(cacheDir)` + `List*` variants; `PluginItem` — Name, Category, CacheDir; `ListPluginItems(cacheDir)`, `ReadPluginItemContent(item)`, `HookScript` — Path, Content; `ReadHookCommandScripts(item)` — reads script files referenced by hook commands (expands `${CLAUDE_PLUGIN_ROOT}`); `normalizeJSON(raw)` |
 | `memory.go`   | `Memory` — Name, Title, Path, Size, ModTime; `SizeStr()`, `LastModified()` |
 | `resource.go` | `ResourceType` constants; `ResolveResource(s)`; `AllResourceNames()`    |
 | `status.go`   | `Status` string type and constants                                      |

@@ -399,3 +399,126 @@ func TestCountMCPs(t *testing.T) {
 		}
 	})
 }
+
+func TestReadHookCommandScripts_DirectScriptPath(t *testing.T) {
+	base := makeTempDir(t)
+	hooksDir := filepath.Join(base, "hooks")
+	if err := os.Mkdir(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	scriptContent := "#!/bin/bash\necho stop"
+	scriptPath := filepath.Join(hooksDir, "stop-hook.sh")
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hookJSON := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.sh"}]}]}}`
+	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.json"), []byte(hookJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "Stop", Category: "hook", CacheDir: base}
+	scripts := model.ReadHookCommandScripts(item)
+
+	if len(scripts) != 1 {
+		t.Fatalf("ReadHookCommandScripts() returned %d scripts, want 1", len(scripts))
+	}
+	if scripts[0].Path != scriptPath {
+		t.Errorf("Path = %q, want %q", scripts[0].Path, scriptPath)
+	}
+	if !strings.Contains(scripts[0].Content, "echo stop") {
+		t.Errorf("Content = %q, expected to contain %q", scripts[0].Content, "echo stop")
+	}
+}
+
+func TestReadHookCommandScripts_BashInvocationExtractsScript(t *testing.T) {
+	base := makeTempDir(t)
+	hooksDir := filepath.Join(base, "hooks")
+	scriptsDir := filepath.Join(base, "scripts")
+	if err := os.Mkdir(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(scriptsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	scriptContent := "#!/bin/bash\necho session-start"
+	scriptPath := filepath.Join(scriptsDir, "launcher.sh")
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hookJSON := `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.sh\" hook session-start"}]}]}}`
+	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.json"), []byte(hookJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "SessionStart", Category: "hook", CacheDir: base}
+	scripts := model.ReadHookCommandScripts(item)
+
+	if len(scripts) != 1 {
+		t.Fatalf("ReadHookCommandScripts() returned %d scripts, want 1", len(scripts))
+	}
+	if !strings.Contains(scripts[0].Content, "echo session-start") {
+		t.Errorf("Content = %q, expected to contain %q", scripts[0].Content, "echo session-start")
+	}
+}
+
+func TestReadHookCommandScripts_NonHookReturnsNil(t *testing.T) {
+	item := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: t.TempDir()}
+	scripts := model.ReadHookCommandScripts(item)
+	if scripts != nil {
+		t.Errorf("ReadHookCommandScripts() = %v, want nil for non-hook category", scripts)
+	}
+}
+
+func TestReadHookCommandScripts_PluginSubdirLayout(t *testing.T) {
+	base := makeTempDir(t)
+	pluginSub := filepath.Join(base, "plugin")
+	hooksDir := filepath.Join(pluginSub, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	scriptContent := "#!/bin/bash\necho plugin-subdir"
+	scriptPath := filepath.Join(hooksDir, "hook.sh")
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// ${CLAUDE_PLUGIN_ROOT} should resolve to the plugin/ subdir (contentDir result)
+	hookJSON := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/hooks/hook.sh"}]}]}}`
+	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.json"), []byte(hookJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "Stop", Category: "hook", CacheDir: base}
+	scripts := model.ReadHookCommandScripts(item)
+
+	if len(scripts) != 1 {
+		t.Fatalf("ReadHookCommandScripts() returned %d scripts, want 1 (plugin/ layout)", len(scripts))
+	}
+	if !strings.Contains(scripts[0].Content, "echo plugin-subdir") {
+		t.Errorf("Content = %q, expected to contain %q", scripts[0].Content, "echo plugin-subdir")
+	}
+}
+
+func TestReadHookCommandScripts_MissingScriptSkipped(t *testing.T) {
+	base := makeTempDir(t)
+	hooksDir := filepath.Join(base, "hooks")
+	if err := os.Mkdir(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hookJSON := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/hooks/nonexistent.sh"}]}]}}`
+	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.json"), []byte(hookJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "Stop", Category: "hook", CacheDir: base}
+	scripts := model.ReadHookCommandScripts(item)
+	if len(scripts) != 0 {
+		t.Errorf("ReadHookCommandScripts() returned %d scripts, want 0 for missing script", len(scripts))
+	}
+}
