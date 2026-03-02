@@ -25,7 +25,7 @@ Tests span four packages. `internal/ui` has the largest test surface (integratio
 | Package                | Files                                        | Count |
 |------------------------|----------------------------------------------|-------|
 | `internal/config`      | `settings_test.go`, `plugins_test.go`        | ~15   |
-| `internal/model`       | `agent_test.go`, `session_test.go`, `project_test.go`, `tool_call_test.go`, `plugin_test.go`, `resource_test.go` | ~33 |
+| `internal/model`       | `agent_test.go`, `session_test.go`, `project_test.go`, `tool_call_test.go`, `plugin_test.go`, `resource_test.go`, `turn_test.go` | ~33 |
 | `internal/transcript`  | `scanner_test.go`, `parser_test.go`          | ~11   |
 
 ## Pattern

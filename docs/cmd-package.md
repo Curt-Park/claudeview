@@ -55,8 +55,8 @@ On `Init`, it fires `loadData()` synchronously, then async reloads via `loadData
 
 Both implement `ui.DataProvider`:
 
-- **`liveDataProvider`** — reads `~/.claude/` via `transcript.ScanProjects`, `transcript.ParseAggregatesIncremental`, `config.LoadInstalledPlugins`, and `config.LoadSettings`. Populates `model.Project`, `model.Session`, `model.Agent`, `model.Plugin`, `model.Memory`.
-- **`demoDataProvider`** — delegates to `internal/demo` for synthetic data; used with `--demo` flag.
+- **`liveDataProvider`** — reads `~/.claude/` via `transcript.ScanProjects`, `transcript.ParseAggregatesIncremental`, `config.LoadInstalledPlugins`, and `config.LoadSettings`. Populates `model.Project`, `model.Session`, `model.Agent`, `model.Plugin`, `model.Memory`. `GetTurns(filePath)` calls `transcript.ParseFile` on the given JSONL path and maps the result to `[]model.Turn`.
+- **`demoDataProvider`** — delegates to `internal/demo` for synthetic data; used with `--demo` flag. `GetTurns` returns nil (no demo turn data).
 
 ## CLI Flags
 
