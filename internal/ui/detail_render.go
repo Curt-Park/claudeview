@@ -198,6 +198,8 @@ func agentDisplayName(t model.AgentType) string {
 		return "Planner"
 	case model.AgentTypeBash:
 		return "Bash"
+	case model.AgentTypeGeneral:
+		return "General"
 	default:
 		return "Agent"
 	}
