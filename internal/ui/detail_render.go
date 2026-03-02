@@ -7,6 +7,12 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
+// RenderSessionChat renders a session's conversation as a chat timeline.
+// Stub — implemented in Tasks 7-9.
+func RenderSessionChat(_ []model.Turn, _ [][]model.Turn, _ []model.AgentType, _ int) string {
+	return ""
+}
+
 // RenderPluginItemDetail renders the content of a selected plugin item.
 func RenderPluginItemDetail(item *model.PluginItem) string {
 	if item == nil {

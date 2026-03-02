@@ -46,6 +46,11 @@ type AppModel struct {
 	SelectedPluginItem  *model.PluginItem
 	SelectedMemory      *model.Memory
 
+	// Session chat data (set on drill-down into session-chat)
+	SelectedTurns []model.Turn
+	SubagentTurns [][]model.Turn
+	SubagentTypes []model.AgentType
+
 	// Data providers (injected from outside)
 	DataProvider DataProvider
 
@@ -85,7 +90,9 @@ func isSubView(rt model.ResourceType) bool {
 // isContentView returns true for views that render flat text (not a table).
 // These views use ContentOffset for scrolling instead of Table navigation.
 func isContentView(rt model.ResourceType) bool {
-	return rt == model.ResourcePluginItemDetail || rt == model.ResourceMemoryDetail
+	return rt == model.ResourcePluginItemDetail ||
+		rt == model.ResourceMemoryDetail ||
+		rt == model.ResourceSessionChat
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -169,7 +176,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global keys (work in all view modes)
 		switch msg.String() {
 		case "/":
-			if m.Resource != model.ResourceMemoryDetail && m.Resource != model.ResourcePluginItemDetail {
+			if m.Resource != model.ResourceMemoryDetail && m.Resource != model.ResourcePluginItemDetail &&
+				m.Resource != model.ResourceSessionChat {
 				m.inFilter = true
 				m.Filter.Activate()
 				m.refreshMenu()
@@ -256,6 +264,8 @@ func (m AppModel) contentMaxOffset() int {
 		contentStr = RenderPluginItemDetail(m.SelectedPluginItem)
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory)
+	case model.ResourceSessionChat:
+		contentStr = RenderSessionChat(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes, m.contentWidth())
 	default:
 		return 0
 	}
@@ -377,6 +387,13 @@ func (m *AppModel) navigateBack() {
 	// Navigate up the resource hierarchy
 	m.ContentOffset = 0
 	switch m.Resource {
+	case model.ResourceSessionChat:
+		m.SelectedSessionID = ""
+		m.SelectedTurns = nil
+		m.SubagentTurns = nil
+		m.SubagentTypes = nil
+		m.popFilter()
+		m.switchResource(model.ResourceSessions)
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
 		m.popFilter()
@@ -411,8 +428,18 @@ func (m *AppModel) drillDown() {
 	case model.ResourceSessions:
 		if s, ok := row.Data.(*model.Session); ok {
 			m.SelectedSessionID = s.ID
+			m.SelectedTurns = m.DataProvider.GetTurns(s.FilePath)
+			agents := m.DataProvider.GetAgents(s.ID)
+			m.SubagentTurns = nil
+			m.SubagentTypes = nil
+			for _, a := range agents {
+				if a.IsSubagent && a.FilePath != "" {
+					m.SubagentTurns = append(m.SubagentTurns, m.DataProvider.GetTurns(a.FilePath))
+					m.SubagentTypes = append(m.SubagentTypes, a.Type)
+				}
+			}
 		}
-		m.drillInto(model.ResourceAgents)
+		m.drillInto(model.ResourceSessionChat)
 	case model.ResourcePlugins:
 		if p, ok := row.Data.(*model.Plugin); ok {
 			m.SelectedPlugin = p
@@ -499,6 +526,8 @@ func (m AppModel) View() string {
 		contentStr = RenderPluginItemDetail(m.SelectedPluginItem)
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory)
+	case model.ResourceSessionChat:
+		contentStr = RenderSessionChat(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes, m.contentWidth())
 	default:
 		contentStr = m.Table.View()
 	}

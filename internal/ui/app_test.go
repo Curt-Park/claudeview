@@ -430,6 +430,44 @@ func TestMKeyBlockedInPluginItemDetail(t *testing.T) {
 	}
 }
 
+func TestDrilldownSessionsToSessionChat(t *testing.T) {
+	s := &model.Session{ID: "sess-abc123", FilePath: "/tmp/fake.jsonl"}
+	app := newApp(model.ResourceSessions)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{s.ShortID(), "topic", "2", "10", "1k", "1h"},
+		Data:  s,
+	}})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.Resource != model.ResourceSessionChat {
+		t.Errorf("expected resource=session-chat after Enter on sessions, got %s", app.Resource)
+	}
+}
+
+func TestSessionChatEscReturnsToSessions(t *testing.T) {
+	app := newApp(model.ResourceSessionChat)
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if app.Resource != model.ResourceSessions {
+		t.Errorf("expected resource=sessions after Esc from session-chat, got %s", app.Resource)
+	}
+}
+
+func TestSessionChatIsContentView(t *testing.T) {
+	app := newApp(model.ResourceSessionChat)
+	app.Width = termWidth
+	app.Height = termHeight
+	before := app.Table.Selected
+
+	app = updateApp(app, keyMsg("j"))
+
+	if app.Table.Selected != before {
+		t.Error("session-chat j should not change Table.Selected")
+	}
+}
+
 func TestContentOffsetFieldExists(t *testing.T) {
 	app := newApp(model.ResourcePluginItemDetail)
 	if app.ContentOffset != 0 {
