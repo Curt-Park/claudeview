@@ -35,6 +35,9 @@ Implements the Bubble Tea application model and all reusable chrome components.
 - `SelectedTurns []model.Turn` — main agent turns for session-chat view
 - `SubagentTurns [][]model.Turn` — per-subagent turn slices (parallel to Task tool calls)
 - `SubagentTypes []model.AgentType` — agent type for each subagent turn slice
+- `ChatFollow bool` — follow mode flag; when true, session-chat view auto-scrolls to bottom (tail -f)
+- `SelectedSessionFilePath string` — JSONL file path of selected session (for async refresh)
+- `SelectedSessionSubagentDir string` — subagent directory for selected session (for async refresh)
 - `inFilter bool` — filter input mode flag
 - `filterStack []string` — saved parent filters across drill-downs
 - `jumpFrom *jumpFromState` — saved state for esc-to-restore after p/m jump
@@ -56,15 +59,21 @@ type DataProvider interface {
 
 | Key      | Action                                      |
 |----------|---------------------------------------------|
-| `j/k`    | move up/down in table                       |
-| `g/G`    | top/bottom                                  |
-| `ctrl+d/u` | page down/up                              |
+| `j/k`    | move up/down in table; in session-chat: scroll down/up (k disables follow mode) |
+| `g/G`    | top/bottom; in session-chat: G re-enables follow mode |
+| `ctrl+d/u` | page down/up; in session-chat: ctrl+u disables follow mode |
 | `enter`  | drill down                                  |
 | `p`      | jump to plugins                             |
 | `m`      | jump to memories (requires project context) |
 | `/`      | filter mode                                 |
 | `esc`    | clear filter / navigate back                |
 | `ctrl+c` | quit                                        |
+
+### Follow Mode (session-chat only)
+
+`ChatFollow = true` is set on drill-down into session-chat (auto-scroll to latest content, like `tail -f`). `View()` overrides `ContentOffset` with `maxOffset` when follow mode is active. `updateContentScroll()` syncs `ContentOffset` from the virtual follow position before applying a relative delta, then toggles `ChatFollow`:
+- Enabled by: `G`, reaching the bottom via `j` or `ctrl+d`
+- Disabled by: `k`, `g`, `ctrl+u`
 
 ## Key Messages
 

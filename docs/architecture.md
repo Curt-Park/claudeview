@@ -45,13 +45,14 @@ type DataProvider interface {
     GetAgents(sessionID string) []*model.Agent
     GetPlugins(projectHash string) []*model.Plugin
     GetMemories(projectHash string) []*model.Memory
+    GetTurns(filePath string) []model.Turn
 }
 ```
 
 ## Resource Hierarchy
 
 ```
-projects → sessions → agents  [leaf]
+projects → sessions → session-chat  [leaf, content view]
 plugins  → plugin-detail → plugin-item-detail  [leaf]
 memories → memory-detail  (requires project context)
 ```

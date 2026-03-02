@@ -51,6 +51,8 @@ type rootModel struct {
 
 On `Init`, it fires `loadData()` synchronously, then async reloads via `loadDataAsync()` which sends a `dataLoadedMsg` back into the update loop. This keeps the initial render fast while data refreshes in the background.
 
+`dataLoadedMsg` carries resource-specific payloads including `turns []model.Turn`, `subagentTurns [][]model.Turn`, and `subagentTypes []model.AgentType` for session-chat refresh. `loadDataAsync()` handles `ResourceSessionChat` by reading `app.SelectedSessionFilePath` and `app.SelectedSessionSubagentDir` (captured before the goroutine) and calling `dp.GetTurns()` and `transcript.ScanSubagents()`. On receipt, `app.SelectedTurns`, `app.SubagentTurns`, and `app.SubagentTypes` are updated directly (bypassing `syncView` table logic).
+
 ## DataProvider Implementations
 
 Both implement `ui.DataProvider`:

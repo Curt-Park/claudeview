@@ -105,7 +105,7 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 
 **Note**: PROJECT column only shown in flat access (via `p`/`m` jump, or no project selected).
 
-**Navigation**: Enter → Agents (filtered to this session)
+**Navigation**: Enter → Session Chat (content view for the selected session)
 
 ### 3. Agents
 
@@ -172,7 +172,17 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 - `j/k` / `ctrl+d/u`: scroll content
 - `esc`: return to Plugin Detail table
 
-### 3. Memory Detail
+### 3. Session Chat (content view)
+- Activated by `enter` on a Sessions row (resource → `session-chat`)
+- Renders a conversation timeline: user bubbles (right-aligned, blue), Claude bubbles (left-aligned, green), subagent bubbles (indented, purple)
+- **Follow mode** (default on entry): auto-scrolls to the latest content — like `tail -f`
+  - `k` / `ctrl+u` / `g`: scroll up, disables follow mode (position locked)
+  - `G`: jumps to bottom, re-enables follow mode
+  - `j` / `ctrl+d`: scrolls down; re-enables follow mode when bottom is reached
+- Content refreshes on every tick (async) so live sessions update automatically
+- `esc`: return to Sessions table
+
+### 4. Memory Detail
 - Activated by `enter` on a Memories row (resource → `memory-detail`)
 - Shows raw file content of the selected memory file
 - `esc`: return to Memories table
@@ -216,7 +226,7 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 ```
 projects
   └─→ sessions (filtered by project)
-        └─→ agents (filtered by session)  [leaf]
+        └─→ session-chat  [leaf, content view, follow mode]
 
 [p] plugins  ──→  plugin-detail  ──→  plugin-item-detail  [leaf]
 [m] memories ──→  memory-detail  (project context required)
