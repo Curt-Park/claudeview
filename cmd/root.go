@@ -81,13 +81,16 @@ func run(cmd *cobra.Command, args []string) error {
 
 // dataLoadedMsg carries freshly loaded data back to the UI goroutine.
 type dataLoadedMsg struct {
-	projects    []*model.Project
-	sessions    []*model.Session
-	agents      []*model.Agent
-	plugins     []*model.Plugin
-	pluginItems []*model.PluginItem
-	memories    []*model.Memory
-	resource    model.ResourceType
+	projects      []*model.Project
+	sessions      []*model.Session
+	agents        []*model.Agent
+	plugins       []*model.Plugin
+	pluginItems   []*model.PluginItem
+	memories      []*model.Memory
+	turns         []model.Turn
+	subagentTurns [][]model.Turn
+	subagentTypes []model.AgentType
+	resource      model.ResourceType
 }
 
 // rootModel wraps AppModel and manages actual resource data.
@@ -266,6 +269,10 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rm.pluginItems = msg.pluginItems
 			case model.ResourceMemory:
 				rm.memories = msg.memories
+			case model.ResourceSessionChat:
+				rm.app.SelectedTurns = msg.turns
+				rm.app.SubagentTurns = msg.subagentTurns
+				rm.app.SubagentTypes = msg.subagentTypes
 			}
 			rm.syncView()
 		}
@@ -294,6 +301,8 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 	projectHash := rm.app.SelectedProjectHash
 	sessionID := rm.app.SelectedSessionID
 	selectedPlugin := rm.app.SelectedPlugin
+	sessionFilePath := rm.app.SelectedSessionFilePath
+	subagentDir := rm.app.SelectedSessionSubagentDir
 	dp := rm.dp
 	return func() tea.Msg {
 		msg := dataLoadedMsg{resource: resource}
@@ -312,6 +321,17 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			}
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
+		case model.ResourceSessionChat:
+			if sessionFilePath != "" {
+				msg.turns = dp.GetTurns(sessionFilePath)
+			}
+			if subagentDir != "" {
+				subInfos, _ := transcript.ScanSubagents(subagentDir)
+				for _, si := range subInfos {
+					msg.subagentTurns = append(msg.subagentTurns, dp.GetTurns(si.FilePath))
+					msg.subagentTypes = append(msg.subagentTypes, detectAgentType(si.ID))
+				}
+			}
 		}
 		return msg
 	}

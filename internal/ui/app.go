@@ -47,9 +47,12 @@ type AppModel struct {
 	SelectedMemory      *model.Memory
 
 	// Session chat data (set on drill-down into session-chat)
-	SelectedTurns []model.Turn
-	SubagentTurns [][]model.Turn
-	SubagentTypes []model.AgentType
+	SelectedTurns              []model.Turn
+	SubagentTurns              [][]model.Turn
+	SubagentTypes              []model.AgentType
+	ChatFollow                 bool   // true = auto-scroll to bottom (tail -f mode)
+	SelectedSessionFilePath    string // for async reload
+	SelectedSessionSubagentDir string // for async subagent reload
 
 	// Data providers (injected from outside)
 	DataProvider DataProvider
@@ -277,8 +280,14 @@ func (m AppModel) contentMaxOffset() int {
 }
 
 // updateContentScroll handles movement keys for content-only views (plugin-item-detail,
-// memory-detail). It adjusts ContentOffset, capped to the actual content length.
+// memory-detail, session-chat). It adjusts ContentOffset, capped to the actual content
+// length. For session-chat, it also manages ChatFollow (tail -f mode).
 func (m *AppModel) updateContentScroll(msg tea.KeyMsg) {
+	// Sync ContentOffset from the virtual follow position before applying a delta,
+	// so relative moves (j/k/ctrl+d/ctrl+u) work from the actual bottom.
+	if m.ChatFollow && m.Resource == model.ResourceSessionChat {
+		m.ContentOffset = m.contentMaxOffset()
+	}
 	half := m.contentHeight() / 2
 	cap := func() {
 		if max := m.contentMaxOffset(); m.ContentOffset > max {
@@ -289,18 +298,28 @@ func (m *AppModel) updateContentScroll(msg tea.KeyMsg) {
 	case "j":
 		m.ContentOffset++
 		cap()
+		if m.ContentOffset >= m.contentMaxOffset() {
+			m.ChatFollow = true
+		}
 	case "k":
+		m.ChatFollow = false
 		if m.ContentOffset > 0 {
 			m.ContentOffset--
 		}
 	case "G":
 		m.ContentOffset = m.contentMaxOffset()
+		m.ChatFollow = true
 	case "g":
 		m.ContentOffset = 0
+		m.ChatFollow = false
 	case "ctrl+d":
 		m.ContentOffset += half
 		cap()
+		if m.ContentOffset >= m.contentMaxOffset() {
+			m.ChatFollow = true
+		}
 	case "ctrl+u":
+		m.ChatFollow = false
 		if m.ContentOffset >= half {
 			m.ContentOffset -= half
 		} else {
@@ -389,9 +408,12 @@ func (m *AppModel) navigateBack() {
 	switch m.Resource {
 	case model.ResourceSessionChat:
 		m.SelectedSessionID = ""
+		m.SelectedSessionFilePath = ""
+		m.SelectedSessionSubagentDir = ""
 		m.SelectedTurns = nil
 		m.SubagentTurns = nil
 		m.SubagentTypes = nil
+		m.ChatFollow = false
 		m.popFilter()
 		m.switchResource(model.ResourceSessions)
 	case model.ResourceAgents:
@@ -428,6 +450,8 @@ func (m *AppModel) drillDown() {
 	case model.ResourceSessions:
 		if s, ok := row.Data.(*model.Session); ok {
 			m.SelectedSessionID = s.ID
+			m.SelectedSessionFilePath = s.FilePath
+			m.SelectedSessionSubagentDir = s.SubagentDir
 			m.SelectedTurns = m.DataProvider.GetTurns(s.FilePath)
 			agents := m.DataProvider.GetAgents(s.ID)
 			m.SubagentTurns = nil
@@ -466,6 +490,9 @@ func (m *AppModel) drillInto(rt model.ResourceType) {
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
 	m.ContentOffset = 0
+	if rt == model.ResourceSessionChat {
+		m.ChatFollow = true
+	}
 	m.refreshMenu()
 }
 
@@ -540,6 +567,10 @@ func (m AppModel) View() string {
 			maxOffset = 0
 		}
 		offset := m.ContentOffset
+		// Follow mode: always show the bottom of the content.
+		if m.ChatFollow && m.Resource == model.ResourceSessionChat {
+			offset = maxOffset
+		}
 		if offset > maxOffset {
 			offset = maxOffset
 		}

@@ -713,6 +713,69 @@ func TestJumpPreservesFilterStack(t *testing.T) {
 	}
 }
 
+func TestSessionChat_FollowMode_InitialDrillDown(t *testing.T) {
+	s := &model.Session{ID: "sess-abc123", FilePath: "/tmp/fake.jsonl"}
+	app := newApp(model.ResourceSessions)
+	app.Table.SetRows([]ui.Row{{
+		Cells: []string{s.ShortID(), "topic", "2", "10", "1k", "1h"},
+		Data:  s,
+	}})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.Resource != model.ResourceSessionChat {
+		t.Fatalf("expected resource=session-chat, got %s", app.Resource)
+	}
+	if !app.ChatFollow {
+		t.Error("expected ChatFollow=true after drill-down into session-chat")
+	}
+}
+
+func TestSessionChat_FollowMode_ScrollUp_DisablesFollow(t *testing.T) {
+	app := newApp(model.ResourceSessionChat)
+	app.ChatFollow = true
+
+	app = updateApp(app, keyMsg("k"))
+
+	if app.ChatFollow {
+		t.Error("expected ChatFollow=false after scrolling up with k")
+	}
+}
+
+func TestSessionChat_FollowMode_G_EnablesFollow(t *testing.T) {
+	app := newApp(model.ResourceSessionChat)
+	app.ChatFollow = false
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+
+	if !app.ChatFollow {
+		t.Error("expected ChatFollow=true after pressing G in session-chat")
+	}
+}
+
+func TestSessionChat_NavigateBack_ClearsState(t *testing.T) {
+	app := newApp(model.ResourceSessionChat)
+	app.SelectedSessionID = "sess-abc123"
+	app.SelectedSessionFilePath = "/tmp/fake.jsonl"
+	app.SelectedSessionSubagentDir = "/tmp/subagents"
+	app.ChatFollow = true
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if app.Resource != model.ResourceSessions {
+		t.Errorf("expected resource=sessions after Esc from session-chat, got %s", app.Resource)
+	}
+	if app.SelectedSessionFilePath != "" {
+		t.Errorf("expected SelectedSessionFilePath cleared, got %q", app.SelectedSessionFilePath)
+	}
+	if app.SelectedSessionSubagentDir != "" {
+		t.Errorf("expected SelectedSessionSubagentDir cleared, got %q", app.SelectedSessionSubagentDir)
+	}
+	if app.ChatFollow {
+		t.Error("expected ChatFollow=false after navigating back from session-chat")
+	}
+}
+
 func TestPluginItemDetailViewHidesJumpHints(t *testing.T) {
 	app := newApp(model.ResourcePluginItemDetail)
 	app.Width = termWidth
