@@ -95,6 +95,7 @@ type DataProvider interface {
 	GetAgents(sessionID string) []*model.Agent
 	GetPlugins(projectHash string) []*model.Plugin
 	GetMemories(projectHash string) []*model.Memory
+	GetTurns(filePath string) []model.Turn
 }
 
 // NewAppModel creates a new application model.

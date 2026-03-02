@@ -370,6 +370,7 @@ func (d *demoDataProvider) GetPlugins(_ string) []*model.Plugin { return d.plugi
 func (d *demoDataProvider) GetMemories(_ string) []*model.Memory {
 	return demo.GenerateMemories()
 }
+func (d *demoDataProvider) GetTurns(_ string) []model.Turn { return nil }
 
 // --- Live Data Provider ---
 
@@ -630,6 +631,38 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 	}
 
 	return agents
+}
+
+func (l *liveDataProvider) GetTurns(filePath string) []model.Turn {
+	parsed, err := transcript.ParseFile(filePath)
+	if err != nil {
+		return nil
+	}
+	turns := make([]model.Turn, 0, len(parsed.Turns))
+	for _, t := range parsed.Turns {
+		turn := model.Turn{
+			Role:         t.Role,
+			Text:         t.Text,
+			Thinking:     t.Thinking,
+			ModelName:    t.Model,
+			InputTokens:  t.Usage.InputTokens,
+			OutputTokens: t.Usage.OutputTokens,
+			Timestamp:    t.Timestamp,
+		}
+		for _, tc := range t.ToolCalls {
+			turn.ToolCalls = append(turn.ToolCalls, &model.ToolCall{
+				ID:        tc.ID,
+				Name:      tc.Name,
+				Input:     tc.Input,
+				Result:    tc.Result,
+				IsError:   tc.IsError,
+				Timestamp: tc.Timestamp,
+				Duration:  tc.Duration,
+			})
+		}
+		turns = append(turns, turn)
+	}
+	return turns
 }
 
 // mdTitle reads the first `# Heading` line from a markdown file and returns
