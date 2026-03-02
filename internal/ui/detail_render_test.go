@@ -201,6 +201,33 @@ func TestRenderSessionChat_ToolCallLines(t *testing.T) {
 	}
 }
 
+func TestRenderSessionChat_SubagentBubble(t *testing.T) {
+	taskInput := json.RawMessage(`{"description":"Explore codebase","subagent_type":"Explore"}`)
+	mainTurns := []model.Turn{
+		{
+			Role: "assistant",
+			Text: "Let me explore.",
+			ToolCalls: []*model.ToolCall{
+				{Name: "Task", Input: taskInput, IsError: false},
+			},
+		},
+	}
+	subTurns := [][]model.Turn{
+		{
+			{Role: "assistant", Text: "Found 42 files.", ModelName: "claude-sonnet-4-6"},
+		},
+	}
+	subTypes := []model.AgentType{model.AgentTypeExplore}
+
+	got := ui.RenderSessionChat(mainTurns, subTurns, subTypes, 120)
+	if !strings.Contains(got, "Found 42 files.") {
+		t.Errorf("expected subagent text in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Explorer") || !strings.Contains(got, "🔍") {
+		t.Errorf("expected subagent label with icon, got:\n%s", got)
+	}
+}
+
 func TestRenderPluginItemDetail_Hook_NoScriptsShowsOnlyJSON(t *testing.T) {
 	cacheDir := t.TempDir()
 	hooksDir := filepath.Join(cacheDir, "hooks")
