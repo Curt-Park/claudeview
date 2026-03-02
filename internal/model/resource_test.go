@@ -54,3 +54,12 @@ func TestAllResourceNames(t *testing.T) {
 		}
 	}
 }
+
+func TestResourceSessionChatExists(t *testing.T) {
+	if model.ResourceSessionChat == "" {
+		t.Error("ResourceSessionChat should be non-empty")
+	}
+	if string(model.ResourceSessionChat) != "session-chat" {
+		t.Errorf("expected 'session-chat', got %q", model.ResourceSessionChat)
+	}
+}

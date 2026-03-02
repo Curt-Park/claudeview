@@ -12,6 +12,7 @@ const (
 	ResourcePluginDetail     ResourceType = "plugin-detail"
 	ResourcePluginItemDetail ResourceType = "plugin-item-detail"
 	ResourceMemoryDetail     ResourceType = "memory-detail"
+	ResourceSessionChat      ResourceType = "session-chat"
 )
 
 // ResourceAliases maps shorthand commands to full resource names.
