@@ -1,6 +1,7 @@
 package ui_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -136,6 +137,67 @@ func TestRenderSessionChat_NilTurnsReturnsEmpty(t *testing.T) {
 	got := ui.RenderSessionChat(nil, nil, nil, 80)
 	if strings.TrimSpace(got) != "" {
 		t.Errorf("expected empty output for nil turns, got %q", got)
+	}
+}
+
+func TestRenderSessionChat_ClaudeBubble(t *testing.T) {
+	turns := []model.Turn{
+		{
+			Role:         "assistant",
+			Text:         "네, 시작하겠습니다.",
+			ModelName:    "claude-sonnet-4-6",
+			InputTokens:  500,
+			OutputTokens: 100,
+			Timestamp:    time.Date(2026, 3, 2, 9, 14, 0, 0, time.UTC),
+		},
+	}
+	got := ui.RenderSessionChat(turns, nil, nil, 120)
+	if !strings.Contains(got, "네, 시작하겠습니다.") {
+		t.Errorf("expected assistant text, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Claude") {
+		t.Errorf("expected 'Claude' label, got:\n%s", got)
+	}
+	if !strings.Contains(got, "09:14") {
+		t.Errorf("expected timestamp, got:\n%s", got)
+	}
+	if !strings.Contains(got, "600") || !strings.Contains(got, "tok") {
+		t.Errorf("expected token count (600 total), got:\n%s", got)
+	}
+}
+
+func TestRenderSessionChat_ThinkingDim(t *testing.T) {
+	turns := []model.Turn{
+		{Role: "assistant", Text: "response", Thinking: "let me think about this carefully"},
+	}
+	got := ui.RenderSessionChat(turns, nil, nil, 120)
+	if !strings.Contains(got, "think") {
+		t.Errorf("expected thinking content in output, got:\n%s", got)
+	}
+}
+
+func TestRenderSessionChat_ToolCallLines(t *testing.T) {
+	input := json.RawMessage(`{"file_path":"internal/ui/app.go"}`)
+	result := json.RawMessage(`"120 lines\nof content"`)
+	turns := []model.Turn{
+		{
+			Role: "assistant",
+			Text: "done",
+			ToolCalls: []*model.ToolCall{
+				{Name: "Read", Input: input, Result: result, IsError: false},
+				{Name: "Bash", Input: json.RawMessage(`{"command":"make test"}`), IsError: true},
+			},
+		},
+	}
+	got := ui.RenderSessionChat(turns, nil, nil, 120)
+	if !strings.Contains(got, "Read") {
+		t.Errorf("expected 'Read' tool name, got:\n%s", got)
+	}
+	if !strings.Contains(got, "✓") {
+		t.Errorf("expected ✓ for successful tool, got:\n%s", got)
+	}
+	if !strings.Contains(got, "✗") {
+		t.Errorf("expected ✗ for failed tool, got:\n%s", got)
 	}
 }
 
