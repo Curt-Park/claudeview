@@ -12,6 +12,7 @@ func TestTurn_HasExpectedFields(t *testing.T) {
 		Role:         "assistant",
 		Text:         "hello",
 		Thinking:     "hmm",
+		ToolCalls:    []*model.ToolCall{},
 		ModelName:    "claude-sonnet",
 		InputTokens:  100,
 		OutputTokens: 50,
