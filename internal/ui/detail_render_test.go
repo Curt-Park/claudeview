@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Curt-Park/claudeview/internal/model"
 	"github.com/Curt-Park/claudeview/internal/ui"
@@ -102,6 +103,39 @@ func TestRenderPluginItemDetail_Hook_ShowsCommandScripts(t *testing.T) {
 	}
 	if !strings.Contains(got, "echo session-stop") {
 		t.Errorf("expected script content in output, got %q", got)
+	}
+}
+
+func TestRenderSessionChat_UserBubble(t *testing.T) {
+	turns := []model.Turn{
+		{Role: "user", Text: "Hello, Claude!", Timestamp: time.Date(2026, 3, 2, 9, 13, 0, 0, time.UTC)},
+	}
+	got := ui.RenderSessionChat(turns, nil, nil, 80)
+	if !strings.Contains(got, "Hello, Claude!") {
+		t.Errorf("expected user text in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "You") {
+		t.Errorf("expected 'You' label in user bubble, got:\n%s", got)
+	}
+	if !strings.Contains(got, "09:13") {
+		t.Errorf("expected timestamp in user bubble, got:\n%s", got)
+	}
+}
+
+func TestRenderSessionChat_MultilineUserBubble(t *testing.T) {
+	turns := []model.Turn{
+		{Role: "user", Text: "Requirement:\n- req1\n- req2", Timestamp: time.Now()},
+	}
+	got := ui.RenderSessionChat(turns, nil, nil, 80)
+	if !strings.Contains(got, "req1") || !strings.Contains(got, "req2") {
+		t.Errorf("expected multiline text preserved, got:\n%s", got)
+	}
+}
+
+func TestRenderSessionChat_NilTurnsReturnsEmpty(t *testing.T) {
+	got := ui.RenderSessionChat(nil, nil, nil, 80)
+	if strings.TrimSpace(got) != "" {
+		t.Errorf("expected empty output for nil turns, got %q", got)
 	}
 }
 
