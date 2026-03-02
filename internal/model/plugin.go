@@ -322,6 +322,84 @@ func countFiles(dir, ext string) int {
 	return count
 }
 
+// HookScript holds a script path and its content, resolved from a hook command.
+type HookScript struct {
+	Path    string
+	Content string
+}
+
+// ReadHookCommandScripts returns the contents of script files referenced by command fields
+// in a hook item's JSON configuration. It expands ${CLAUDE_PLUGIN_ROOT} using contentDir
+// (the effective plugin root) and reads any script files it can locate.
+func ReadHookCommandScripts(item *PluginItem) []HookScript {
+	if item.Category != "hook" {
+		return nil
+	}
+	cd := contentDir(item.CacheDir)
+	jsonPath := filepath.Join(cd, "hooks", "hooks.json")
+	data, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return nil
+	}
+	var wrapper struct {
+		Hooks map[string]json.RawMessage `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil
+	}
+	raw, ok := wrapper.Hooks[item.Name]
+	if !ok {
+		return nil
+	}
+	var entries []struct {
+		Hooks []struct {
+			Type    string `json:"type"`
+			Command string `json:"command"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil
+	}
+	var scripts []HookScript
+	seen := map[string]bool{}
+	for _, entry := range entries {
+		for _, h := range entry.Hooks {
+			if h.Type != "command" || h.Command == "" {
+				continue
+			}
+			for _, path := range resolveScriptPaths(h.Command, cd) {
+				if seen[path] {
+					continue
+				}
+				seen[path] = true
+				content, err := os.ReadFile(path)
+				if err != nil {
+					continue
+				}
+				scripts = append(scripts, HookScript{Path: path, Content: string(content)})
+			}
+		}
+	}
+	return scripts
+}
+
+// resolveScriptPaths expands ${CLAUDE_PLUGIN_ROOT} in cmd using pluginRoot,
+// then returns paths of any readable script files found among the command tokens.
+func resolveScriptPaths(cmd, pluginRoot string) []string {
+	expanded := strings.ReplaceAll(cmd, "${CLAUDE_PLUGIN_ROOT}", pluginRoot)
+	var paths []string
+	for _, token := range strings.Fields(expanded) {
+		token = strings.Trim(token, `"'`)
+		if !strings.HasPrefix(token, "/") && !strings.HasPrefix(token, "./") {
+			continue
+		}
+		if info, err := os.Stat(token); err == nil && !info.IsDir() {
+			paths = append(paths, token)
+		}
+	}
+	return paths
+}
+
 // normalizeJSON re-indents raw JSON bytes with consistent 2-space indentation,
 // stripping any original indentation carried over from the parent JSON structure.
 func normalizeJSON(raw json.RawMessage) string {
