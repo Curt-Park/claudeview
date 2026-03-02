@@ -95,7 +95,7 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 	case model.ResourceProjects:
 		items = append(items, MenuItem{Key: "enter", Desc: "see sessions"})
 	case model.ResourceSessions:
-		items = append(items, MenuItem{Key: "enter", Desc: "see agents"})
+		items = append(items, MenuItem{Key: "enter", Desc: "view chat"})
 	case model.ResourceAgents:
 		// no enter hint
 	case model.ResourcePlugins:
@@ -113,6 +113,8 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 			items = append(items, MenuItem{Key: "esc", Desc: "see projects"})
 		case model.ResourceAgents:
 			items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
+		case model.ResourceSessionChat:
+			items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
 		case model.ResourcePlugins, model.ResourceMemory:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
 		case model.ResourcePluginDetail, model.ResourcePluginItemDetail, model.ResourceMemoryDetail:
@@ -128,7 +130,7 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 // so the filter key is omitted.
 func TableUtilItems(rt model.ResourceType) []MenuItem {
 	switch rt {
-	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail:
+	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail, model.ResourceSessionChat:
 		return nil
 	}
 	return []MenuItem{
