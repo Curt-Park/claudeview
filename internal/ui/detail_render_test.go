@@ -13,7 +13,7 @@ import (
 )
 
 func TestRenderPluginItemDetail_Nil(t *testing.T) {
-	got := ui.RenderPluginItemDetail(nil)
+	got := ui.RenderPluginItemDetail(nil, 80)
 	if got != "" {
 		t.Errorf("expected empty string for nil item, got %q", got)
 	}
@@ -25,12 +25,12 @@ func TestRenderPluginItemDetail_ShowsSkillContent(t *testing.T) {
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatalf("failed to create skill dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(skillDir, "my-skill.md"), []byte("# My Skill\nDoes things."), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# My Skill\nDoes things."), 0o644); err != nil {
 		t.Fatalf("failed to write skill file: %v", err)
 	}
 
 	item := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: cacheDir}
-	got := ui.RenderPluginItemDetail(item)
+	got := ui.RenderPluginItemDetail(item, 80)
 	if !strings.Contains(got, "my-skill") {
 		t.Errorf("expected output to contain item name %q, got %q", "my-skill", got)
 	}
@@ -44,14 +44,14 @@ func TestRenderPluginItemDetail_ShowsSkillContent(t *testing.T) {
 
 func TestRenderPluginItemDetail_ErrorOnMissingContent(t *testing.T) {
 	item := &model.PluginItem{Name: "missing-skill", Category: "skill", CacheDir: t.TempDir()}
-	got := ui.RenderPluginItemDetail(item)
+	got := ui.RenderPluginItemDetail(item, 80)
 	if !strings.Contains(strings.ToLower(got), "error") && !strings.Contains(got, "no content") {
 		t.Errorf("expected output to indicate error or missing content, got %q", got)
 	}
 }
 
 func TestRenderMemoryDetail_Nil(t *testing.T) {
-	got := ui.RenderMemoryDetail(nil)
+	got := ui.RenderMemoryDetail(nil, 80)
 	if got != "" {
 		t.Errorf("expected empty string for nil memory, got %q", got)
 	}
@@ -64,7 +64,7 @@ func TestRenderMemoryDetail_ReturnsFileContent(t *testing.T) {
 	}
 
 	m := &model.Memory{Path: tmpFile}
-	got := ui.RenderMemoryDetail(m)
+	got := ui.RenderMemoryDetail(m, 80)
 	if !strings.Contains(got, "hello world") {
 		t.Errorf("expected output to contain %q, got %q", "hello world", got)
 	}
@@ -72,7 +72,7 @@ func TestRenderMemoryDetail_ReturnsFileContent(t *testing.T) {
 
 func TestRenderMemoryDetail_ErrorOnBadPath(t *testing.T) {
 	m := &model.Memory{Path: "/nonexistent/path.md"}
-	got := ui.RenderMemoryDetail(m)
+	got := ui.RenderMemoryDetail(m, 80)
 	if !strings.Contains(strings.ToLower(got), "error") {
 		t.Errorf("expected output to contain %q for bad path, got %q", "error", got)
 	}
@@ -97,7 +97,7 @@ func TestRenderPluginItemDetail_Hook_ShowsCommandScripts(t *testing.T) {
 	}
 
 	item := &model.PluginItem{Name: "Stop", Category: "hook", CacheDir: cacheDir}
-	got := ui.RenderPluginItemDetail(item)
+	got := ui.RenderPluginItemDetail(item, 80)
 
 	if !strings.Contains(got, "command scripts below") {
 		t.Errorf("expected 'command scripts below' section, got %q", got)
@@ -242,7 +242,7 @@ func TestRenderPluginItemDetail_Hook_NoScriptsShowsOnlyJSON(t *testing.T) {
 	}
 
 	item := &model.PluginItem{Name: "PreToolUse", Category: "hook", CacheDir: cacheDir}
-	got := ui.RenderPluginItemDetail(item)
+	got := ui.RenderPluginItemDetail(item, 80)
 
 	if strings.Contains(got, "command scripts below") {
 		t.Errorf("expected no 'command scripts below' section for inline command, got %q", got)

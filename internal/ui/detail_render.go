@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Curt-Park/claudeview/internal/model"
 )
@@ -206,19 +207,19 @@ func agentDisplayName(t model.AgentType) string {
 }
 
 // RenderPluginItemDetail renders the content of a selected plugin item.
-func RenderPluginItemDetail(item *model.PluginItem) string {
+func RenderPluginItemDetail(item *model.PluginItem, width int) string {
 	if item == nil {
 		return ""
 	}
 	header := StyleTitle.Render(item.Name) + "  " + StyleDim.Render(item.Category)
 	content := model.ReadPluginItemContent(item)
-	result := header + "\n\n" + content
+	result := header + "\n\n" + ansi.Wrap(content, width, "")
 	if item.Category == "hook" {
 		scripts := model.ReadHookCommandScripts(item)
 		if len(scripts) > 0 {
 			result += "\n\ncommand scripts below:\n"
 			for _, s := range scripts {
-				result += "\n" + StyleDim.Render("--- "+s.Path+" ---") + "\n" + s.Content
+				result += "\n" + StyleDim.Render("--- "+s.Path+" ---") + "\n" + ansi.Wrap(s.Content, width, "")
 			}
 		}
 	}
@@ -226,7 +227,7 @@ func RenderPluginItemDetail(item *model.PluginItem) string {
 }
 
 // RenderMemoryDetail reads and returns the raw content of a memory file.
-func RenderMemoryDetail(m *model.Memory) string {
+func RenderMemoryDetail(m *model.Memory, width int) string {
 	if m == nil {
 		return ""
 	}
@@ -234,5 +235,5 @@ func RenderMemoryDetail(m *model.Memory) string {
 	if err != nil {
 		return fmt.Sprintf("error reading %s: %v", m.Path, err)
 	}
-	return string(data)
+	return ansi.Wrap(string(data), width, "")
 }

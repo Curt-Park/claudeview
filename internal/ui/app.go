@@ -261,9 +261,9 @@ func (m AppModel) contentMaxOffset() int {
 	var contentStr string
 	switch m.Resource {
 	case model.ResourcePluginItemDetail:
-		contentStr = RenderPluginItemDetail(m.SelectedPluginItem)
+		contentStr = RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
 	case model.ResourceMemoryDetail:
-		contentStr = RenderMemoryDetail(m.SelectedMemory)
+		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
 	case model.ResourceSessionChat:
 		contentStr = RenderSessionChat(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes, m.contentWidth())
 	default:
@@ -523,9 +523,9 @@ func (m AppModel) View() string {
 	var contentStr string
 	switch m.Resource {
 	case model.ResourcePluginItemDetail:
-		contentStr = RenderPluginItemDetail(m.SelectedPluginItem)
+		contentStr = RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
 	case model.ResourceMemoryDetail:
-		contentStr = RenderMemoryDetail(m.SelectedMemory)
+		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
 	case model.ResourceSessionChat:
 		contentStr = RenderSessionChat(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes, m.contentWidth())
 	default:
