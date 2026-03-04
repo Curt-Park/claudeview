@@ -74,7 +74,7 @@ func (c ChatItem) MessagePreview(max int) string {
 	}
 	var parts []string
 
-	// Add text preview (first line, whitespace-collapsed).
+	// Add text preview (first non-blank line, whitespace-collapsed).
 	// Check Turn.Text first, then fall back to ExtraTurns for collapsed subagents
 	// where the first turn may be tool-only.
 	text := c.Turn.Text
@@ -87,8 +87,7 @@ func (c ChatItem) MessagePreview(max int) string {
 		}
 	}
 	if text != "" {
-		line := strings.SplitN(text, "\n", 2)[0]
-		line = strings.TrimSpace(line)
+		line := cleanTextPreview(text)
 		if line != "" {
 			parts = append(parts, line)
 		}
@@ -112,6 +111,50 @@ func (c ChatItem) MessagePreview(max int) string {
 		result = string([]rune(result)[:max-3]) + "..."
 	}
 	return result
+}
+
+// cleanTextPreview extracts a meaningful single-line preview from turn text.
+// Handles system-injected content (command tags, skill responses, local command
+// output) and skips leading blank lines.
+func cleanTextPreview(text string) string {
+	// Handle <command-message> / <command-name> user turns (slash commands).
+	// Prefer <command-name> (includes / prefix) when present.
+	switch {
+	case strings.HasPrefix(text, "<command-message>"):
+		if name := extractXMLContent(text, "command-name"); name != "" {
+			return name
+		}
+		if name := extractXMLContent(text, "command-message"); name != "" {
+			return "/" + name
+		}
+	case strings.HasPrefix(text, "<command-name>"):
+		if name := extractXMLContent(text, "command-name"); name != "" {
+			return name
+		}
+	case strings.HasPrefix(text, "Base directory for this skill:"):
+		return "(skill loaded)"
+	case strings.HasPrefix(text, "<local-command-caveat>"),
+		strings.HasPrefix(text, "<local-command-stdout>"),
+		strings.HasPrefix(text, "<local-command-stderr>"):
+		return "(command output)"
+	}
+
+	// Collapse newlines into spaces so the preview shows as much context as
+	// possible in a single line (the caller truncates to the column width).
+	line := strings.Join(strings.Fields(text), " ")
+	return line
+}
+
+// extractXMLContent returns the trimmed text inside the first <tag>…</tag> in s.
+func extractXMLContent(s, tag string) string {
+	open := "<" + tag + ">"
+	close := "</" + tag + ">"
+	start := strings.Index(s, open)
+	end := strings.Index(s, close)
+	if start >= 0 && end > start+len(open) {
+		return strings.TrimSpace(s[start+len(open) : end])
+	}
+	return ""
 }
 
 // ActionLabel returns the first tool name + "+N" count, or "-".

@@ -239,6 +239,59 @@ func TestBuildChatItems_SubagentSkipsContentlessPrimary(t *testing.T) {
 	}
 }
 
+func TestCleanTextPreview(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"plain text", "hello world", "hello world"},
+		{"multiline collapsed", "first line\nsecond line", "first line second line"},
+		{"leading blank lines collapsed", "\n\n\nactual content\nmore", "actual content more"},
+		{"only blank lines", "\n\n\n", ""},
+		{"command-message with command-name",
+			"<command-message>sync-knowledge</command-message>\n<command-name>/autology:sync-knowledge</command-name>",
+			"/autology:sync-knowledge"},
+		{"command-message only",
+			"<command-message>autology:sync-knowledge</command-message>",
+			"/autology:sync-knowledge"},
+		{"command-name only",
+			"<command-name>/autology:triage-knowledge</command-name>\nsome body",
+			"/autology:triage-knowledge"},
+		{"skill response",
+			"Base directory for this skill: /home/user/.claude/plugins/cache/autology/autology/0.10.2/skills/sync-knowledge\n\n## Overview",
+			"(skill loaded)"},
+		{"local-command-stdout", "<local-command-stdout>some output</local-command-stdout>", "(command output)"},
+		{"local-command-stderr", "<local-command-stderr>error msg</local-command-stderr>", "(command output)"},
+		{"local-command-caveat", "<local-command-caveat>warning</local-command-caveat>", "(command output)"},
+		{"regular text with leading whitespace", "  trimmed  ", "trimmed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cleanTextPreview(tt.text)
+			if got != tt.want {
+				t.Errorf("cleanTextPreview(%q) = %q, want %q", tt.text, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMessagePreview_CleanedText(t *testing.T) {
+	// Verify MessagePreview collapses newlines.
+	c := ChatItem{Turn: model.Turn{Role: "assistant", Text: "\n\n\n<analysis>\nSome analysis"}}
+	got := c.MessagePreview(120)
+	if got != "<analysis> Some analysis" {
+		t.Errorf("expected collapsed text, got %q", got)
+	}
+
+	// Command-message user turn.
+	c2 := ChatItem{Turn: model.Turn{Role: "user", Text: "<command-message>sync</command-message>\n<command-name>/autology:sync</command-name>"}}
+	got2 := c2.MessagePreview(120)
+	if got2 != "/autology:sync" {
+		t.Errorf("expected /autology:sync, got %q", got2)
+	}
+}
+
 func TestTimeLabel_NegativeDuration(t *testing.T) {
 	now := time.Now()
 	prev := ChatItem{Turn: model.Turn{Timestamp: now}}
