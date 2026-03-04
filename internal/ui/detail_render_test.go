@@ -1,17 +1,19 @@
 package ui_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Curt-Park/claudeview/internal/model"
 	"github.com/Curt-Park/claudeview/internal/ui"
 )
 
 func TestRenderPluginItemDetail_Nil(t *testing.T) {
-	got := ui.RenderPluginItemDetail(nil)
+	got := ui.RenderPluginItemDetail(nil, 80)
 	if got != "" {
 		t.Errorf("expected empty string for nil item, got %q", got)
 	}
@@ -23,12 +25,12 @@ func TestRenderPluginItemDetail_ShowsSkillContent(t *testing.T) {
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatalf("failed to create skill dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(skillDir, "my-skill.md"), []byte("# My Skill\nDoes things."), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# My Skill\nDoes things."), 0o644); err != nil {
 		t.Fatalf("failed to write skill file: %v", err)
 	}
 
 	item := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: cacheDir}
-	got := ui.RenderPluginItemDetail(item)
+	got := ui.RenderPluginItemDetail(item, 80)
 	if !strings.Contains(got, "my-skill") {
 		t.Errorf("expected output to contain item name %q, got %q", "my-skill", got)
 	}
@@ -42,14 +44,14 @@ func TestRenderPluginItemDetail_ShowsSkillContent(t *testing.T) {
 
 func TestRenderPluginItemDetail_ErrorOnMissingContent(t *testing.T) {
 	item := &model.PluginItem{Name: "missing-skill", Category: "skill", CacheDir: t.TempDir()}
-	got := ui.RenderPluginItemDetail(item)
+	got := ui.RenderPluginItemDetail(item, 80)
 	if !strings.Contains(strings.ToLower(got), "error") && !strings.Contains(got, "no content") {
 		t.Errorf("expected output to indicate error or missing content, got %q", got)
 	}
 }
 
 func TestRenderMemoryDetail_Nil(t *testing.T) {
-	got := ui.RenderMemoryDetail(nil)
+	got := ui.RenderMemoryDetail(nil, 80)
 	if got != "" {
 		t.Errorf("expected empty string for nil memory, got %q", got)
 	}
@@ -62,7 +64,7 @@ func TestRenderMemoryDetail_ReturnsFileContent(t *testing.T) {
 	}
 
 	m := &model.Memory{Path: tmpFile}
-	got := ui.RenderMemoryDetail(m)
+	got := ui.RenderMemoryDetail(m, 80)
 	if !strings.Contains(got, "hello world") {
 		t.Errorf("expected output to contain %q, got %q", "hello world", got)
 	}
@@ -70,7 +72,7 @@ func TestRenderMemoryDetail_ReturnsFileContent(t *testing.T) {
 
 func TestRenderMemoryDetail_ErrorOnBadPath(t *testing.T) {
 	m := &model.Memory{Path: "/nonexistent/path.md"}
-	got := ui.RenderMemoryDetail(m)
+	got := ui.RenderMemoryDetail(m, 80)
 	if !strings.Contains(strings.ToLower(got), "error") {
 		t.Errorf("expected output to contain %q for bad path, got %q", "error", got)
 	}
@@ -95,13 +97,167 @@ func TestRenderPluginItemDetail_Hook_ShowsCommandScripts(t *testing.T) {
 	}
 
 	item := &model.PluginItem{Name: "Stop", Category: "hook", CacheDir: cacheDir}
-	got := ui.RenderPluginItemDetail(item)
+	got := ui.RenderPluginItemDetail(item, 80)
 
 	if !strings.Contains(got, "command scripts below") {
 		t.Errorf("expected 'command scripts below' section, got %q", got)
 	}
 	if !strings.Contains(got, "echo session-stop") {
 		t.Errorf("expected script content in output, got %q", got)
+	}
+}
+
+func TestRenderChatItemDetail_UserBubble(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{Role: "user", Text: "Hello, Claude!", Timestamp: time.Date(2026, 3, 2, 9, 13, 0, 0, time.UTC)},
+	}
+	got := ui.RenderChatItemDetail(item, 80)
+	if !strings.Contains(got, "Hello, Claude!") {
+		t.Errorf("expected user text in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "You") {
+		t.Errorf("expected 'You' label in user bubble, got:\n%s", got)
+	}
+	if !strings.Contains(got, "09:13") {
+		t.Errorf("expected timestamp in user bubble, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_MultilineUserBubble(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{Role: "user", Text: "Requirement:\n- req1\n- req2", Timestamp: time.Now()},
+	}
+	got := ui.RenderChatItemDetail(item, 80)
+	if !strings.Contains(got, "req1") || !strings.Contains(got, "req2") {
+		t.Errorf("expected multiline text preserved, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_ClaudeBubble(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{
+			Role:         "assistant",
+			Text:         "네, 시작하겠습니다.",
+			ModelName:    "claude-sonnet-4-6",
+			InputTokens:  500,
+			OutputTokens: 100,
+			Timestamp:    time.Date(2026, 3, 2, 9, 14, 0, 0, time.UTC),
+		},
+	}
+	got := ui.RenderChatItemDetail(item, 120)
+	if !strings.Contains(got, "네, 시작하겠습니다.") {
+		t.Errorf("expected assistant text, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Claude") {
+		t.Errorf("expected 'Claude' label, got:\n%s", got)
+	}
+	if !strings.Contains(got, "09:14") {
+		t.Errorf("expected timestamp, got:\n%s", got)
+	}
+	if !strings.Contains(got, "600") || !strings.Contains(got, "tok") {
+		t.Errorf("expected token count (600 total), got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_ThinkingDim(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{Role: "assistant", Text: "response", Thinking: "let me think about this carefully"},
+	}
+	got := ui.RenderChatItemDetail(item, 120)
+	if !strings.Contains(got, "think") {
+		t.Errorf("expected thinking content in output, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_ToolCallLines(t *testing.T) {
+	input := json.RawMessage(`{"file_path":"internal/ui/app.go"}`)
+	result := json.RawMessage(`"120 lines\nof content"`)
+	item := ui.ChatItem{
+		Turn: model.Turn{
+			Role: "assistant",
+			Text: "done",
+			ToolCalls: []*model.ToolCall{
+				{Name: "Read", Input: input, Result: result, IsError: false},
+				{Name: "Bash", Input: json.RawMessage(`{"command":"make test"}`), IsError: true},
+			},
+		},
+	}
+	got := ui.RenderChatItemDetail(item, 120)
+	if !strings.Contains(got, "Read") {
+		t.Errorf("expected 'Read' tool name, got:\n%s", got)
+	}
+	if !strings.Contains(got, "✓") {
+		t.Errorf("expected ✓ for successful tool, got:\n%s", got)
+	}
+	if !strings.Contains(got, "✗") {
+		t.Errorf("expected ✗ for failed tool, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_SubagentBubble(t *testing.T) {
+	item := ui.ChatItem{
+		Turn:       model.Turn{Text: "Found 42 files.", ModelName: "claude-sonnet-4-6", Role: "assistant"},
+		IsSubagent: true,
+		AgentType:  model.AgentTypeExplore,
+	}
+	got := ui.RenderChatItemDetail(item, 120)
+	if !strings.Contains(got, "Found 42 files.") {
+		t.Errorf("expected subagent text in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Explorer") || !strings.Contains(got, "🔍") {
+		t.Errorf("expected subagent label with icon, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_GroupedWithExtraTurns(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{
+			Role:         "assistant",
+			Text:         "Let me check the code.",
+			ModelName:    "claude-opus-4-6",
+			InputTokens:  500,
+			OutputTokens: 100,
+			Timestamp:    time.Date(2026, 3, 2, 9, 15, 0, 0, time.UTC),
+			ToolCalls: []*model.ToolCall{
+				{Name: "Grep", Input: json.RawMessage(`{"pattern":"KeyUp"}`)},
+			},
+		},
+		ExtraTurns: []model.Turn{
+			{
+				Role:         "assistant",
+				InputTokens:  300,
+				OutputTokens: 50,
+				ToolCalls: []*model.ToolCall{
+					{Name: "Read", Input: json.RawMessage(`{"file_path":"app.go"}`)},
+					{Name: "Edit", Input: json.RawMessage(`{"file_path":"app.go"}`)},
+				},
+			},
+		},
+	}
+	got := ui.RenderChatItemDetail(item, 120)
+
+	// Primary text should be visible
+	if !strings.Contains(got, "Let me check the code.") {
+		t.Errorf("expected primary text in output, got:\n%s", got)
+	}
+	// Primary tool call
+	if !strings.Contains(got, "Grep") {
+		t.Errorf("expected primary tool call 'Grep', got:\n%s", got)
+	}
+	// ExtraTurn tool calls
+	if !strings.Contains(got, "Read") {
+		t.Errorf("expected extra turn tool call 'Read', got:\n%s", got)
+	}
+	if !strings.Contains(got, "Edit") {
+		t.Errorf("expected extra turn tool call 'Edit', got:\n%s", got)
+	}
+	// Separator
+	if !strings.Contains(got, "continued") {
+		t.Errorf("expected '── continued ──' separator, got:\n%s", got)
+	}
+	// Aggregated tokens: 500+100+300+50 = 950
+	if !strings.Contains(got, "950") {
+		t.Errorf("expected aggregated token count 950, got:\n%s", got)
 	}
 }
 
@@ -119,7 +275,7 @@ func TestRenderPluginItemDetail_Hook_NoScriptsShowsOnlyJSON(t *testing.T) {
 	}
 
 	item := &model.PluginItem{Name: "PreToolUse", Category: "hook", CacheDir: cacheDir}
-	got := ui.RenderPluginItemDetail(item)
+	got := ui.RenderPluginItemDetail(item, 80)
 
 	if strings.Contains(got, "command scripts below") {
 		t.Errorf("expected no 'command scripts below' section for inline command, got %q", got)

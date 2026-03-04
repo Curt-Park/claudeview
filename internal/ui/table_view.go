@@ -225,7 +225,18 @@ func (t TableView) View() string {
 		}
 	}
 
+	// Count content lines that will be rendered.
+	contentLines := 0
+	for i := offset; i < len(rows); i++ {
+		next := contentLines + rowLineCount(rows[i])
+		if next > visible {
+			break
+		}
+		contentLines = next
+	}
+
 	linesUsed := 0
+
 	for i := offset; i < len(rows) && linesUsed < visible; i++ {
 		row := rows[i]
 		sb.WriteString(t.renderRow(row, cols, i == selected))
@@ -238,7 +249,7 @@ func (t TableView) View() string {
 		}
 	}
 
-	// Fill empty lines
+	// Fill empty lines (only when not bottom-aligned, since padding is above)
 	for linesUsed < visible {
 		sb.WriteString(strings.Repeat(" ", t.Width))
 		sb.WriteString("\n")

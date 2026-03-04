@@ -98,14 +98,14 @@ Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`
 | TOPIC       | flex (max 35%) | first line of session topic / summary        |
 | TURNS       | 6              | conversation turn count                      |
 | AGENTS      | 6              | agent count                                  |
-| TOKENS      | flex (max 25%) | token usage string (input + output)          |
+| MODEL:TOKEN | flex (max 25%) | per-model token string (e.g. `opus:125k sonnet:50k`) |
 | LAST ACTIVE | 11             | time since last modification                 |
 
 Each row optionally shows a **subtitle line** (dimmed) with model, cost, and status metadata, indented under TOPIC.
 
 **Note**: PROJECT column only shown in flat access (via `p`/`m` jump, or no project selected).
 
-**Navigation**: Enter → Agents (filtered to this session)
+**Navigation**: Enter → Session Chat (content view for the selected session)
 
 ### 3. Agents
 
@@ -172,7 +172,19 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 - `j/k` / `ctrl+d/u`: scroll content
 - `esc`: return to Plugin Detail table
 
-### 3. Memory Detail
+### 3. Session History (table view)
+- Activated by `enter` on a Sessions row (resource → `history`)
+- Renders a navigable table of chat items (NAME, MESSAGE, ACTION, MODEL:TOKEN, DURATION)
+- Each row is a grouped turn: user messages, Claude responses with tool calls, or subagent responses
+- `enter` on a row → history-detail (content view showing expanded turn detail)
+- **Follow mode** (default on entry): auto-scrolls to the latest row — like `tail -f`
+  - `k` / `ctrl+u` / `g`: scroll up, disables follow mode (position locked)
+  - `G`: jumps to bottom, re-enables follow mode
+  - `j` / `ctrl+d`: scrolls down; re-enables follow mode when bottom is reached
+- Content refreshes on every tick (async) so live sessions update automatically
+- `esc`: return to Sessions table
+
+### 4. Memory Detail
 - Activated by `enter` on a Memories row (resource → `memory-detail`)
 - Shows raw file content of the selected memory file
 - `esc`: return to Memories table
@@ -198,7 +210,7 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 | `G`               | go to bottom                                                      |
 | `ctrl+d` / `pgdn` | page down (half page)                                             |
 | `ctrl+u` / `pgup` | page up (half page)                                               |
-| `enter`           | drill down (projects→sessions; sessions→agents; plugins/memories→detail) |
+| `enter`           | drill down (projects→sessions; sessions→history; plugins/memories→detail) |
 | `esc`             | clear filter (if active); otherwise navigate back                 |
 
 ### Filter Mode (`/`)
@@ -216,7 +228,8 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 ```
 projects
   └─→ sessions (filtered by project)
-        └─→ agents (filtered by session)  [leaf]
+        └─→ history  [table view, follow mode]
+              └─→ history-detail  [leaf, content view]
 
 [p] plugins  ──→  plugin-detail  ──→  plugin-item-detail  [leaf]
 [m] memories ──→  memory-detail  (project context required)

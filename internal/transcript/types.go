@@ -4,12 +4,20 @@ import "encoding/json"
 
 // entry represents a single JSONL line in a transcript file.
 type entry struct {
-	Type      string          `json:"type"`
-	Timestamp string          `json:"timestamp"`
-	UUID      string          `json:"uuid"`
-	SessionID string          `json:"sessionId"`
-	GitBranch string          `json:"gitBranch"`
-	Message   json.RawMessage `json:"message"`
+	Type            string           `json:"type"`
+	Subtype         string           `json:"subtype"`
+	Timestamp       string           `json:"timestamp"`
+	UUID            string           `json:"uuid"`
+	SessionID       string           `json:"sessionId"`
+	GitBranch       string           `json:"gitBranch"`
+	Message         json.RawMessage  `json:"message"`
+	CompactMetadata *compactMetadata `json:"compactMetadata,omitempty"`
+}
+
+// compactMetadata holds metadata for compact_boundary system entries.
+type compactMetadata struct {
+	Trigger   string `json:"trigger"`
+	PreTokens int    `json:"preTokens"`
 }
 
 // messageContent is a polymorphic content block inside a message.

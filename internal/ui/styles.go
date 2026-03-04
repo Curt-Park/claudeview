@@ -93,6 +93,15 @@ var (
 	// StyleRowSubtitle is used for the optional second line of a table row.
 	StyleRowSubtitle         = lipgloss.NewStyle().Foreground(colorGray)
 	StyleRowSubtitleSelected = lipgloss.NewStyle().Background(colorBgSel).Foreground(colorGray)
+
+	// Chat detail styles
+	StyleChatThinking  = lipgloss.NewStyle().Foreground(colorGray)
+	StyleChatToolOK    = lipgloss.NewStyle().Foreground(colorGreen)
+	StyleChatToolErr   = lipgloss.NewStyle().Foreground(colorRed)
+	StyleChatToolName  = lipgloss.NewStyle().Foreground(colorBlue)
+	StyleChatTokens    = lipgloss.NewStyle().Foreground(colorGray)
+	StyleChatTimestamp = lipgloss.NewStyle().Foreground(colorDimGray)
+	StyleChatHeader    = lipgloss.NewStyle().Foreground(colorCyan).Bold(true)
 )
 
 // StatusStyle returns the lipgloss style for a given status.

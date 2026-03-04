@@ -181,8 +181,12 @@ func ReadPluginItemContent(item *PluginItem) string {
 	cd := contentDir(item.CacheDir)
 	switch item.Category {
 	case "skill":
-		// Find first .md file in skills/<name>/
 		skillDir := filepath.Join(cd, "skills", item.Name)
+		// Try SKILL.md first (standard convention across all known plugins).
+		if data, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md")); err == nil {
+			return string(data)
+		}
+		// Fall back to first .md file in directory
 		entries, err := os.ReadDir(skillDir)
 		if err != nil {
 			return fmt.Sprintf("error reading skill directory: %v", err)

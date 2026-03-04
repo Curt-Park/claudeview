@@ -310,7 +310,7 @@ func TestReadPluginItemContent_Skill(t *testing.T) {
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillDir, "my-skill.md"), []byte("skill content"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("skill content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -318,6 +318,26 @@ func TestReadPluginItemContent_Skill(t *testing.T) {
 	got := model.ReadPluginItemContent(item)
 	if got != "skill content" {
 		t.Errorf("ReadPluginItemContent() = %q, want %q", got, "skill content")
+	}
+}
+
+func TestReadPluginItemContent_SkillPrefersSKILLmdOverOtherMD(t *testing.T) {
+	base := makeTempDir(t)
+	skillDir := filepath.Join(base, "skills", "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "EXAMPLES.md"), []byte("example content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("skill content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := &model.PluginItem{Name: "my-skill", Category: "skill", CacheDir: base}
+	got := model.ReadPluginItemContent(item)
+	if got != "skill content" {
+		t.Errorf("ReadPluginItemContent() = %q, want SKILL.md content", got)
 	}
 }
 

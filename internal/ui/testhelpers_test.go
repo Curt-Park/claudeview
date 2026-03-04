@@ -26,6 +26,7 @@ type mockDP struct {
 	agents   []*model.Agent
 	plugins  []*model.Plugin
 	memories []*model.Memory
+	turns    []model.Turn
 }
 
 func (m *mockDP) GetProjects() []*model.Project         { return m.projects }
@@ -33,6 +34,7 @@ func (m *mockDP) GetSessions(_ string) []*model.Session { return m.sessions }
 func (m *mockDP) GetAgents(_ string) []*model.Agent     { return m.agents }
 func (m *mockDP) GetPlugins(_ string) []*model.Plugin   { return m.plugins }
 func (m *mockDP) GetMemories(_ string) []*model.Memory  { return m.memories }
+func (m *mockDP) GetTurns(_ string) []model.Turn        { return m.turns }
 
 // newApp creates an AppModel pre-sized for tests.
 func newApp(resource model.ResourceType) ui.AppModel {
@@ -72,6 +74,28 @@ func sessionRows(n int) []ui.Row {
 		rows[i] = ui.Row{
 			Cells: []string{s.ShortID(), "Refactor auth module", "2", "10", "sonnet:5k", "1h"},
 			Data:  s,
+		}
+	}
+	return rows
+}
+
+// chatItemRows creates table rows from ChatItems for testing the session-chat table.
+func chatItemRows(items []ui.ChatItem) []ui.Row {
+	rows := make([]ui.Row, len(items))
+	for i, item := range items {
+		var prev *ui.ChatItem
+		if i > 0 {
+			prev = &items[i-1]
+		}
+		rows[i] = ui.Row{
+			Cells: []string{
+				item.WhoLabel(),
+				item.MessagePreview(120),
+				item.ActionLabel(),
+				item.ModelTokenLabel(),
+				item.TimeLabel(prev),
+			},
+			Data: item,
 		}
 	}
 	return rows

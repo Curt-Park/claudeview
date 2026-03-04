@@ -12,7 +12,8 @@ Reads Claude Code JSONL transcript files. Provides the data backbone for the liv
 
 | File        | Purpose                                                                           |
 |-------------|-----------------------------------------------------------------------------------|
-| `parser.go` | `ParsedTranscript`, `Turn`, `ToolCall`, `SessionAggregates`, `Usage` — intermediate parsing types; `ParseFile(path)`, `Parse(r)`, `ParseAggregatesIncremental(path, agg)` |
+| `types.go`  | Wire types for JSONL decoding: `entry` (single JSONL line), `messageContent` (polymorphic content block), `Usage` (token counts: InputTokens, OutputTokens, CacheCreationInputTokens, CacheReadInputTokens), `assistantMessage`, `userMessage` (with `textContent()` and `toolResults()` helpers) |
+| `parser.go` | `ParsedTranscript`, `Turn`, `ToolCall`, `SessionAggregates`, `TranscriptCache` — intermediate parsing types; `ParseFile(path)`, `Parse(r)`, `ParseAggregatesIncremental(path, agg)`, `ParseFileIncremental(path, cache)` |
 | `scanner.go`| `SessionInfo`, `ProjectInfo` — directory scan types; `ScanProjects(claudeDir)`, `ScanSubagents(dir)`, `CountSubagents(dir)` |
 
 ## JSONL Format
@@ -36,9 +37,10 @@ Claude Code writes one JSON object per line. Each line is either:
 
 ## Key Functions
 
-- `ParseFile(path)` — full parse; used for session metadata extraction
+- `ParseFile(path)` — full parse; used for agent metadata extraction
 - `Parse(r io.Reader)` — parse from any reader
-- `ParseAggregatesIncremental(path, agg)` — offset-based re-read; avoids re-parsing from the beginning on each refresh tick
+- `ParseAggregatesIncremental(path, agg)` — offset-based re-read for session-level metrics; avoids re-parsing from the beginning on each refresh tick
+- `ParseFileIncremental(path, cache)` — offset-based incremental turns parsing via `TranscriptCache`; used by `liveDataProvider.GetTurns` for the history view. `TranscriptCache` tracks committed turns, a pending assistant turn, and unmatched tool results across calls. `Turns()` returns a snapshot including the pending turn; `Offset()` exposes the read position
 - `ScanProjects(claudeDir)` — enumerate all projects+sessions; used by liveDataProvider
 - `ScanSubagents(dir)` — enumerate subagent transcripts for a session
 - `CountSubagents(dir)` — count subagent transcripts without full enumeration

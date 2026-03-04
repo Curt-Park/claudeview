@@ -19,6 +19,18 @@ func FormatAge(d time.Duration) string {
 	}
 }
 
+// FormatTokenCount formats a token count as "1.5k", "1.5M", etc.
+func FormatTokenCount(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1000:
+		return fmt.Sprintf("%dk", n/1000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
+}
+
 // FormatSize formats a byte count as a human-readable size string.
 func FormatSize(b int64) string {
 	const (

@@ -158,6 +158,26 @@ func TestTableNavItemsPluginItemDetailHasEsc(t *testing.T) {
 	}
 }
 
+func TestSessionChatMenuHints(t *testing.T) {
+	items := ui.TableNavItems(model.ResourceHistory, false)
+	keys := make(map[string]string)
+	for _, it := range items {
+		keys[it.Key] = it.Desc
+	}
+	if _, ok := keys["esc"]; !ok {
+		t.Error("session-chat nav should include esc hint")
+	}
+}
+
+func TestSessionsEnterHintIsChat(t *testing.T) {
+	items := ui.TableNavItems(model.ResourceSessions, false)
+	for _, it := range items {
+		if it.Key == "enter" && it.Desc == "see agents" {
+			t.Error("sessions enter hint should no longer say 'see agents'")
+		}
+	}
+}
+
 func TestSetHighlightMatchesCompoundKey(t *testing.T) {
 	menu := ui.MenuModel{
 		NavItems: []ui.MenuItem{
