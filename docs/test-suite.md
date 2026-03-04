@@ -13,7 +13,7 @@ Tests span four packages. `internal/ui` has the largest test surface (integratio
 | File                    | Coverage                                                    |
 |-------------------------|-------------------------------------------------------------|
 | `app_test.go`           | AppModel integration — key flows, navigation, state transitions, slug group drill-down/navigate-back |
-| `chat_item_test.go`     | `BuildMergedChatItems`, `SubagentIdx` assignment, divider label methods |
+| `chat_item_test.go`     | `BuildMergedChatItems`, `SubagentIdx` assignment, content-less primary skip, negative `TimeLabel`, divider label methods |
 | `render_test.go`        | Full render output assertions / golden snapshots            |
 | `detail_render_test.go` | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail` output (including full subagent transcript rendering) |
 | `filter_test.go`        | `FilterModel` unit tests                                    |

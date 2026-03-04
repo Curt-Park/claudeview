@@ -55,7 +55,7 @@ type rootModel struct {
 
 On `Init`, it fires `loadData()` synchronously, then async reloads via `loadDataAsync()` which sends a `dataLoadedMsg` back into the update loop. This keeps the initial render fast while data refreshes in the background.
 
-`dataLoadedMsg` carries resource-specific payloads including `turns []model.Turn`, `subagentTurns [][]model.Turn`, `subagentTypes []model.AgentType`, and slug group fields (`slugGroupTurns`, `slugGroupSubTurns`, `slugGroupSubTypes`) for history view refresh. `loadDataAsync()` handles `ResourceHistory`/`ResourceHistoryDetail`: when `SlugSessions` has multiple sessions, it loads turns/subagents for each session in the group; otherwise it reads single-session data via `app.SelectedSessionFilePath` and `app.SelectedSessionSubagentDir`. On receipt, either `app.SetSlugGroupData()` or the single-session fields are updated, then `RebuildChatItems()` refreshes the flattened chat item list and `syncView` updates the table. `GetSessions` applies `model.GroupSessionsBySlug` before returning, sorting sessions into slug-grouped order with tree prefixes.
+`dataLoadedMsg` carries resource-specific payloads including `turns []model.Turn`, `subagentTurns [][]model.Turn`, `subagentTypes []model.AgentType`, and slug group fields (`slugGroupSessions`, `slugGroupTurns`, `slugGroupSubTurns`, `slugGroupSubTypes`) for history view refresh. `loadDataAsync()` handles `ResourceHistory`/`ResourceHistoryDetail`: it calls `refreshSlugGroup()` to re-scan sessions and detect newly created (or removed) sessions under the same slug. When the refreshed group has multiple sessions, it loads turns/subagents for each; otherwise it reads single-session data via `app.SelectedSessionFilePath` and `app.SelectedSessionSubagentDir`. On receipt, `SlugSessions` is updated if `slugGroupSessions` is non-nil, then either `app.SetSlugGroupData()` or the single-session fields are set, `RebuildChatItems()` refreshes the flattened chat item list, and `syncView` updates the table. `GetSessions` applies `model.GroupSessionsBySlug` before returning, sorting sessions into slug-grouped order with tree prefixes.
 
 ## DataProvider Implementations
 
@@ -75,7 +75,9 @@ Both implement `ui.DataProvider`:
 
 - `parseAgentsFromSession(s *model.Session)` — builds `[]*model.Agent` by parsing the session's transcript and subagent transcripts
 - `populateToolCalls(agent *model.Agent, sessionID string, parsed *transcript.ParsedTranscript)` — fills agent's `ToolCalls` slice and sets `LastActivity`
-- `detectAgentType(id string)` — infers `AgentType` from the agent ID string
+- `extractSubagentTypes(turns []model.Turn)` / `extractSubagentTypesFromTranscript(turns []transcript.Turn)` — reads `subagent_type` from Agent tool call JSON input to determine each subagent's `AgentType`
+- `agentTypeFromInput(input json.RawMessage)` — parses the `subagent_type` field from a single Agent tool call's input
+- `refreshSlugGroup(dp, projectHash, sessionID, currentSlug)` — re-scans sessions to detect new/removed sessions in a slug group during history view refresh
 - `mdTitle(path string)` — reads a Markdown file and returns the first `# Heading` text
 
 ## Related
