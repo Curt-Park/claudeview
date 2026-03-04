@@ -10,9 +10,11 @@ Wires all internal packages into a runnable Bubble Tea application. Contains the
 
 ## Files
 
-| File       | Purpose                                                                         |
-|------------|---------------------------------------------------------------------------------|
-| `root.go`  | Cobra `rootCmd`; `rootModel`; `liveDataProvider`; `demoDataProvider`; async load |
+| File              | Purpose                                                                         |
+|-------------------|---------------------------------------------------------------------------------|
+| `root.go`         | Cobra `rootCmd`; `rootModel`; `liveDataProvider`; `demoDataProvider`; async load |
+| `update.go`       | `--update` self-update: fetch latest GitHub release, download, atomic replace    |
+| `update_test.go`  | 4 tests for update logic using `httptest.NewServer` (no network)                |
 
 ## rootModel
 

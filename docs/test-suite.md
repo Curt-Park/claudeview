@@ -6,7 +6,7 @@ tags: [testing, ui, internals]
 
 # Test Suite
 
-Tests span four packages. `internal/ui` has the largest test surface (integration + render), while `internal/config`, `internal/model`, and `internal/transcript` each have unit tests for their own logic. The `internal/view` and `internal/demo` packages have no test files.
+Tests span five packages. `internal/ui` has the largest test surface (integration + render), while `cmd`, `internal/config`, `internal/model`, and `internal/transcript` each have unit tests for their own logic. The `internal/view` and `internal/demo` packages have no test files.
 
 ## Test Files — `internal/ui` (`package ui_test`)
 
@@ -25,6 +25,7 @@ Tests span four packages. `internal/ui` has the largest test surface (integratio
 
 | Package                | Files                                        | Count |
 |------------------------|----------------------------------------------|-------|
+| `cmd`                  | `update_test.go`                             | 4     |
 | `internal/config`      | `settings_test.go`, `plugins_test.go`        | ~15   |
 | `internal/model`       | `agent_test.go`, `session_test.go`, `project_test.go`, `tool_call_test.go`, `plugin_test.go`, `resource_test.go`, `turn_test.go`, `slug_group_test.go` | ~52 |
 | `internal/transcript`  | `scanner_test.go`, `parser_test.go` (includes slug extraction tests) | ~13 |
