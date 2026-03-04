@@ -87,6 +87,13 @@ func ChatItemKey(item ChatItem) string {
 	if tcs := item.AllToolCalls(); len(tcs) > 0 {
 		key += "|" + tcs[0].Name
 	}
+	// Include text prefix to disambiguate items with identical timestamp/role
+	// (e.g. consecutive user turns from local commands at the same second).
+	if t := item.Turn.Text; len(t) > 32 {
+		key += "|" + t[:32]
+	} else if t != "" {
+		key += "|" + t
+	}
 	return key
 }
 
