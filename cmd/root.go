@@ -91,6 +91,11 @@ type dataLoadedMsg struct {
 	subagentTurns [][]model.Turn
 	subagentTypes []model.AgentType
 	resource      model.ResourceType
+
+	// Slug group reload data
+	slugGroupTurns    [][]model.Turn
+	slugGroupSubTurns [][][]model.Turn
+	slugGroupSubTypes [][]model.AgentType
 }
 
 // rootModel wraps AppModel and manages actual resource data.
@@ -283,9 +288,13 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case model.ResourceMemory:
 				rm.memories = msg.memories
 			case model.ResourceHistory, model.ResourceHistoryDetail:
-				rm.app.SelectedTurns = msg.turns
-				rm.app.SubagentTurns = msg.subagentTurns
-				rm.app.SubagentTypes = msg.subagentTypes
+				if len(msg.slugGroupTurns) > 1 {
+					rm.app.SetSlugGroupData(msg.slugGroupTurns, msg.slugGroupSubTurns, msg.slugGroupSubTypes)
+				} else {
+					rm.app.SelectedTurns = msg.turns
+					rm.app.SubagentTurns = msg.subagentTurns
+					rm.app.SubagentTypes = msg.subagentTypes
+				}
 				rm.app.RebuildChatItems()
 				rm.chatItems = rm.app.ChatItems
 			}
@@ -318,6 +327,7 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 	selectedPlugin := rm.app.SelectedPlugin
 	sessionFilePath := rm.app.SelectedSessionFilePath
 	subagentDir := rm.app.SelectedSessionSubagentDir
+	slugSessions := rm.app.SlugSessions
 	dp := rm.dp
 	return func() tea.Msg {
 		msg := dataLoadedMsg{resource: resource}
@@ -337,14 +347,33 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
 		case model.ResourceHistory, model.ResourceHistoryDetail:
-			if sessionFilePath != "" {
-				msg.turns = dp.GetTurns(sessionFilePath)
-			}
-			if subagentDir != "" {
-				subInfos, _ := transcript.ScanSubagents(subagentDir)
-				for _, si := range subInfos {
-					msg.subagentTurns = append(msg.subagentTurns, dp.GetTurns(si.FilePath))
-					msg.subagentTypes = append(msg.subagentTypes, detectAgentType(si.ID))
+			if len(slugSessions) > 1 {
+				// Multi-session slug group: reload all sessions
+				for _, s := range slugSessions {
+					turns := dp.GetTurns(s.FilePath)
+					msg.slugGroupTurns = append(msg.slugGroupTurns, turns)
+					var subTurns [][]model.Turn
+					var subTypes []model.AgentType
+					if s.SubagentDir != "" {
+						subInfos, _ := transcript.ScanSubagents(s.SubagentDir)
+						for _, si := range subInfos {
+							subTurns = append(subTurns, dp.GetTurns(si.FilePath))
+							subTypes = append(subTypes, detectAgentType(si.ID))
+						}
+					}
+					msg.slugGroupSubTurns = append(msg.slugGroupSubTurns, subTurns)
+					msg.slugGroupSubTypes = append(msg.slugGroupSubTypes, subTypes)
+				}
+			} else {
+				if sessionFilePath != "" {
+					msg.turns = dp.GetTurns(sessionFilePath)
+				}
+				if subagentDir != "" {
+					subInfos, _ := transcript.ScanSubagents(subagentDir)
+					for _, si := range subInfos {
+						msg.subagentTurns = append(msg.subagentTurns, dp.GetTurns(si.FilePath))
+						msg.subagentTypes = append(msg.subagentTypes, detectAgentType(si.ID))
+					}
 				}
 			}
 		}
@@ -474,7 +503,7 @@ func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
 			sessions = append(sessions, s)
 		}
 	}
-	return sessions
+	return model.GroupSessionsBySlug(sessions)
 }
 
 func (l *liveDataProvider) GetAgents(sessionID string) []*model.Agent {
@@ -590,6 +619,7 @@ func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Ses
 	s.NumTurns = agg.NumTurns
 	s.Topic = agg.Topic
 	s.Branch = agg.Branch
+	s.Slug = agg.Slug
 	s.ToolCallCount = agg.TotalToolCalls
 	s.AgentCount = 1 + transcript.CountSubagents(si.SubagentDir)
 	if info, err := os.Stat(si.FilePath); err == nil {

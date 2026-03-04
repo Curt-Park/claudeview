@@ -55,7 +55,7 @@ type rootModel struct {
 
 On `Init`, it fires `loadData()` synchronously, then async reloads via `loadDataAsync()` which sends a `dataLoadedMsg` back into the update loop. This keeps the initial render fast while data refreshes in the background.
 
-`dataLoadedMsg` carries resource-specific payloads including `turns []model.Turn`, `subagentTurns [][]model.Turn`, and `subagentTypes []model.AgentType` for history view refresh. `loadDataAsync()` handles `ResourceHistory`/`ResourceHistoryDetail` by reading `app.SelectedSessionFilePath` and `app.SelectedSessionSubagentDir` (captured before the goroutine) and calling `dp.GetTurns()` and `transcript.ScanSubagents()`. On receipt, `app.SelectedTurns`, `app.SubagentTurns`, and `app.SubagentTypes` are updated, then `RebuildChatItems()` refreshes the flattened chat item list and `syncView` updates the table.
+`dataLoadedMsg` carries resource-specific payloads including `turns []model.Turn`, `subagentTurns [][]model.Turn`, `subagentTypes []model.AgentType`, and slug group fields (`slugGroupTurns`, `slugGroupSubTurns`, `slugGroupSubTypes`) for history view refresh. `loadDataAsync()` handles `ResourceHistory`/`ResourceHistoryDetail`: when `SlugSessions` has multiple sessions, it loads turns/subagents for each session in the group; otherwise it reads single-session data via `app.SelectedSessionFilePath` and `app.SelectedSessionSubagentDir`. On receipt, either `app.SetSlugGroupData()` or the single-session fields are updated, then `RebuildChatItems()` refreshes the flattened chat item list and `syncView` updates the table. `GetSessions` applies `model.GroupSessionsBySlug` before returning, sorting sessions into slug-grouped order with tree prefixes.
 
 ## DataProvider Implementations
 

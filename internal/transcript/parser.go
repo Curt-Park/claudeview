@@ -428,6 +428,7 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 type SessionAggregates struct {
 	Topic          string
 	Branch         string
+	Slug           string
 	TokensByModel  map[string]Usage
 	TotalToolCalls int
 	DurationMS     int64
@@ -473,6 +474,11 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 		// Capture git branch from first entry that has it
 		if agg.Branch == "" && entry.GitBranch != "" {
 			agg.Branch = entry.GitBranch
+		}
+
+		// Capture slug from first entry that has it
+		if agg.Slug == "" && entry.Slug != "" {
+			agg.Slug = entry.Slug
 		}
 
 		switch entry.Type {
@@ -542,7 +548,8 @@ func extractTopic(text string) string {
 	switch {
 	case strings.HasPrefix(text, "<local-command-caveat>"),
 		strings.HasPrefix(text, "<local-command-stdout>"),
-		strings.HasPrefix(text, "<local-command-stderr>"):
+		strings.HasPrefix(text, "<local-command-stderr>"),
+		strings.HasPrefix(text, "[Request interrupted by user"):
 		// These are injected by Claude Code and carry no useful topic text.
 		return ""
 

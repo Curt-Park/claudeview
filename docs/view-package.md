@@ -14,12 +14,12 @@ Resource-specific table renderers. One file per resource type plus shared helper
 |-------------------|----------------------------------------------------------------------|
 | `resource_view.go`| `ResourceView[T]` — generic table view; `RowBuilder[T]`; `Sync()`   |
 | `projects.go`     | columns + `projectRow` for `ResourceView[*model.Project]`            |
-| `sessions.go`     | columns + `sessionRow`; flat mode; subtitle line (model/cost/status) |
+| `sessions.go`     | columns + `sessionRow`; flat mode; subtitle line (model/cost/status); tree prefix via `model.SessionTreePrefix` for slug groups |
 | `agents.go`       | columns + `agentRow`; flat mode; tree prefix for subagents           |
 | `plugins.go`      | columns + `pluginRow`; scope, enabled/disabled, skill/cmd/hook counts|
 | `plugin_items.go` | columns + `pluginItemRow` for `ResourceView[*model.PluginItem]`; `NewPluginItemsView` |
 | `memories.go`     | columns + `memoryRow` for `ResourceView[*model.Memory]`              |
-| `chat.go`         | columns + `chatRow` for `ResourceView[ui.ChatItem]`; `NewChatView`   |
+| `chat.go`         | columns + `chatRow` for `ResourceView[ui.ChatItem]`; `NewChatView`; divider row handling for merged slug groups |
 | `helpers.go`      | Shared formatting utilities (`truncateHash`, `ShortID`)              |
 
 ## Generic ResourceView[T]

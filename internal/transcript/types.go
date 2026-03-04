@@ -9,6 +9,7 @@ type entry struct {
 	Timestamp       string           `json:"timestamp"`
 	UUID            string           `json:"uuid"`
 	SessionID       string           `json:"sessionId"`
+	Slug            string           `json:"slug"`
 	GitBranch       string           `json:"gitBranch"`
 	Message         json.RawMessage  `json:"message"`
 	CompactMetadata *compactMetadata `json:"compactMetadata,omitempty"`

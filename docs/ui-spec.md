@@ -103,9 +103,11 @@ Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`
 
 Each row optionally shows a **subtitle line** (dimmed) with model, cost, and status metadata, indented under TOPIC.
 
+**Slug grouping**: Sessions sharing a `slug` field (same conversation across plan/execute transitions) are grouped contiguously. The NAME cell shows tree prefixes: first session has no prefix, middle sessions show `├ `, and the last shows `└ `. Groups are sorted by latest ModTime descending; within a group, sessions are sorted by ModTime ascending.
+
 **Note**: PROJECT column only shown in flat access (via `p`/`m` jump, or no project selected).
 
-**Navigation**: Enter → Session Chat (content view for the selected session)
+**Navigation**: Enter → Session Chat. When entering a session that belongs to a slug group, all sessions in the group are merged into a single history view with divider rows (`── session N/M ──`) between each session's turns. Divider rows cannot be drilled into (enter is a no-op).
 
 ### 3. Agents
 
@@ -263,7 +265,7 @@ Tests in `internal/ui/` (`package ui_test`):
 |-------------------------|---------------------------------------------------|
 | `app_test.go`           | AppModel integration — key flows, state transitions |
 | `render_test.go`        | Full render output / golden snapshots             |
-| `detail_render_test.go` | Plugin detail and memory detail rendering         |
+| `detail_render_test.go` | Plugin detail, memory detail, chat item detail (including full subagent transcript) rendering |
 | `filter_test.go`        | Filter component unit tests                       |
 | `crumbs_test.go`        | Breadcrumb component unit tests                   |
 | `menu_test.go`          | Menu / nav hint unit tests                        |

@@ -140,6 +140,30 @@ func TestTopicUsesFirstUserMessage(t *testing.T) {
 	}
 }
 
+func TestTopicSkipsInterruptedByUser(t *testing.T) {
+	f, err := os.CreateTemp("", "interrupted-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	content := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}` + "\n" +
+		`{"type":"user","timestamp":"2025-01-01T10:00:01Z","message":{"role":"user","content":[{"type":"text","text":"Fix the login bug"}]}}` + "\n"
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	result, err := transcript.ParseFile(f.Name())
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	want := "Fix the login bug"
+	if result.Topic != want {
+		t.Errorf("expected topic %q, got %q", want, result.Topic)
+	}
+}
+
 func TestTokensByModelMultiModel(t *testing.T) {
 	f, err := os.CreateTemp("", "multimodel-*.jsonl")
 	if err != nil {
@@ -425,6 +449,51 @@ func TestParseFileIncremental(t *testing.T) {
 	}
 	if cache3.Offset() <= prevOffset {
 		t.Error("phase 3: offset should have increased")
+	}
+}
+
+func TestParseAggregatesIncremental_Slug(t *testing.T) {
+	f, err := os.CreateTemp("", "slug-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	content := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","slug":"fizzy-napping-stallman","message":{"role":"user","content":[{"type":"text","text":"Hello"}]}}` + "\n" +
+		`{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","slug":"fizzy-napping-stallman","message":{"role":"assistant","content":[{"type":"text","text":"Hi"}],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":20}}}` + "\n"
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	agg, err := transcript.ParseAggregatesIncremental(f.Name(), nil)
+	if err != nil {
+		t.Fatalf("ParseAggregatesIncremental failed: %v", err)
+	}
+	if agg.Slug != "fizzy-napping-stallman" {
+		t.Errorf("expected slug %q, got %q", "fizzy-napping-stallman", agg.Slug)
+	}
+}
+
+func TestParseAggregatesIncremental_SlugEmpty(t *testing.T) {
+	f, err := os.CreateTemp("", "no-slug-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	content := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"Hello"}]}}` + "\n"
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	agg, err := transcript.ParseAggregatesIncremental(f.Name(), nil)
+	if err != nil {
+		t.Fatalf("ParseAggregatesIncremental failed: %v", err)
+	}
+	if agg.Slug != "" {
+		t.Errorf("expected empty slug, got %q", agg.Slug)
 	}
 }
 

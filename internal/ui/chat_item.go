@@ -13,10 +13,13 @@ import (
 // It wraps a Turn with metadata about whether it's from a subagent.
 // ExtraTurns holds subsequent tool-only assistant turns grouped under this item.
 type ChatItem struct {
-	Turn       model.Turn
-	ExtraTurns []model.Turn // subsequent tool-only turns merged into this group
-	IsSubagent bool
-	AgentType  model.AgentType
+	Turn         model.Turn
+	ExtraTurns   []model.Turn // subsequent tool-only turns merged into this group
+	IsSubagent   bool
+	AgentType    model.AgentType
+	SubagentIdx  int // index into subagentTurns; -1 for non-subagent items
+	IsDivider    bool
+	DividerLabel string
 }
 
 // AllToolCalls collects tool calls from the primary Turn and all ExtraTurns.
@@ -31,6 +34,9 @@ func (c ChatItem) AllToolCalls() []*model.ToolCall {
 
 // WhoLabel returns a short label for the message author.
 func (c ChatItem) WhoLabel() string {
+	if c.IsDivider {
+		return ""
+	}
 	if c.IsSubagent {
 		return agentDisplayName(c.AgentType)
 	}
@@ -48,6 +54,9 @@ func (c ChatItem) WhoLabel() string {
 // MessagePreview returns a single-line summary of the turn content.
 // Combines text preview and first tool call info for maximum context.
 func (c ChatItem) MessagePreview(max int) string {
+	if c.IsDivider {
+		return c.DividerLabel
+	}
 	var parts []string
 
 	// Add text preview (first line, whitespace-collapsed)
@@ -82,6 +91,9 @@ func (c ChatItem) MessagePreview(max int) string {
 // ActionLabel returns the first tool name + "+N" count, or "-".
 // For Agent/Task calls, appends the agent type. For Skill calls, appends the skill name.
 func (c ChatItem) ActionLabel() string {
+	if c.IsDivider {
+		return ""
+	}
 	allTC := c.AllToolCalls()
 	if len(allTC) == 0 {
 		return "-"
@@ -122,6 +134,9 @@ func extractStringField(tc *model.ToolCall, field string) string {
 
 // ModelTokenLabel returns per-model token totals (e.g. "opus:1.5k sonnet:300") or "-".
 func (c ChatItem) ModelTokenLabel() string {
+	if c.IsDivider {
+		return ""
+	}
 	byModel := make(map[string]int)
 	addTurn := func(t model.Turn) {
 		if t.ModelName == "" {
@@ -150,6 +165,9 @@ func (c ChatItem) ModelTokenLabel() string {
 
 // TimeLabel returns elapsed time since prev turn, or "HH:MM" for the first item.
 func (c ChatItem) TimeLabel(prev *ChatItem) string {
+	if c.IsDivider {
+		return ""
+	}
 	if c.Turn.Timestamp.IsZero() {
 		return "-"
 	}
@@ -170,7 +188,7 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 	// interleaveSubagents appends subagent ChatItems for each Task tool call in the turn.
 	interleaveSubagents := func(toolCalls []*model.ToolCall) {
 		for _, tc := range toolCalls {
-			if tc.Name == "Task" && subIdx < len(subagentTurns) {
+			if (tc.Name == "Task" || tc.Name == "Agent") && subIdx < len(subagentTurns) {
 				agentType := model.AgentTypeGeneral
 				if subIdx < len(subagentTypes) {
 					agentType = subagentTypes[subIdx]
@@ -178,9 +196,10 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 				for _, st := range subagentTurns[subIdx] {
 					if st.Role == "assistant" {
 						items = append(items, ChatItem{
-							Turn:       st,
-							IsSubagent: true,
-							AgentType:  agentType,
+							Turn:        st,
+							IsSubagent:  true,
+							AgentType:   agentType,
+							SubagentIdx: subIdx,
 						})
 					}
 				}
@@ -201,10 +220,65 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 			}
 		}
 
-		items = append(items, ChatItem{Turn: turn})
+		items = append(items, ChatItem{Turn: turn, SubagentIdx: -1})
 		if turn.Role == "assistant" {
 			interleaveSubagents(turn.ToolCalls)
 		}
 	}
 	return items
+}
+
+// BuildMergedChatItems merges turns from multiple sessions into a single ChatItem list
+// with divider rows at session boundaries.
+// sessionIDs provides the short session ID for each session (used in divider labels).
+// For a single session, it delegates to BuildChatItems.
+func BuildMergedChatItems(
+	sessionTurns [][]model.Turn,
+	subTurnsBySession [][][]model.Turn,
+	subTypesBySession [][]model.AgentType,
+	sessionIDs []string,
+) []ChatItem {
+	if len(sessionTurns) <= 1 {
+		var subTurns [][]model.Turn
+		var subTypes []model.AgentType
+		if len(subTurnsBySession) > 0 {
+			subTurns = subTurnsBySession[0]
+		}
+		if len(subTypesBySession) > 0 {
+			subTypes = subTypesBySession[0]
+		}
+		var turns []model.Turn
+		if len(sessionTurns) > 0 {
+			turns = sessionTurns[0]
+		}
+		return BuildChatItems(turns, subTurns, subTypes)
+	}
+
+	total := len(sessionTurns)
+	var all []ChatItem
+	for i, turns := range sessionTurns {
+		var subTurns [][]model.Turn
+		var subTypes []model.AgentType
+		if i < len(subTurnsBySession) {
+			subTurns = subTurnsBySession[i]
+		}
+		if i < len(subTypesBySession) {
+			subTypes = subTypesBySession[i]
+		}
+		items := BuildChatItems(turns, subTurns, subTypes)
+		if i > 0 {
+			label := fmt.Sprintf("── session %d/%d", i+1, total)
+			if i < len(sessionIDs) && sessionIDs[i] != "" {
+				label += fmt.Sprintf(" (%s)", sessionIDs[i])
+			}
+			label += " ──"
+			all = append(all, ChatItem{
+				IsDivider:    true,
+				DividerLabel: label,
+				SubagentIdx:  -1,
+			})
+		}
+		all = append(all, items...)
+	}
+	return all
 }

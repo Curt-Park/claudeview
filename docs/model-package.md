@@ -13,7 +13,8 @@ Core data models used across transcript parsing, config loading, UI rendering, a
 | File          | Types / Purpose                                                         |
 |---------------|-------------------------------------------------------------------------|
 | `project.go`  | `Project` — Hash, Path, LastSeen, Sessions `[]*Session`                 |
-| `session.go`  | `Session` — ID, ProjectHash, FilePath, SubagentDir, Branch, FileSize, Topic, TokensByModel (`map[string]TokenCount`), AgentCount, ToolCallCount, Agents, NumTurns, StartTime, EndTime, ModTime; `TokenCount` struct (InputTokens, OutputTokens) |
+| `session.go`  | `Session` — ID, ProjectHash, FilePath, SubagentDir, Branch, Slug, FileSize, Topic, TokensByModel (`map[string]TokenCount`), AgentCount, ToolCallCount, Agents, NumTurns, StartTime, EndTime, ModTime; `TokenCount` struct (InputTokens, OutputTokens) |
+| `slug_group.go` | `GroupSessionsBySlug(sessions)` — groups sessions sharing a slug (sorted by latest ModTime desc, within-group by ModTime asc); `SessionTreePrefix(sessions, idx)` — returns tree prefix (`""`, `"├ "`, `"└ "`) for contiguous slug groups |
 | `agent.go`    | `Agent` — ID, SessionID, Type (`AgentType`), Status, IsSubagent, ToolCalls, LastActivity, FilePath, StartTime, Depth |
 | `turn.go`     | `Turn` — Role, Text, Thinking, ToolCalls, ModelName, InputTokens, OutputTokens, Timestamp |
 | `tool_call.go`| `ToolCall` — ID, SessionID, AgentID, Name, Input/Result (json.RawMessage), IsError, Timestamp; `InputSummary()` |

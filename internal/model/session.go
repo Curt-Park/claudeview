@@ -20,6 +20,7 @@ type Session struct {
 	FilePath      string
 	SubagentDir   string
 	Branch        string
+	Slug          string
 	FileSize      int64
 	Topic         string
 	TokensByModel map[string]TokenCount
@@ -30,6 +31,26 @@ type Session struct {
 	StartTime     time.Time
 	EndTime       time.Time
 	ModTime       time.Time
+
+	// GroupSessions holds all sessions in the slug group (oldest-first).
+	// nil for solo sessions (no slug or single-member group).
+	GroupSessions []*Session
+}
+
+// IsGroupRepresentative returns true if this session represents a collapsed slug group.
+func (s *Session) IsGroupRepresentative() bool {
+	return len(s.GroupSessions) > 1
+}
+
+// GroupNameCell returns the display name for the NAME column.
+// For groups: "d2559feb..360eb907"; for solo sessions: "d2559feb".
+func (s *Session) GroupNameCell() string {
+	if !s.IsGroupRepresentative() {
+		return s.ShortID()
+	}
+	first := s.GroupSessions[0].ShortID()
+	last := s.GroupSessions[len(s.GroupSessions)-1].ShortID()
+	return first + ".." + last
 }
 
 // LastActive returns a human-friendly elapsed time string based on ModTime.
