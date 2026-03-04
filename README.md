@@ -67,7 +67,7 @@ make lint     # golangci-lint
 make demo     # build and run demo mode
 ```
 
-For the full UI specification, keybindings, and column definitions see [`docs/ui-spec.md`](docs/ui-spec.md).
+For the full UI specification, keybindings, and column definitions see [`docs/ui-spec.md`](docs/ui-spec.md). Internal documentation under `docs/` is kept in sync with the codebase via [autology](https://github.com/Curt-Park/autology).
 
 **License**
 
