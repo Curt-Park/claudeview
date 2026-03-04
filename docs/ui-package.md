@@ -14,13 +14,13 @@ Implements the Bubble Tea application model and all reusable chrome components.
 |-----------------------|----------------------------------------------------------------|
 | `app.go`              | `AppModel` — root Bubble Tea model; key events, layout, mode   |
 | `table_view.go`       | `TableView` — scrollable table with filter, selection          |
-| `detail_render.go`    | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail` — string renderers |
+| `detail_render.go`    | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail`, `ChatItemKey`, `capLines` — string renderers and helpers |
 | `header.go`           | Info panel (5-column layout: info, nav, util, shortcuts, quit) |
 | `menu.go`             | `MenuModel` — nav/util item lists and key highlight state      |
 | `crumbs.go`           | `CrumbsModel` — breadcrumb trail                               |
 | `flash.go`            | `FlashModel` — ephemeral status/error message                  |
 | `filter.go`           | `FilterModel` — `/`-triggered filter input bar                 |
-| `chat_item.go`        | `ChatItem` — wraps Turn with subagent metadata (`IsSubagent`, `AgentType`, `SubagentIdx`), divider support (`IsDivider`, `DividerLabel`); `BuildChatItems`, `BuildMergedChatItems` (multi-session with divider rows), `ActionLabel`, `ModelTokenLabel`, `TimeLabel` |
+| `chat_item.go`        | `ChatItem` — wraps Turn with subagent metadata (`IsSubagent`, `AgentType`, `SubagentIdx`), divider support (`IsDivider`, `DividerLabel`); `agentDisplayName` (unexported helper for display labels); `BuildChatItems`, `BuildMergedChatItems` (multi-session with divider rows), `ActionLabel`, `ModelTokenLabel`, `TimeLabel` |
 | `chat_item_test.go`   | Tests for `BuildMergedChatItems`, `SubagentIdx` assignment, and divider label methods |
 | `styles.go`           | Lip Gloss style definitions shared across components           |
 

@@ -11,20 +11,6 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
-func shortModel(m string) string {
-	lower := strings.ToLower(m)
-	switch {
-	case strings.Contains(lower, "opus"):
-		return "opus"
-	case strings.Contains(lower, "sonnet"):
-		return "sonnet"
-	case strings.Contains(lower, "haiku"):
-		return "haiku"
-	default:
-		return m
-	}
-}
-
 func subagentIcon(t model.AgentType) string {
 	switch t {
 	case model.AgentTypeExplore:
@@ -35,21 +21,6 @@ func subagentIcon(t model.AgentType) string {
 		return "💻"
 	default:
 		return "⚙️"
-	}
-}
-
-func agentDisplayName(t model.AgentType) string {
-	switch t {
-	case model.AgentTypeExplore:
-		return "Explorer"
-	case model.AgentTypePlan:
-		return "Planner"
-	case model.AgentTypeBash:
-		return "Bash"
-	case model.AgentTypeGeneral:
-		return "General"
-	default:
-		return "Agent"
 	}
 }
 
@@ -111,7 +82,7 @@ func renderChatItem(item ChatItem, width int) []string {
 	} else {
 		headerParts = append(headerParts, StyleChatHeader.Render("Claude"))
 	}
-	if m := shortModel(turn.ModelName); m != "" {
+	if m := model.ShortModelName(turn.ModelName); m != "" {
 		headerParts = append(headerParts, StyleDim.Render(m))
 	}
 	if !turn.Timestamp.IsZero() {
@@ -210,11 +181,7 @@ func expandResult(tc *model.ToolCall) string {
 	// Try string result
 	var s string
 	if err := json.Unmarshal(tc.Result, &s); err == nil {
-		// Cap at reasonable length for display
-		lines := strings.Split(s, "\n")
-		if len(lines) > 30 {
-			lines = append(lines[:30], fmt.Sprintf("... (%d more lines)", len(lines)-30))
-		}
+		lines := capLines(strings.Split(s, "\n"), 30)
 		return strings.Join(lines, "\n")
 	}
 	// Try array of content blocks
@@ -228,14 +195,19 @@ func expandResult(tc *model.ToolCall) string {
 		}
 		if len(texts) > 0 {
 			result := strings.Join(texts, "\n")
-			lines := strings.Split(result, "\n")
-			if len(lines) > 30 {
-				lines = append(lines[:30], fmt.Sprintf("... (%d more lines)", len(lines)-30))
-			}
+			lines := capLines(strings.Split(result, "\n"), 30)
 			return strings.Join(lines, "\n")
 		}
 	}
 	return ""
+}
+
+// capLines truncates a slice of lines, appending a summary if it exceeds max.
+func capLines(lines []string, max int) []string {
+	if len(lines) > max {
+		return append(lines[:max], fmt.Sprintf("... (%d more lines)", len(lines)-max))
+	}
+	return lines
 }
 
 // RenderPluginItemDetail renders the content of a selected plugin item.

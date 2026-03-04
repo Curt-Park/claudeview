@@ -75,8 +75,9 @@ Both implement `ui.DataProvider`:
 
 - `parseAgentsFromSession(s *model.Session)` — builds `[]*model.Agent` by parsing the session's transcript and subagent transcripts
 - `populateToolCalls(agent *model.Agent, sessionID string, parsed *transcript.ParsedTranscript)` — fills agent's `ToolCalls` slice and sets `LastActivity`
-- `extractSubagentTypes(turns []model.Turn)` / `extractSubagentTypesFromTranscript(turns []transcript.Turn)` — reads `subagent_type` from Agent tool call JSON input to determine each subagent's `AgentType`
-- `agentTypeFromInput(input json.RawMessage)` — parses the `subagent_type` field from a single Agent tool call's input
+- `extractAgentTypesFromCalls(calls []toolCallInfo)` — core logic: reads `subagent_type` from Agent/Task tool calls to determine each subagent's `AgentType`
+- `extractSubagentTypes(turns []model.Turn)` — thin adapter: collects `toolCallInfo` from model turns and delegates to `extractAgentTypesFromCalls`
+- `toolCallInfo` struct — shared type (`Name string`, `Input json.RawMessage`) enabling a single extraction implementation for both `model.Turn` and `transcript.Turn` sources
 - `refreshSlugGroup(dp, projectHash, sessionID, currentSlug)` — re-scans sessions to detect new/removed sessions in a slug group during history view refresh
 - `mdTitle(path string)` — reads a Markdown file and returns the first `# Heading` text
 

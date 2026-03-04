@@ -73,7 +73,7 @@ func (s *Session) TokenString() string {
 	for _, m := range models {
 		tc := s.TokensByModel[m]
 		total := tc.InputTokens + tc.OutputTokens
-		parts = append(parts, fmt.Sprintf("%s:%s", ShortModelName(m), formatTokens(total)))
+		parts = append(parts, fmt.Sprintf("%s:%s", ShortModelName(m), FormatTokenCount(total)))
 	}
 	return strings.Join(parts, " ")
 }
@@ -108,35 +108,4 @@ func (s *Session) ShortID() string {
 		return s.ID[:8]
 	}
 	return s.ID
-}
-
-// ShortModelName extracts a short identifier from a model name.
-func ShortModelName(model string) string {
-	lower := strings.ToLower(model)
-	switch {
-	case strings.Contains(lower, "opus"):
-		return "opus"
-	case strings.Contains(lower, "sonnet"):
-		return "sonnet"
-	case strings.Contains(lower, "haiku"):
-		return "haiku"
-	default:
-		parts := strings.Split(model, "-")
-		if len(parts) > 0 {
-			return parts[len(parts)-1]
-		}
-		return model
-	}
-}
-
-// formatTokens formats a token count as "125k", "1.5M", etc.
-func formatTokens(n int) string {
-	switch {
-	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
-	case n >= 1000:
-		return fmt.Sprintf("%dk", n/1000)
-	default:
-		return fmt.Sprintf("%d", n)
-	}
 }

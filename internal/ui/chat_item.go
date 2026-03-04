@@ -32,6 +32,21 @@ func (c ChatItem) AllToolCalls() []*model.ToolCall {
 	return all
 }
 
+func agentDisplayName(t model.AgentType) string {
+	switch t {
+	case model.AgentTypeExplore:
+		return "Explorer"
+	case model.AgentTypePlan:
+		return "Planner"
+	case model.AgentTypeBash:
+		return "Bash"
+	case model.AgentTypeGeneral:
+		return "General"
+	default:
+		return "Agent"
+	}
+}
+
 // WhoLabel returns a short label for the message author.
 func (c ChatItem) WhoLabel() string {
 	if c.IsDivider {

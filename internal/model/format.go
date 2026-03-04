@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,25 @@ func FormatTokenCount(n int) string {
 		return fmt.Sprintf("%dk", n/1000)
 	default:
 		return fmt.Sprintf("%d", n)
+	}
+}
+
+// ShortModelName extracts a short identifier from a model name.
+func ShortModelName(model string) string {
+	lower := strings.ToLower(model)
+	switch {
+	case strings.Contains(lower, "opus"):
+		return "opus"
+	case strings.Contains(lower, "sonnet"):
+		return "sonnet"
+	case strings.Contains(lower, "haiku"):
+		return "haiku"
+	default:
+		parts := strings.Split(model, "-")
+		if len(parts) > 0 {
+			return parts[len(parts)-1]
+		}
+		return model
 	}
 }
 
