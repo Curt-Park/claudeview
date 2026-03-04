@@ -94,6 +94,7 @@ type dataLoadedMsg struct {
 	resource      model.ResourceType
 
 	// Slug group reload data
+	slugGroupSessions []*model.Session // refreshed slug group membership
 	slugGroupTurns    [][]model.Turn
 	slugGroupSubTurns [][][]model.Turn
 	slugGroupSubTypes [][]model.AgentType
@@ -289,6 +290,10 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case model.ResourceMemory:
 				rm.memories = msg.memories
 			case model.ResourceHistory, model.ResourceHistoryDetail:
+				// Update slug group membership if new sessions were detected.
+				if len(msg.slugGroupSessions) > 0 {
+					rm.app.SlugSessions = msg.slugGroupSessions
+				}
 				if len(msg.slugGroupTurns) > 1 {
 					rm.app.SetSlugGroupData(msg.slugGroupTurns, msg.slugGroupSubTurns, msg.slugGroupSubTypes)
 				} else {
@@ -348,9 +353,11 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
 		case model.ResourceHistory, model.ResourceHistoryDetail:
-			if len(slugSessions) > 1 {
-				// Multi-session slug group: reload all sessions
-				for _, s := range slugSessions {
+			// Re-scan sessions to detect newly created sessions in the slug group.
+			freshSlug := refreshSlugGroup(dp, projectHash, sessionID, slugSessions)
+			if len(freshSlug) > 1 {
+				msg.slugGroupSessions = freshSlug
+				for _, s := range freshSlug {
 					turns := dp.GetTurns(s.FilePath)
 					msg.slugGroupTurns = append(msg.slugGroupTurns, turns)
 					var subTurns [][]model.Turn
@@ -378,6 +385,35 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 		}
 		return msg
 	}
+}
+
+// refreshSlugGroup re-scans sessions for the project and returns the updated
+// slug group membership. This detects newly created sessions under the same slug.
+// Returns the fresh slug group if it has >1 members, otherwise nil (single session).
+func refreshSlugGroup(dp ui.DataProvider, projectHash, sessionID string, currentSlug []*model.Session) []*model.Session {
+	// Determine the slug we're tracking.
+	var slug string
+	if len(currentSlug) > 0 {
+		slug = currentSlug[0].Slug
+	}
+	if slug == "" {
+		// Not a slug group — check if a new session joined to form one.
+		allSessions := dp.GetSessions(projectHash)
+		for _, s := range allSessions {
+			if s.ID == sessionID && s.IsGroupRepresentative() {
+				return s.GroupSessions
+			}
+		}
+		return nil
+	}
+	// Re-scan and find the matching slug group.
+	allSessions := dp.GetSessions(projectHash)
+	for _, s := range allSessions {
+		if s.Slug == slug && s.IsGroupRepresentative() {
+			return s.GroupSessions
+		}
+	}
+	return currentSlug
 }
 
 func (rm *rootModel) View() string {
