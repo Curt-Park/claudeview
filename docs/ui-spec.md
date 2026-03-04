@@ -94,16 +94,17 @@ Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`
 | Column      | Width          | Description                                  |
 |-------------|----------------|----------------------------------------------|
 | PROJECT     | 20             | parent project hash (flat access only)       |
-| NAME        | 10             | session short ID (first 8 chars)             |
+| SLUG        | 16             | slug identifier (shared across plan/execute transitions) |
+| SESSION_IDs | 19             | session short ID(s): `d2559feb` for solo, `d2559feb..360eb907` for groups |
 | TOPIC       | flex (max 35%) | first line of session topic / summary        |
-| TURNS       | 6              | conversation turn count                      |
-| AGENTS      | 6              | agent count                                  |
+| TURNS       | 6              | conversation turn count (aggregated for groups) |
+| AGENTS      | 6              | agent count (aggregated for groups)          |
 | MODEL:TOKEN | flex (max 25%) | per-model token string (e.g. `opus:125k sonnet:50k`) |
 | LAST ACTIVE | 11             | time since last modification                 |
 
-Each row optionally shows a **subtitle line** (dimmed) with model, cost, and status metadata, indented under TOPIC.
+Each row optionally shows a **subtitle line** (dimmed) with branch and file size metadata, indented under TOPIC.
 
-**Slug grouping**: Sessions sharing a `slug` field (same conversation across plan/execute transitions) are grouped contiguously. The NAME cell shows tree prefixes: first session has no prefix, middle sessions show `├ `, and the last shows `└ `. Groups are sorted by latest ModTime descending; within a group, sessions are sorted by ModTime ascending.
+**Slug grouping**: Sessions sharing a `slug` field (same conversation across plan/execute transitions) are collapsed into a single representative row via `GroupSessionsBySlug`. The SESSION_IDs cell shows `first..last` short IDs for groups. Groups are sorted by latest ModTime descending; within a group, sessions are sorted by ModTime ascending. Aggregated fields: NumTurns, AgentCount, FileSize, TokensByModel.
 
 **Note**: PROJECT column only shown in flat access (via `p`/`m` jump, or no project selected).
 

@@ -13,8 +13,8 @@ Core data models used across transcript parsing, config loading, UI rendering, a
 | File          | Types / Purpose                                                         |
 |---------------|-------------------------------------------------------------------------|
 | `project.go`  | `Project` — Hash, Path, LastSeen, Sessions `[]*Session`                 |
-| `session.go`  | `Session` — ID, ProjectHash, FilePath, SubagentDir, Branch, Slug, FileSize, Topic, TokensByModel (`map[string]TokenCount`), AgentCount, ToolCallCount, Agents, NumTurns, StartTime, EndTime, ModTime; `TokenCount` struct (InputTokens, OutputTokens) |
-| `slug_group.go` | `GroupSessionsBySlug(sessions)` — groups sessions sharing a slug (sorted by latest ModTime desc, within-group by ModTime asc); `SessionTreePrefix(sessions, idx)` — returns tree prefix (`""`, `"├ "`, `"└ "`) for contiguous slug groups |
+| `session.go`  | `Session` — ID, ProjectHash, FilePath, SubagentDir, Branch, Slug, FileSize, Topic, TokensByModel (`map[string]TokenCount`), AgentCount, ToolCallCount, Agents, NumTurns, StartTime, EndTime, ModTime, GroupSessions; `TokenCount` struct; `IsGroupRepresentative()`, `GroupNameCell()`, `ShortID()`, `TokenString()`, `TopicShort()`, `MetaLine()`, `LastActive()`, `ShortModelName()` |
+| `slug_group.go` | `GroupSessionsBySlug(sessions)` — collapses sessions sharing a slug into a single representative row with aggregated stats (NumTurns, AgentCount, FileSize, TokensByModel); sorted by latest ModTime desc, within-group by ModTime asc; representative's `GroupSessions` holds all sessions oldest-first |
 | `agent.go`    | `Agent` — ID, SessionID, Type (`AgentType`), Status, IsSubagent, ToolCalls, LastActivity, FilePath, StartTime, Depth |
 | `turn.go`     | `Turn` — Role, Text, Thinking, ToolCalls, ModelName, InputTokens, OutputTokens, Timestamp |
 | `tool_call.go`| `ToolCall` — ID, SessionID, AgentID, Name, Input/Result (json.RawMessage), IsError, Timestamp; `InputSummary()` |
