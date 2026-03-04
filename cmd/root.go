@@ -630,6 +630,33 @@ func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Ses
 	for m, u := range agg.TokensByModel {
 		s.TokensByModel[m] = model.TokenCount{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}
 	}
+
+	// Merge subagent token data into session totals
+	if si.SubagentDir != "" {
+		subInfos, _ := transcript.ScanSubagents(si.SubagentDir)
+		for _, sub := range subInfos {
+			l.mu.Lock()
+			subCached := l.aggCache[sub.FilePath]
+			l.mu.Unlock()
+
+			subAgg, err := transcript.ParseAggregatesIncremental(sub.FilePath, subCached)
+			if err != nil {
+				continue
+			}
+
+			l.mu.Lock()
+			l.aggCache[sub.FilePath] = subAgg
+			l.mu.Unlock()
+
+			for m, u := range subAgg.TokensByModel {
+				cur := s.TokensByModel[m]
+				cur.InputTokens += u.InputTokens
+				cur.OutputTokens += u.OutputTokens
+				s.TokensByModel[m] = cur
+			}
+		}
+	}
+
 	return s
 }
 
