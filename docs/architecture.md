@@ -12,6 +12,7 @@ claudeview is a Go TUI application for monitoring Claude Code sessions. It reads
 
 - `main.go` — sets `AppVersion` from build-time ldflags, calls `cmd.Execute()`
 - `cmd/root.go` — Cobra CLI; `--demo` flag; wires `DataProvider` into `AppModel`
+- `cmd/update.go` — `--update` flag; self-update from GitHub releases
 
 ## Top-Level Architecture
 
