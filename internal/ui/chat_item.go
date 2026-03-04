@@ -185,7 +185,11 @@ func (c ChatItem) TimeLabel(prev *ChatItem) string {
 	if prev == nil || prev.Turn.Timestamp.IsZero() {
 		return "-"
 	}
-	return model.FormatAge(c.Turn.Timestamp.Sub(prev.Turn.Timestamp))
+	d := c.Turn.Timestamp.Sub(prev.Turn.Timestamp)
+	if d < 0 {
+		return "-"
+	}
+	return model.FormatAge(d)
 }
 
 // BuildChatItems flattens main turns and subagent turns into a single
@@ -205,18 +209,31 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 				if subIdx < len(subagentTypes) {
 					agentType = subagentTypes[subIdx]
 				}
-				var first *model.Turn
-				var extra []model.Turn
+				// Collect assistant turns, preferring one with text or tool calls as primary.
+				var allAssistant []model.Turn
 				for _, st := range subagentTurns[subIdx] {
 					if st.Role != "assistant" {
 						continue
 					}
+					allAssistant = append(allAssistant, st)
+				}
+				var first *model.Turn
+				var extra []model.Turn
+				for i := range allAssistant {
 					if first == nil {
-						cp := st
-						first = &cp
+						if allAssistant[i].Text != "" || len(allAssistant[i].ToolCalls) > 0 {
+							first = &allAssistant[i]
+						} else {
+							extra = append(extra, allAssistant[i]) // content-less leading turns → ExtraTurns
+						}
 					} else {
-						extra = append(extra, st)
+						extra = append(extra, allAssistant[i])
 					}
+				}
+				// Fallback: use the first assistant turn even if content-less.
+				if first == nil && len(allAssistant) > 0 {
+					first = &allAssistant[0]
+					extra = allAssistant[1:]
 				}
 				if first != nil {
 					items = append(items, ChatItem{

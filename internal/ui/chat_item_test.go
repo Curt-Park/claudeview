@@ -2,6 +2,7 @@ package ui
 
 import (
 	"testing"
+	"time"
 
 	"github.com/Curt-Park/claudeview/internal/model"
 )
@@ -198,5 +199,53 @@ func TestBuildChatItems_AgentToolName(t *testing.T) {
 	}
 	if len(subItems[0].ExtraTurns) != 1 {
 		t.Errorf("expected 1 ExtraTurn, got %d", len(subItems[0].ExtraTurns))
+	}
+}
+
+func TestBuildChatItems_SubagentSkipsContentlessPrimary(t *testing.T) {
+	// First assistant turn has no text/tools (only model info); second has content.
+	mainTurns := []model.Turn{
+		{Role: "user", Text: "go"},
+		{Role: "assistant", Text: "delegating", ToolCalls: []*model.ToolCall{{Name: "Agent"}}},
+	}
+	sub := []model.Turn{
+		{Role: "assistant", ModelName: "claude-opus-4-6", InputTokens: 100, OutputTokens: 50},
+		{Role: "assistant", Text: "found the files", ToolCalls: []*model.ToolCall{{Name: "Grep"}}},
+		{Role: "assistant", Text: "done"},
+	}
+	items := BuildChatItems(mainTurns, [][]model.Turn{sub}, []model.AgentType{model.AgentTypeExplore})
+
+	var subItem *ChatItem
+	for i := range items {
+		if items[i].IsSubagent {
+			subItem = &items[i]
+			break
+		}
+	}
+	if subItem == nil {
+		t.Fatal("expected a subagent item")
+	}
+	// Primary Turn should be the second turn (has text+tools), not the first (content-less).
+	if subItem.Turn.Text != "found the files" {
+		t.Errorf("expected primary Turn.Text='found the files', got %q", subItem.Turn.Text)
+	}
+	// ExtraTurns: content-less first turn + third turn "done"
+	if len(subItem.ExtraTurns) != 2 {
+		t.Fatalf("expected 2 ExtraTurns, got %d", len(subItem.ExtraTurns))
+	}
+	// Content-less turn should be in ExtraTurns (for token accounting)
+	if subItem.ExtraTurns[0].InputTokens != 100 {
+		t.Errorf("expected content-less turn preserved in ExtraTurns for tokens, got InputTokens=%d", subItem.ExtraTurns[0].InputTokens)
+	}
+}
+
+func TestTimeLabel_NegativeDuration(t *testing.T) {
+	now := time.Now()
+	prev := ChatItem{Turn: model.Turn{Timestamp: now}}
+	// Subagent started 10 seconds before the preceding item.
+	cur := ChatItem{Turn: model.Turn{Timestamp: now.Add(-10 * time.Second)}}
+	got := cur.TimeLabel(&prev)
+	if got != "-" {
+		t.Errorf("expected '-' for negative duration, got %q", got)
 	}
 }
