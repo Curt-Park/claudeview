@@ -47,7 +47,8 @@ func GroupSessionsBySlug(sessions []*Session) []*Session {
 	var sortItems []sortItem
 	for _, slug := range slugOrder {
 		g := groups[slug]
-		rep := g[len(g)-1] // newest = representative
+		repCopy := *g[len(g)-1] // shallow-copy to avoid mutating cached *Session
+		rep := &repCopy
 
 		if len(g) > 1 {
 			// Aggregate stats into representative using separate accumulators

@@ -186,6 +186,26 @@ func TestGroupNameCell_Group(t *testing.T) {
 	}
 }
 
+func TestGroupSessionsBySlug_NoCacheMutation(t *testing.T) {
+	sessions := []*Session{
+		{ID: "s1", Slug: "grp", ModTime: time.Unix(100, 0), NumTurns: 5, FileSize: 1000},
+		{ID: "s2", Slug: "grp", ModTime: time.Unix(200, 0), NumTurns: 3, FileSize: 2000},
+	}
+	r1 := GroupSessionsBySlug(sessions)
+	r2 := GroupSessionsBySlug(sessions)
+
+	if r1[0].NumTurns != 8 {
+		t.Errorf("first call: expected NumTurns=8, got %d", r1[0].NumTurns)
+	}
+	if r2[0].NumTurns != 8 {
+		t.Errorf("second call: expected NumTurns=8, got %d (double-counted)", r2[0].NumTurns)
+	}
+	// Original sessions must not be mutated
+	if sessions[1].NumTurns != 3 {
+		t.Errorf("original s2 mutated: expected NumTurns=3, got %d", sessions[1].NumTurns)
+	}
+}
+
 func TestIsGroupRepresentative(t *testing.T) {
 	solo := &Session{ID: "solo"}
 	if solo.IsGroupRepresentative() {
