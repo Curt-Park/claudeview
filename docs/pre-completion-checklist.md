@@ -21,3 +21,4 @@ make test   # Run all tests with race detector — unit and render integration t
 - [[refactoring-standards]]
 - [[test-suite]]
 - [[ui-spec]]
+- [[tmux-e2e-testing]] — visual verification of TUI via tmux

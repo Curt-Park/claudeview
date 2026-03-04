@@ -48,3 +48,4 @@ make test   # go test -race -count=1 ./...
 - [[ui-package]] — `AppModel` under test
 - [[ui-spec]] — spec behaviors verified by these tests
 - [[pre-completion-checklist]] — requires `make test` before completing any task
+- [[tmux-e2e-testing]] — visual verification of TUI via tmux
