@@ -247,7 +247,7 @@ func (rm *rootModel) syncView() {
 
 func (rm *rootModel) updateInfo() {
 	rm.app.Info.Project = rm.app.SelectedProjectHash
-	rm.app.Info.Session = view.ShortID(rm.app.SelectedSessionID, 8)
+	rm.app.Info.Session = rm.app.SelectedSessionSlug
 	rm.app.Info.User = rm.userStr
 	rm.app.Info.ClaudeVersion = rm.claudeVersion
 	rm.app.Info.AppVersion = AppVersion

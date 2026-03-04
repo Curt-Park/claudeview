@@ -51,6 +51,7 @@ type AppModel struct {
 	SubagentTurns              [][]model.Turn
 	SubagentTypes              []model.AgentType
 	ChatFollow                 bool   // true = auto-scroll to bottom (tail -f mode)
+	SelectedSessionSlug        string // slug for the selected session (shown in header)
 	SelectedSessionFilePath    string // for async reload
 	SelectedSessionSubagentDir string // for async subagent reload
 
@@ -488,6 +489,7 @@ func (m *AppModel) navigateBack() {
 		m.switchResource(model.ResourceHistory)
 	case model.ResourceHistory:
 		m.SelectedSessionID = ""
+		m.SelectedSessionSlug = ""
 		m.SelectedSessionFilePath = ""
 		m.SelectedSessionSubagentDir = ""
 		m.SelectedTurns = nil
@@ -503,6 +505,7 @@ func (m *AppModel) navigateBack() {
 		m.switchResource(model.ResourceSessions)
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
+		m.SelectedSessionSlug = ""
 		m.popFilter()
 		m.switchResource(model.ResourceSessions)
 	case model.ResourceSessions:
@@ -550,6 +553,7 @@ func (m *AppModel) drillDown() {
 	case model.ResourceSessions:
 		if s, ok := row.Data.(*model.Session); ok {
 			m.SelectedSessionID = s.ID
+			m.SelectedSessionSlug = s.Slug
 			m.SelectedSessionFilePath = s.FilePath
 			m.SelectedSessionSubagentDir = s.SubagentDir
 

@@ -32,7 +32,7 @@ Implements the Bubble Tea application model and all reusable chrome components.
 - `Table` — active `TableView`
 - `Info`, `Menu`, `Crumbs`, `Flash`, `Filter` — chrome components
 - `Width`, `Height` — terminal dimensions
-- `SelectedProjectHash`, `SelectedSessionID`, `SelectedAgentID` — drill-down context
+- `SelectedProjectHash`, `SelectedSessionID`, `SelectedSessionSlug`, `SelectedAgentID` — drill-down context
 - `SelectedPlugin`, `SelectedPluginItem`, `SelectedMemory` — detail view context
 - `SelectedTurns []model.Turn` — main agent turns for history view
 - `SubagentTurns [][]model.Turn` — per-subagent turn slices (parallel to Task tool calls)

@@ -43,14 +43,14 @@ The info panel occupies 5+ rows and renders five columns:
 
 ```
 Project:      <full-width path — left-truncated if long>
-Session:      <value>   <j/k> down/up    </> filter    <p> plugins   <ctrl+c> quit
+Session Slug: <value>   <j/k> down/up    </> filter    <p> plugins   <ctrl+c> quit
 User:         <value>   <G/g> bottom/top               <m> memories
 Claude Code:  <value>   <ctrl+d/u> page down/up
 claudeview:   <value>   <enter> (context)
               ...       <esc> (context)
 ```
 
-- **Col 0**: `labelW=14` + value; total ~32 chars
+- **Col 0**: `labelW=14` + value; total ~32 chars (`leftW`). Values are truncated with "…" to stay within `leftW` and keep columns aligned.
 - **Col 1**: nav commands (j/k, G/g, ctrl+d/u, enter/esc — context-sensitive)
 - **Col 2**: util commands (`/` filter)
 - **Col 3**: p/m jump shortcuts (context-sensitive)
