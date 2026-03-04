@@ -24,10 +24,7 @@ import (
 // AppVersion is set from main.go via the build-time Version variable.
 var AppVersion string
 
-var (
-	demoMode   bool
-	renderOnce bool
-)
+var demoMode bool
 
 // Execute runs the root command.
 func Execute() {
@@ -50,7 +47,6 @@ Use : to switch resource types (sessions, agents, tools, tasks, plugins, mcp).`,
 
 func init() {
 	rootCmd.Flags().BoolVar(&demoMode, "demo", false, "Run with synthetic demo data")
-	rootCmd.Flags().BoolVar(&renderOnce, "render-once", false, "Render one frame to stdout and exit (for debugging)")
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -65,12 +61,6 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Create top-level model that wraps AppModel with actual view data
 	root := newRootModel(appModel, dp)
-
-	if renderOnce {
-		root.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-		fmt.Print(root.View())
-		return nil
-	}
 
 	p := tea.NewProgram(root,
 		tea.WithAltScreen(),
