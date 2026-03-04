@@ -55,11 +55,11 @@ func TestAllResourceNames(t *testing.T) {
 	}
 }
 
-func TestResourceSessionChatExists(t *testing.T) {
-	if model.ResourceSessionChat == "" {
-		t.Error("ResourceSessionChat should be non-empty")
+func TestResourceHistoryExists(t *testing.T) {
+	if model.ResourceHistory == "" {
+		t.Error("ResourceHistory should be non-empty")
 	}
-	if string(model.ResourceSessionChat) != "session-chat" {
-		t.Errorf("expected 'session-chat', got %q", model.ResourceSessionChat)
+	if string(model.ResourceHistory) != "history" {
+		t.Errorf("expected 'history', got %q", model.ResourceHistory)
 	}
 }

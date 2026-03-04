@@ -54,6 +54,10 @@ type AppModel struct {
 	SelectedSessionFilePath    string // for async reload
 	SelectedSessionSubagentDir string // for async subagent reload
 
+	// Chat table state
+	ChatItems        []ChatItem // flattened selectable items
+	SelectedChatItem int        // index of expanded item in detail view
+
 	// Data providers (injected from outside)
 	DataProvider DataProvider
 
@@ -87,7 +91,8 @@ type jumpFromState struct {
 func isSubView(rt model.ResourceType) bool {
 	return rt == model.ResourcePluginDetail ||
 		rt == model.ResourcePluginItemDetail ||
-		rt == model.ResourceMemoryDetail
+		rt == model.ResourceMemoryDetail ||
+		rt == model.ResourceHistoryDetail
 }
 
 // isContentView returns true for views that render flat text (not a table).
@@ -95,7 +100,7 @@ func isSubView(rt model.ResourceType) bool {
 func isContentView(rt model.ResourceType) bool {
 	return rt == model.ResourcePluginItemDetail ||
 		rt == model.ResourceMemoryDetail ||
-		rt == model.ResourceSessionChat
+		rt == model.ResourceHistoryDetail
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -180,7 +185,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "/":
 			if m.Resource != model.ResourceMemoryDetail && m.Resource != model.ResourcePluginItemDetail &&
-				m.Resource != model.ResourceSessionChat {
+				m.Resource != model.ResourceHistoryDetail {
 				m.inFilter = true
 				m.Filter.Activate()
 				m.refreshMenu()
@@ -253,6 +258,7 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if isContentView(m.Resource) {
 			m.updateContentScroll(msg)
 		} else {
+			m.updateChatFollow(msg)
 			m.Table.Update(msg)
 		}
 	}
@@ -267,8 +273,10 @@ func (m AppModel) contentMaxOffset() int {
 		contentStr = RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
-	case model.ResourceSessionChat:
-		contentStr = RenderSessionChat(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes, m.contentWidth())
+	case model.ResourceHistoryDetail:
+		if m.SelectedChatItem >= 0 && m.SelectedChatItem < len(m.ChatItems) {
+			contentStr = RenderChatItemDetail(m.ChatItems[m.SelectedChatItem], m.contentWidth())
+		}
 	default:
 		return 0
 	}
@@ -280,14 +288,9 @@ func (m AppModel) contentMaxOffset() int {
 }
 
 // updateContentScroll handles movement keys for content-only views (plugin-item-detail,
-// memory-detail, session-chat). It adjusts ContentOffset, capped to the actual content
-// length. For session-chat, it also manages ChatFollow (tail -f mode).
+// memory-detail, session-chat-detail). It adjusts ContentOffset, capped to the actual
+// content length.
 func (m *AppModel) updateContentScroll(msg tea.KeyMsg) {
-	// Sync ContentOffset from the virtual follow position before applying a delta,
-	// so relative moves (j/k/ctrl+d/ctrl+u) work from the actual bottom.
-	if m.ChatFollow && m.Resource == model.ResourceSessionChat {
-		m.ContentOffset = m.contentMaxOffset()
-	}
 	half := m.contentHeight() / 2
 	cap := func() {
 		if max := m.contentMaxOffset(); m.ContentOffset > max {
@@ -295,37 +298,52 @@ func (m *AppModel) updateContentScroll(msg tea.KeyMsg) {
 		}
 	}
 	switch msg.String() {
-	case "j":
+	case "j", "down":
 		m.ContentOffset++
 		cap()
-		if m.ContentOffset >= m.contentMaxOffset() {
-			m.ChatFollow = true
-		}
-	case "k":
-		m.ChatFollow = false
+	case "k", "up":
 		if m.ContentOffset > 0 {
 			m.ContentOffset--
 		}
 	case "G":
 		m.ContentOffset = m.contentMaxOffset()
-		m.ChatFollow = true
 	case "g":
 		m.ContentOffset = 0
-		m.ChatFollow = false
-	case "ctrl+d":
+	case "ctrl+d", "pgdown":
 		m.ContentOffset += half
 		cap()
-		if m.ContentOffset >= m.contentMaxOffset() {
-			m.ChatFollow = true
-		}
-	case "ctrl+u":
-		m.ChatFollow = false
+	case "ctrl+u", "pgup":
 		if m.ContentOffset >= half {
 			m.ContentOffset -= half
 		} else {
 			m.ContentOffset = 0
 		}
 	}
+}
+
+// updateChatFollow manages ChatFollow state based on navigation keys.
+// G enables follow; k/g/ctrl+u disable it.
+func (m *AppModel) updateChatFollow(msg tea.KeyMsg) {
+	if m.Resource != model.ResourceHistory {
+		return
+	}
+	switch msg.String() {
+	case "G":
+		m.ChatFollow = true
+	case "k", "up", "g", "ctrl+u", "pgup":
+		m.ChatFollow = false
+	case "j", "down", "ctrl+d", "pgdown":
+		// Enable follow if we land on the last row
+		n := m.Table.FilteredCount()
+		if n > 0 && m.Table.Selected >= n-2 {
+			m.ChatFollow = true
+		}
+	}
+}
+
+// RebuildChatItems rebuilds the flattened ChatItems list from current turn data.
+func (m *AppModel) RebuildChatItems() {
+	m.ChatItems = BuildChatItems(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes)
 }
 
 // refreshMenu updates the menu nav and util items based on current state.
@@ -406,7 +424,9 @@ func (m *AppModel) navigateBack() {
 	// Navigate up the resource hierarchy
 	m.ContentOffset = 0
 	switch m.Resource {
-	case model.ResourceSessionChat:
+	case model.ResourceHistoryDetail:
+		m.switchResource(model.ResourceHistory)
+	case model.ResourceHistory:
 		m.SelectedSessionID = ""
 		m.SelectedSessionFilePath = ""
 		m.SelectedSessionSubagentDir = ""
@@ -414,6 +434,7 @@ func (m *AppModel) navigateBack() {
 		m.SubagentTurns = nil
 		m.SubagentTypes = nil
 		m.ChatFollow = false
+		m.ChatItems = nil
 		m.popFilter()
 		m.switchResource(model.ResourceSessions)
 	case model.ResourceAgents:
@@ -442,6 +463,17 @@ func (m *AppModel) drillDown() {
 		return
 	}
 	switch m.Resource {
+	case model.ResourceHistory:
+		if ci, ok := row.Data.(ChatItem); ok {
+			for i, item := range m.ChatItems {
+				if item.Turn.Timestamp.Equal(ci.Turn.Timestamp) && item.Turn.Role == ci.Turn.Role {
+					m.SelectedChatItem = i
+					break
+				}
+			}
+			m.drillInto(model.ResourceHistoryDetail)
+		}
+		return
 	case model.ResourceProjects:
 		if p, ok := row.Data.(*model.Project); ok {
 			m.SelectedProjectHash = p.Hash
@@ -463,7 +495,8 @@ func (m *AppModel) drillDown() {
 				}
 			}
 		}
-		m.drillInto(model.ResourceSessionChat)
+		m.drillInto(model.ResourceHistory)
+		m.RebuildChatItems()
 	case model.ResourcePlugins:
 		if p, ok := row.Data.(*model.Plugin); ok {
 			m.SelectedPlugin = p
@@ -490,7 +523,7 @@ func (m *AppModel) drillInto(rt model.ResourceType) {
 	m.Filter.Deactivate()
 	m.Filter.Input = ""
 	m.ContentOffset = 0
-	if rt == model.ResourceSessionChat {
+	if rt == model.ResourceHistory {
 		m.ChatFollow = true
 	}
 	m.refreshMenu()
@@ -548,18 +581,20 @@ func (m AppModel) View() string {
 
 	// --- 3. Content ---
 	var contentStr string
+	limit := m.contentHeight()
 	switch m.Resource {
 	case model.ResourcePluginItemDetail:
 		contentStr = RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
-	case model.ResourceSessionChat:
-		contentStr = RenderSessionChat(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes, m.contentWidth())
+	case model.ResourceHistoryDetail:
+		if m.SelectedChatItem >= 0 && m.SelectedChatItem < len(m.ChatItems) {
+			contentStr = RenderChatItemDetail(m.ChatItems[m.SelectedChatItem], m.contentWidth())
+		}
 	default:
 		contentStr = m.Table.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
-	limit := m.contentHeight()
 	// For content-only views, apply scroll offset (capped to actual max).
 	if isContentView(m.Resource) {
 		maxOffset := len(rawLines) - limit
@@ -567,10 +602,6 @@ func (m AppModel) View() string {
 			maxOffset = 0
 		}
 		offset := m.ContentOffset
-		// Follow mode: always show the bottom of the content.
-		if m.ChatFollow && m.Resource == model.ResourceSessionChat {
-			offset = maxOffset
-		}
 		if offset > maxOffset {
 			offset = maxOffset
 		}

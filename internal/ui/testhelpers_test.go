@@ -79,6 +79,28 @@ func sessionRows(n int) []ui.Row {
 	return rows
 }
 
+// chatItemRows creates table rows from ChatItems for testing the session-chat table.
+func chatItemRows(items []ui.ChatItem) []ui.Row {
+	rows := make([]ui.Row, len(items))
+	for i, item := range items {
+		var prev *ui.ChatItem
+		if i > 0 {
+			prev = &items[i-1]
+		}
+		rows[i] = ui.Row{
+			Cells: []string{
+				item.WhoLabel(),
+				item.MessagePreview(120),
+				item.ActionLabel(),
+				item.ModelTokenLabel(),
+				item.TimeLabel(prev),
+			},
+			Data: item,
+		}
+	}
+	return rows
+}
+
 // newTestModel creates a teatest TestModel pre-populated with rows.
 func newTestModel(t *testing.T, resource model.ResourceType, dp *mockDP, rows []ui.Row) *teatest.TestModel {
 	t.Helper()

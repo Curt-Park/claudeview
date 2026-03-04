@@ -107,11 +107,11 @@ func TestRenderPluginItemDetail_Hook_ShowsCommandScripts(t *testing.T) {
 	}
 }
 
-func TestRenderSessionChat_UserBubble(t *testing.T) {
-	turns := []model.Turn{
-		{Role: "user", Text: "Hello, Claude!", Timestamp: time.Date(2026, 3, 2, 9, 13, 0, 0, time.UTC)},
+func TestRenderChatItemDetail_UserBubble(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{Role: "user", Text: "Hello, Claude!", Timestamp: time.Date(2026, 3, 2, 9, 13, 0, 0, time.UTC)},
 	}
-	got := ui.RenderSessionChat(turns, nil, nil, 80)
+	got := ui.RenderChatItemDetail(item, 80)
 	if !strings.Contains(got, "Hello, Claude!") {
 		t.Errorf("expected user text in output, got:\n%s", got)
 	}
@@ -123,26 +123,19 @@ func TestRenderSessionChat_UserBubble(t *testing.T) {
 	}
 }
 
-func TestRenderSessionChat_MultilineUserBubble(t *testing.T) {
-	turns := []model.Turn{
-		{Role: "user", Text: "Requirement:\n- req1\n- req2", Timestamp: time.Now()},
+func TestRenderChatItemDetail_MultilineUserBubble(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{Role: "user", Text: "Requirement:\n- req1\n- req2", Timestamp: time.Now()},
 	}
-	got := ui.RenderSessionChat(turns, nil, nil, 80)
+	got := ui.RenderChatItemDetail(item, 80)
 	if !strings.Contains(got, "req1") || !strings.Contains(got, "req2") {
 		t.Errorf("expected multiline text preserved, got:\n%s", got)
 	}
 }
 
-func TestRenderSessionChat_NilTurnsReturnsEmpty(t *testing.T) {
-	got := ui.RenderSessionChat(nil, nil, nil, 80)
-	if strings.TrimSpace(got) != "" {
-		t.Errorf("expected empty output for nil turns, got %q", got)
-	}
-}
-
-func TestRenderSessionChat_ClaudeBubble(t *testing.T) {
-	turns := []model.Turn{
-		{
+func TestRenderChatItemDetail_ClaudeBubble(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{
 			Role:         "assistant",
 			Text:         "네, 시작하겠습니다.",
 			ModelName:    "claude-sonnet-4-6",
@@ -151,7 +144,7 @@ func TestRenderSessionChat_ClaudeBubble(t *testing.T) {
 			Timestamp:    time.Date(2026, 3, 2, 9, 14, 0, 0, time.UTC),
 		},
 	}
-	got := ui.RenderSessionChat(turns, nil, nil, 120)
+	got := ui.RenderChatItemDetail(item, 120)
 	if !strings.Contains(got, "네, 시작하겠습니다.") {
 		t.Errorf("expected assistant text, got:\n%s", got)
 	}
@@ -166,21 +159,21 @@ func TestRenderSessionChat_ClaudeBubble(t *testing.T) {
 	}
 }
 
-func TestRenderSessionChat_ThinkingDim(t *testing.T) {
-	turns := []model.Turn{
-		{Role: "assistant", Text: "response", Thinking: "let me think about this carefully"},
+func TestRenderChatItemDetail_ThinkingDim(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{Role: "assistant", Text: "response", Thinking: "let me think about this carefully"},
 	}
-	got := ui.RenderSessionChat(turns, nil, nil, 120)
+	got := ui.RenderChatItemDetail(item, 120)
 	if !strings.Contains(got, "think") {
 		t.Errorf("expected thinking content in output, got:\n%s", got)
 	}
 }
 
-func TestRenderSessionChat_ToolCallLines(t *testing.T) {
+func TestRenderChatItemDetail_ToolCallLines(t *testing.T) {
 	input := json.RawMessage(`{"file_path":"internal/ui/app.go"}`)
 	result := json.RawMessage(`"120 lines\nof content"`)
-	turns := []model.Turn{
-		{
+	item := ui.ChatItem{
+		Turn: model.Turn{
 			Role: "assistant",
 			Text: "done",
 			ToolCalls: []*model.ToolCall{
@@ -189,7 +182,7 @@ func TestRenderSessionChat_ToolCallLines(t *testing.T) {
 			},
 		},
 	}
-	got := ui.RenderSessionChat(turns, nil, nil, 120)
+	got := ui.RenderChatItemDetail(item, 120)
 	if !strings.Contains(got, "Read") {
 		t.Errorf("expected 'Read' tool name, got:\n%s", got)
 	}
@@ -201,30 +194,70 @@ func TestRenderSessionChat_ToolCallLines(t *testing.T) {
 	}
 }
 
-func TestRenderSessionChat_SubagentBubble(t *testing.T) {
-	taskInput := json.RawMessage(`{"description":"Explore codebase","subagent_type":"Explore"}`)
-	mainTurns := []model.Turn{
-		{
-			Role: "assistant",
-			Text: "Let me explore.",
-			ToolCalls: []*model.ToolCall{
-				{Name: "Task", Input: taskInput, IsError: false},
-			},
-		},
+func TestRenderChatItemDetail_SubagentBubble(t *testing.T) {
+	item := ui.ChatItem{
+		Turn:       model.Turn{Text: "Found 42 files.", ModelName: "claude-sonnet-4-6", Role: "assistant"},
+		IsSubagent: true,
+		AgentType:  model.AgentTypeExplore,
 	}
-	subTurns := [][]model.Turn{
-		{
-			{Role: "assistant", Text: "Found 42 files.", ModelName: "claude-sonnet-4-6"},
-		},
-	}
-	subTypes := []model.AgentType{model.AgentTypeExplore}
-
-	got := ui.RenderSessionChat(mainTurns, subTurns, subTypes, 120)
+	got := ui.RenderChatItemDetail(item, 120)
 	if !strings.Contains(got, "Found 42 files.") {
 		t.Errorf("expected subagent text in output, got:\n%s", got)
 	}
 	if !strings.Contains(got, "Explorer") || !strings.Contains(got, "🔍") {
 		t.Errorf("expected subagent label with icon, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_GroupedWithExtraTurns(t *testing.T) {
+	item := ui.ChatItem{
+		Turn: model.Turn{
+			Role:         "assistant",
+			Text:         "Let me check the code.",
+			ModelName:    "claude-opus-4-6",
+			InputTokens:  500,
+			OutputTokens: 100,
+			Timestamp:    time.Date(2026, 3, 2, 9, 15, 0, 0, time.UTC),
+			ToolCalls: []*model.ToolCall{
+				{Name: "Grep", Input: json.RawMessage(`{"pattern":"KeyUp"}`)},
+			},
+		},
+		ExtraTurns: []model.Turn{
+			{
+				Role:         "assistant",
+				InputTokens:  300,
+				OutputTokens: 50,
+				ToolCalls: []*model.ToolCall{
+					{Name: "Read", Input: json.RawMessage(`{"file_path":"app.go"}`)},
+					{Name: "Edit", Input: json.RawMessage(`{"file_path":"app.go"}`)},
+				},
+			},
+		},
+	}
+	got := ui.RenderChatItemDetail(item, 120)
+
+	// Primary text should be visible
+	if !strings.Contains(got, "Let me check the code.") {
+		t.Errorf("expected primary text in output, got:\n%s", got)
+	}
+	// Primary tool call
+	if !strings.Contains(got, "Grep") {
+		t.Errorf("expected primary tool call 'Grep', got:\n%s", got)
+	}
+	// ExtraTurn tool calls
+	if !strings.Contains(got, "Read") {
+		t.Errorf("expected extra turn tool call 'Read', got:\n%s", got)
+	}
+	if !strings.Contains(got, "Edit") {
+		t.Errorf("expected extra turn tool call 'Edit', got:\n%s", got)
+	}
+	// Separator
+	if !strings.Contains(got, "continued") {
+		t.Errorf("expected '── continued ──' separator, got:\n%s", got)
+	}
+	// Aggregated tokens: 500+100+300+50 = 950
+	if !strings.Contains(got, "950") {
+		t.Errorf("expected aggregated token count 950, got:\n%s", got)
 	}
 }
 

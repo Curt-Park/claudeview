@@ -111,6 +111,10 @@ type rootModel struct {
 	pluginsView     *view.ResourceView[*model.Plugin]
 	pluginItemsView *view.ResourceView[*model.PluginItem]
 	memoriesView    *view.ResourceView[*model.Memory]
+	chatView        *view.ResourceView[ui.ChatItem]
+
+	// Cached chat items for the chat table
+	chatItems []ui.ChatItem
 
 	// Static info (set once at startup)
 	userStr       string
@@ -136,6 +140,7 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		pluginsView:     view.NewPluginsView(0, 0),
 		pluginItemsView: view.NewPluginItemsView(0, 0),
 		memoriesView:    view.NewMemoriesView(0, 0),
+		chatView:        view.NewChatView(0, 0),
 		cursor:          make(map[model.ResourceType]struct{ sel, off int }),
 		lastResource:    app.Resource,
 	}
@@ -183,6 +188,8 @@ func (rm *rootModel) loadData() {
 		}
 	case model.ResourceMemory:
 		rm.memories = rm.dp.GetMemories(rm.app.SelectedProjectHash)
+	case model.ResourceHistory:
+		rm.app.RebuildChatItems()
 	}
 	rm.syncView()
 }
@@ -220,6 +227,12 @@ func (rm *rootModel) syncView() {
 		rm.app.Table = rm.pluginItemsView.Sync(rm.pluginItems, w, h, cur.sel, cur.off, flt, false)
 	case model.ResourceMemory:
 		rm.app.Table = rm.memoriesView.Sync(rm.memories, w, h, cur.sel, cur.off, flt, false)
+	case model.ResourceHistory:
+		rm.chatItems = rm.app.ChatItems
+		rm.app.Table = rm.chatView.Sync(rm.chatItems, w, h, cur.sel, cur.off, flt, false)
+		if rm.app.ChatFollow {
+			rm.app.Table.GotoBottom()
+		}
 	}
 
 	rm.lastResource = rt
@@ -269,10 +282,12 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rm.pluginItems = msg.pluginItems
 			case model.ResourceMemory:
 				rm.memories = msg.memories
-			case model.ResourceSessionChat:
+			case model.ResourceHistory, model.ResourceHistoryDetail:
 				rm.app.SelectedTurns = msg.turns
 				rm.app.SubagentTurns = msg.subagentTurns
 				rm.app.SubagentTypes = msg.subagentTypes
+				rm.app.RebuildChatItems()
+				rm.chatItems = rm.app.ChatItems
 			}
 			rm.syncView()
 		}
@@ -321,7 +336,7 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			}
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
-		case model.ResourceSessionChat:
+		case model.ResourceHistory, model.ResourceHistoryDetail:
 			if sessionFilePath != "" {
 				msg.turns = dp.GetTurns(sessionFilePath)
 			}
@@ -399,13 +414,15 @@ type liveDataProvider struct {
 	currentProject string
 	currentSession string
 	aggCache       map[string]*transcript.SessionAggregates
+	turnsCache     map[string]*transcript.TranscriptCache
 	mu             sync.Mutex
 }
 
 func newLiveProvider(claudeDir string) ui.DataProvider {
 	return &liveDataProvider{
-		claudeDir: claudeDir,
-		aggCache:  make(map[string]*transcript.SessionAggregates),
+		claudeDir:  claudeDir,
+		aggCache:   make(map[string]*transcript.SessionAggregates),
+		turnsCache: make(map[string]*transcript.TranscriptCache),
 	}
 }
 
@@ -654,12 +671,22 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 }
 
 func (l *liveDataProvider) GetTurns(filePath string) []model.Turn {
-	parsed, err := transcript.ParseFile(filePath)
+	l.mu.Lock()
+	cached := l.turnsCache[filePath]
+	l.mu.Unlock()
+
+	cache, err := transcript.ParseFileIncremental(filePath, cached)
 	if err != nil {
 		return nil
 	}
-	turns := make([]model.Turn, 0, len(parsed.Turns))
-	for _, t := range parsed.Turns {
+
+	l.mu.Lock()
+	l.turnsCache[filePath] = cache
+	l.mu.Unlock()
+
+	parsed := cache.Turns()
+	turns := make([]model.Turn, 0, len(parsed))
+	for _, t := range parsed {
 		turn := model.Turn{
 			Role:         t.Role,
 			Text:         t.Text,

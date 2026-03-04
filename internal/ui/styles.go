@@ -94,22 +94,7 @@ var (
 	StyleRowSubtitle         = lipgloss.NewStyle().Foreground(colorGray)
 	StyleRowSubtitleSelected = lipgloss.NewStyle().Background(colorBgSel).Foreground(colorGray)
 
-	// Chat bubble border styles
-	StyleUserBubble = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorBlue).
-			Padding(0, 1)
-
-	StyleClaudeBubble = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorGreen).
-				Padding(0, 1)
-
-	StyleSubagentBubble = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorPurple).
-				Padding(0, 1)
-
+	// Chat detail styles
 	StyleChatThinking  = lipgloss.NewStyle().Foreground(colorGray)
 	StyleChatToolOK    = lipgloss.NewStyle().Foreground(colorGreen)
 	StyleChatToolErr   = lipgloss.NewStyle().Foreground(colorRed)

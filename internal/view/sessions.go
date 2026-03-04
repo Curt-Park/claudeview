@@ -13,7 +13,7 @@ var sessionColumnsBase = []ui.Column{
 	{Title: "TOPIC", Width: 20, Flex: true, MaxPercent: 0.35},
 	{Title: "TURNS", Width: 6},
 	{Title: "AGENTS", Width: 6},
-	{Title: "TOKENS", Width: 20, Flex: true, MaxPercent: 0.25},
+	{Title: "MODEL:TOKEN", Width: 20, Flex: true, MaxPercent: 0.25},
 	{Title: "LAST ACTIVE", Width: 11},
 }
 
@@ -23,7 +23,7 @@ var sessionColumnsFlat = []ui.Column{
 	{Title: "TOPIC", Width: 20, Flex: true, MaxPercent: 0.35},
 	{Title: "TURNS", Width: 6},
 	{Title: "AGENTS", Width: 6},
-	{Title: "TOKENS", Width: 20, Flex: true, MaxPercent: 0.25},
+	{Title: "MODEL:TOKEN", Width: 20, Flex: true, MaxPercent: 0.25},
 	{Title: "LAST ACTIVE", Width: 11},
 }
 

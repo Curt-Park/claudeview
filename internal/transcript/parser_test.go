@@ -250,6 +250,184 @@ func TestParseAggregatesIncremental(t *testing.T) {
 	}
 }
 
+func TestParseConsecutiveAssistantEntries(t *testing.T) {
+	f, err := os.CreateTemp("", "consecutive-assistant-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	// User message, then two consecutive assistant entries:
+	// first has text only, second has tool_use only.
+	content := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"Check the code"}]}}` + "\n" +
+		`{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"Let me check."}],"model":"claude-opus-4-6","usage":{"input_tokens":100,"output_tokens":20}}}` + "\n" +
+		`{"type":"assistant","timestamp":"2025-01-01T10:00:02Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"main.go"}}],"model":"claude-opus-4-6","usage":{"input_tokens":50,"output_tokens":10}}}` + "\n" +
+		`{"type":"user","timestamp":"2025-01-01T10:00:03Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"package main"}]}}` + "\n"
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	result, err := transcript.ParseFile(f.Name())
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// Should have 2 turns: 1 user + 1 merged assistant (not 2 separate assistant turns)
+	if len(result.Turns) != 2 {
+		t.Fatalf("expected 2 turns (1 user + 1 merged assistant), got %d", len(result.Turns))
+	}
+
+	assistant := result.Turns[1]
+	if assistant.Role != "assistant" {
+		t.Fatalf("expected assistant turn, got %q", assistant.Role)
+	}
+	if assistant.Text != "Let me check." {
+		t.Errorf("expected merged text %q, got %q", "Let me check.", assistant.Text)
+	}
+	if len(assistant.ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call in merged turn, got %d", len(assistant.ToolCalls))
+	}
+	if assistant.ToolCalls[0].Name != "Read" {
+		t.Errorf("expected tool call name 'Read', got %q", assistant.ToolCalls[0].Name)
+	}
+	if assistant.ToolCalls[0].Result == nil {
+		t.Error("expected tool result to be matched")
+	}
+	// Usage should be summed
+	if assistant.Usage.InputTokens != 150 {
+		t.Errorf("expected merged InputTokens=150, got %d", assistant.Usage.InputTokens)
+	}
+	if assistant.Usage.OutputTokens != 30 {
+		t.Errorf("expected merged OutputTokens=30, got %d", assistant.Usage.OutputTokens)
+	}
+}
+
+func TestParseCompactBoundary(t *testing.T) {
+	f, err := os.CreateTemp("", "compact-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	content := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"Hello"}]}}` + "\n" +
+		`{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"Hi there"}],"model":"claude-opus-4-6","usage":{"input_tokens":100,"output_tokens":20}}}` + "\n" +
+		`{"type":"system","subtype":"compact_boundary","content":"Conversation compacted","compactMetadata":{"trigger":"auto","preTokens":168000},"timestamp":"2025-01-01T10:05:00Z"}` + "\n" +
+		`{"type":"user","timestamp":"2025-01-01T10:05:01Z","message":{"role":"user","content":[{"type":"text","text":"Continue please"}]}}` + "\n" +
+		`{"type":"assistant","timestamp":"2025-01-01T10:05:02Z","message":{"role":"assistant","content":[{"type":"text","text":"Sure"}],"model":"claude-opus-4-6","usage":{"input_tokens":50,"output_tokens":10}}}` + "\n"
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	result, err := transcript.ParseFile(f.Name())
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// Expect: user, assistant, system, user, assistant = 5 turns
+	if len(result.Turns) != 5 {
+		t.Fatalf("expected 5 turns, got %d", len(result.Turns))
+	}
+
+	sys := result.Turns[2]
+	if sys.Role != "system" {
+		t.Errorf("expected system turn at index 2, got role %q", sys.Role)
+	}
+	want := "Conversation compacted (168k tokens)"
+	if sys.Text != want {
+		t.Errorf("expected text %q, got %q", want, sys.Text)
+	}
+	if sys.Timestamp.IsZero() {
+		t.Error("expected non-zero timestamp on system turn")
+	}
+}
+
+func TestParseFileIncremental(t *testing.T) {
+	f, err := os.CreateTemp("", "incremental-turns-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	// Phase 1: user message + assistant with tool_use
+	line1 := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"Check the code"}]}}` + "\n"
+	line2 := `{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"Let me check."},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"main.go"}}],"model":"claude-opus-4-6","usage":{"input_tokens":100,"output_tokens":20}}}` + "\n"
+	if _, err := f.WriteString(line1 + line2); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	// First call: nil cache
+	cache1, err := transcript.ParseFileIncremental(f.Name(), nil)
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+	turns1 := cache1.Turns()
+	// Should have 2 turns: user + pending assistant snapshot
+	if len(turns1) != 2 {
+		t.Fatalf("phase 1: expected 2 turns, got %d", len(turns1))
+	}
+	if turns1[0].Role != "user" || turns1[0].Text != "Check the code" {
+		t.Errorf("phase 1: unexpected user turn: %+v", turns1[0])
+	}
+	if turns1[1].Role != "assistant" || turns1[1].Text != "Let me check." {
+		t.Errorf("phase 1: unexpected assistant turn: %+v", turns1[1])
+	}
+	// Tool result not yet matched (no tool_result entry yet)
+	if turns1[1].ToolCalls[0].Result != nil {
+		t.Error("phase 1: tool result should not be matched yet")
+	}
+
+	prevOffset := cache1.Offset()
+
+	// Phase 2: no new data — turns unchanged
+	cache2, err := transcript.ParseFileIncremental(f.Name(), cache1)
+	if err != nil {
+		t.Fatalf("second call failed: %v", err)
+	}
+	turns2 := cache2.Turns()
+	if len(turns2) != 2 {
+		t.Fatalf("phase 2: expected 2 turns, got %d", len(turns2))
+	}
+	if cache2.Offset() != prevOffset {
+		t.Errorf("phase 2: offset should not change: got %d, want %d", cache2.Offset(), prevOffset)
+	}
+
+	// Phase 3: append user with tool_result + new assistant
+	line3 := `{"type":"user","timestamp":"2025-01-01T10:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"package main"}]}}` + "\n"
+	line4 := `{"type":"assistant","timestamp":"2025-01-01T10:00:03Z","message":{"role":"assistant","content":[{"type":"text","text":"The file contains a main package."}],"model":"claude-opus-4-6","usage":{"input_tokens":200,"output_tokens":50}}}` + "\n"
+	af, err := os.OpenFile(f.Name(), os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := af.WriteString(line3 + line4); err != nil {
+		_ = af.Close()
+		t.Fatal(err)
+	}
+	_ = af.Close()
+
+	cache3, err := transcript.ParseFileIncremental(f.Name(), cache2)
+	if err != nil {
+		t.Fatalf("third call failed: %v", err)
+	}
+	turns3 := cache3.Turns()
+	// Should have 3 turns: user, flushed assistant (with tool result), new pending assistant
+	if len(turns3) != 3 {
+		t.Fatalf("phase 3: expected 3 turns, got %d", len(turns3))
+	}
+	// First assistant turn should now have tool result matched
+	if turns3[1].ToolCalls[0].Result == nil {
+		t.Error("phase 3: tool result should be matched on flushed turn")
+	}
+	if turns3[2].Text != "The file contains a main package." {
+		t.Errorf("phase 3: unexpected new assistant text: %q", turns3[2].Text)
+	}
+	if cache3.Offset() <= prevOffset {
+		t.Error("phase 3: offset should have increased")
+	}
+}
+
 func TestCountSubagents(t *testing.T) {
 	// Empty directory
 	dir, err := os.MkdirTemp("", "subagents-*")

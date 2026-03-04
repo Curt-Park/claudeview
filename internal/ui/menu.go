@@ -95,7 +95,7 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 	case model.ResourceProjects:
 		items = append(items, MenuItem{Key: "enter", Desc: "see sessions"})
 	case model.ResourceSessions:
-		items = append(items, MenuItem{Key: "enter", Desc: "view chat"})
+		items = append(items, MenuItem{Key: "enter", Desc: "view history"})
 	case model.ResourceAgents:
 		// no enter hint
 	case model.ResourcePlugins:
@@ -104,6 +104,8 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 		items = append(items, MenuItem{Key: "enter", Desc: "detail"})
 	case model.ResourceMemory:
 		items = append(items, MenuItem{Key: "enter", Desc: "detail"})
+	case model.ResourceHistory:
+		items = append(items, MenuItem{Key: "enter", Desc: "expand"})
 	}
 	if hasFilter {
 		items = append(items, MenuItem{Key: "esc", Desc: "clear filter"})
@@ -113,11 +115,13 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 			items = append(items, MenuItem{Key: "esc", Desc: "see projects"})
 		case model.ResourceAgents:
 			items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
-		case model.ResourceSessionChat:
+		case model.ResourceHistory:
 			items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
 		case model.ResourcePlugins, model.ResourceMemory:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
 		case model.ResourcePluginDetail, model.ResourcePluginItemDetail, model.ResourceMemoryDetail:
+			items = append(items, MenuItem{Key: "esc", Desc: "back"})
+		case model.ResourceHistoryDetail:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
 			// ResourceProjects: no esc (root level)
 		}
@@ -130,7 +134,7 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 // so the filter key is omitted.
 func TableUtilItems(rt model.ResourceType) []MenuItem {
 	switch rt {
-	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail, model.ResourceSessionChat:
+	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail, model.ResourceHistoryDetail:
 		return nil
 	}
 	return []MenuItem{

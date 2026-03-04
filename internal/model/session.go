@@ -52,7 +52,7 @@ func (s *Session) TokenString() string {
 	for _, m := range models {
 		tc := s.TokensByModel[m]
 		total := tc.InputTokens + tc.OutputTokens
-		parts = append(parts, fmt.Sprintf("%s:%s", shortModelName(m), formatTokens(total)))
+		parts = append(parts, fmt.Sprintf("%s:%s", ShortModelName(m), formatTokens(total)))
 	}
 	return strings.Join(parts, " ")
 }
@@ -89,8 +89,8 @@ func (s *Session) ShortID() string {
 	return s.ID
 }
 
-// shortModelName extracts a short identifier from a model name.
-func shortModelName(model string) string {
+// ShortModelName extracts a short identifier from a model name.
+func ShortModelName(model string) string {
 	lower := strings.ToLower(model)
 	switch {
 	case strings.Contains(lower, "opus"):

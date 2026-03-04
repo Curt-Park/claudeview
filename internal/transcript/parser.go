@@ -3,6 +3,7 @@ package transcript
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -103,6 +104,15 @@ func parseSystemDuration(message json.RawMessage, rawLine []byte) (durationMS in
 	return 0, 0, 0
 }
 
+// formatCompactText builds display text for a compact_boundary system entry.
+func formatCompactText(e entry) string {
+	text := "Conversation compacted"
+	if e.CompactMetadata != nil && e.CompactMetadata.PreTokens > 0 {
+		text += fmt.Sprintf(" (%dk tokens)", e.CompactMetadata.PreTokens/1000)
+	}
+	return text
+}
+
 // Parse reads from an io.Reader and parses JSONL transcript entries.
 func Parse(r io.Reader) (*ParsedTranscript, error) {
 	scanner := newJSONLScanner(r)
@@ -182,9 +192,37 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 					})
 				}
 			}
-			pendingAssistantTurn = &turn
+			if pendingAssistantTurn != nil {
+				// Merge consecutive assistant entries (e.g. text-only followed by tool-only)
+				if turn.Text != "" {
+					if pendingAssistantTurn.Text != "" {
+						pendingAssistantTurn.Text += "\n"
+					}
+					pendingAssistantTurn.Text += turn.Text
+				}
+				if turn.Thinking != "" {
+					if pendingAssistantTurn.Thinking != "" {
+						pendingAssistantTurn.Thinking += "\n"
+					}
+					pendingAssistantTurn.Thinking += turn.Thinking
+				}
+				pendingAssistantTurn.ToolCalls = append(pendingAssistantTurn.ToolCalls, turn.ToolCalls...)
+				pendingAssistantTurn.Usage.InputTokens += turn.Usage.InputTokens
+				pendingAssistantTurn.Usage.OutputTokens += turn.Usage.OutputTokens
+			} else {
+				pendingAssistantTurn = &turn
+			}
 
 		case "system":
+			if entry.Subtype == "compact_boundary" {
+				if pendingAssistantTurn != nil {
+					flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors)
+					pendingAssistantTurn = nil
+				}
+				result.Turns = append(result.Turns, Turn{
+					Role: "system", Text: formatCompactText(entry), Timestamp: ts,
+				})
+			}
 			// Two formats: old (fields in Message, snake_case) and new (top-level, camelCase).
 			dur, turns, cost := parseSystemDuration(entry.Message, line)
 			result.DurationMS += dur
@@ -203,6 +241,187 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 	}
 
 	return result, scanner.Err()
+}
+
+// TranscriptCache holds parser state for incremental turns parsing.
+type TranscriptCache struct {
+	committed   []Turn                     // fully flushed turns (tool results matched)
+	pending     *Turn                      // current assistant turn awaiting tool results
+	toolResults map[string]json.RawMessage // collected but unmatched tool results
+	toolErrors  map[string]bool            // error flags for unmatched tool results
+	offset      int64                      // file position after last-read line
+	topic       string                     // first real user message text
+}
+
+// Offset returns the current file read position.
+func (c *TranscriptCache) Offset() int64 { return c.offset }
+
+// Turns returns all turns including a snapshot of the pending assistant turn.
+func (c *TranscriptCache) Turns() []Turn {
+	if c.pending == nil {
+		return c.committed
+	}
+	snapshot := *c.pending
+	snapshot.ToolCalls = make([]ToolCall, len(c.pending.ToolCalls))
+	copy(snapshot.ToolCalls, c.pending.ToolCalls)
+	for i := range snapshot.ToolCalls {
+		tc := &snapshot.ToolCalls[i]
+		if res, ok := c.toolResults[tc.ID]; ok {
+			tc.Result = res
+			tc.IsError = c.toolErrors[tc.ID]
+		}
+	}
+	return append(c.committed, snapshot)
+}
+
+// ParseFileIncremental reads a JSONL file from the stored offset,
+// processes new lines into turns, and returns the updated cache.
+// If cache is nil, a new TranscriptCache is created (reading from offset 0).
+func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache, error) {
+	if cache == nil {
+		cache = &TranscriptCache{
+			toolResults: make(map[string]json.RawMessage),
+			toolErrors:  make(map[string]bool),
+		}
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return cache, err
+	}
+	defer func() { _ = f.Close() }()
+
+	if cache.offset > 0 {
+		if _, err := f.Seek(cache.offset, io.SeekStart); err != nil {
+			return cache, err
+		}
+	}
+
+	scanner := newJSONLScanner(f)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var e entry
+		if err := json.Unmarshal(line, &e); err != nil {
+			continue
+		}
+
+		ts, _ := time.Parse(time.RFC3339Nano, e.Timestamp)
+
+		switch e.Type {
+		case "user":
+			var msg userMessage
+			if err := json.Unmarshal(e.Message, &msg); err != nil {
+				continue
+			}
+			// Collect tool results to match with pending tool calls
+			for _, c := range msg.toolResults() {
+				cache.toolResults[c.ToolUseID] = c.Content
+				cache.toolErrors[c.ToolUseID] = c.IsError
+			}
+			// Flush pending assistant turn with matched results
+			if cache.pending != nil {
+				for i := range cache.pending.ToolCalls {
+					tc := &cache.pending.ToolCalls[i]
+					if res, ok := cache.toolResults[tc.ID]; ok {
+						tc.Result = res
+						tc.IsError = cache.toolErrors[tc.ID]
+					}
+				}
+				cache.committed = append(cache.committed, *cache.pending)
+				cache.pending = nil
+			}
+			// Add user text turns
+			turn := Turn{Role: "user", Timestamp: ts}
+			turn.Text = msg.textContent()
+			if turn.Text != "" {
+				if cache.topic == "" && !strings.HasPrefix(turn.Text, "Base directory for this skill:") {
+					cache.topic = extractTopic(turn.Text)
+				}
+				cache.committed = append(cache.committed, turn)
+			}
+
+		case "assistant":
+			var msg assistantMessage
+			if err := json.Unmarshal(e.Message, &msg); err != nil {
+				continue
+			}
+			turn := Turn{
+				Role:      "assistant",
+				Model:     msg.Model,
+				Usage:     msg.Usage,
+				Timestamp: ts,
+			}
+			for _, c := range msg.Content {
+				switch c.Type {
+				case "text":
+					turn.Text += c.Text
+				case "thinking":
+					turn.Thinking += c.Thinking
+				case "tool_use":
+					turn.ToolCalls = append(turn.ToolCalls, ToolCall{
+						ID:        c.ID,
+						Name:      c.Name,
+						Input:     c.Input,
+						Timestamp: ts,
+					})
+				}
+			}
+			if cache.pending != nil {
+				// Merge consecutive assistant entries
+				if turn.Text != "" {
+					if cache.pending.Text != "" {
+						cache.pending.Text += "\n"
+					}
+					cache.pending.Text += turn.Text
+				}
+				if turn.Thinking != "" {
+					if cache.pending.Thinking != "" {
+						cache.pending.Thinking += "\n"
+					}
+					cache.pending.Thinking += turn.Thinking
+				}
+				cache.pending.ToolCalls = append(cache.pending.ToolCalls, turn.ToolCalls...)
+				cache.pending.Usage.InputTokens += turn.Usage.InputTokens
+				cache.pending.Usage.OutputTokens += turn.Usage.OutputTokens
+			} else {
+				cache.pending = &turn
+			}
+
+		case "system":
+			if e.Subtype == "compact_boundary" {
+				if cache.pending != nil {
+					for i := range cache.pending.ToolCalls {
+						tc := &cache.pending.ToolCalls[i]
+						if res, ok := cache.toolResults[tc.ID]; ok {
+							tc.Result = res
+							tc.IsError = cache.toolErrors[tc.ID]
+						}
+					}
+					cache.committed = append(cache.committed, *cache.pending)
+					cache.pending = nil
+				}
+				cache.committed = append(cache.committed, Turn{
+					Role: "system", Text: formatCompactText(e), Timestamp: ts,
+				})
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return cache, err
+	}
+
+	// Update offset to end of file
+	if pos, err := f.Seek(0, io.SeekEnd); err == nil {
+		cache.offset = pos
+	}
+
+	return cache, nil
 }
 
 // SessionAggregates holds cached session-level metrics for incremental parsing.

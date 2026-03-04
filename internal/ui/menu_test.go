@@ -159,7 +159,7 @@ func TestTableNavItemsPluginItemDetailHasEsc(t *testing.T) {
 }
 
 func TestSessionChatMenuHints(t *testing.T) {
-	items := ui.TableNavItems(model.ResourceSessionChat, false)
+	items := ui.TableNavItems(model.ResourceHistory, false)
 	keys := make(map[string]string)
 	for _, it := range items {
 		keys[it.Key] = it.Desc

@@ -440,13 +440,13 @@ func TestDrilldownSessionsToSessionChat(t *testing.T) {
 
 	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
 
-	if app.Resource != model.ResourceSessionChat {
+	if app.Resource != model.ResourceHistory {
 		t.Errorf("expected resource=session-chat after Enter on sessions, got %s", app.Resource)
 	}
 }
 
 func TestSessionChatEscReturnsToSessions(t *testing.T) {
-	app := newApp(model.ResourceSessionChat)
+	app := newApp(model.ResourceHistory)
 
 	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc})
 
@@ -455,16 +455,21 @@ func TestSessionChatEscReturnsToSessions(t *testing.T) {
 	}
 }
 
-func TestSessionChatIsContentView(t *testing.T) {
-	app := newApp(model.ResourceSessionChat)
+func TestSessionChatIsTableView(t *testing.T) {
+	app := newApp(model.ResourceHistory)
 	app.Width = termWidth
 	app.Height = termHeight
-	before := app.Table.Selected
+	items := []ui.ChatItem{
+		{Turn: model.Turn{Role: "user", Text: "hello"}},
+		{Turn: model.Turn{Role: "assistant", Text: "hi"}},
+	}
+	app.ChatItems = items
+	app.Table.SetRows(chatItemRows(items))
 
 	app = updateApp(app, keyMsg("j"))
 
-	if app.Table.Selected != before {
-		t.Error("session-chat j should not change Table.Selected")
+	if app.Table.Selected != 1 {
+		t.Errorf("expected Table.Selected=1 after j in session-chat table, got %d", app.Table.Selected)
 	}
 }
 
@@ -723,7 +728,7 @@ func TestSessionChat_FollowMode_InitialDrillDown(t *testing.T) {
 
 	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
 
-	if app.Resource != model.ResourceSessionChat {
+	if app.Resource != model.ResourceHistory {
 		t.Fatalf("expected resource=session-chat, got %s", app.Resource)
 	}
 	if !app.ChatFollow {
@@ -732,8 +737,15 @@ func TestSessionChat_FollowMode_InitialDrillDown(t *testing.T) {
 }
 
 func TestSessionChat_FollowMode_ScrollUp_DisablesFollow(t *testing.T) {
-	app := newApp(model.ResourceSessionChat)
+	app := newApp(model.ResourceHistory)
 	app.ChatFollow = true
+	items := []ui.ChatItem{
+		{Turn: model.Turn{Role: "user", Text: "hello"}},
+		{Turn: model.Turn{Role: "assistant", Text: "hi"}},
+	}
+	app.ChatItems = items
+	app.Table.SetRows(chatItemRows(items))
+	app.Table.Selected = 1
 
 	app = updateApp(app, keyMsg("k"))
 
@@ -743,8 +755,15 @@ func TestSessionChat_FollowMode_ScrollUp_DisablesFollow(t *testing.T) {
 }
 
 func TestSessionChat_FollowMode_G_EnablesFollow(t *testing.T) {
-	app := newApp(model.ResourceSessionChat)
+	app := newApp(model.ResourceHistory)
 	app.ChatFollow = false
+	items := []ui.ChatItem{
+		{Turn: model.Turn{Role: "user", Text: "hello"}},
+		{Turn: model.Turn{Role: "assistant", Text: "hi"}},
+	}
+	app.ChatItems = items
+	app.Table.SetRows(chatItemRows(items))
+	app.Table.Selected = 0
 
 	app = updateApp(app, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
 
@@ -754,7 +773,7 @@ func TestSessionChat_FollowMode_G_EnablesFollow(t *testing.T) {
 }
 
 func TestSessionChat_NavigateBack_ClearsState(t *testing.T) {
-	app := newApp(model.ResourceSessionChat)
+	app := newApp(model.ResourceHistory)
 	app.SelectedSessionID = "sess-abc123"
 	app.SelectedSessionFilePath = "/tmp/fake.jsonl"
 	app.SelectedSessionSubagentDir = "/tmp/subagents"
