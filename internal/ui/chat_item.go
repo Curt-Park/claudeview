@@ -59,9 +59,20 @@ func (c ChatItem) MessagePreview(max int) string {
 	}
 	var parts []string
 
-	// Add text preview (first line, whitespace-collapsed)
-	if c.Turn.Text != "" {
-		line := strings.SplitN(c.Turn.Text, "\n", 2)[0]
+	// Add text preview (first line, whitespace-collapsed).
+	// Check Turn.Text first, then fall back to ExtraTurns for collapsed subagents
+	// where the first turn may be tool-only.
+	text := c.Turn.Text
+	if text == "" {
+		for _, et := range c.ExtraTurns {
+			if et.Text != "" {
+				text = et.Text
+				break
+			}
+		}
+	}
+	if text != "" {
+		line := strings.SplitN(text, "\n", 2)[0]
 		line = strings.TrimSpace(line)
 		if line != "" {
 			parts = append(parts, line)
