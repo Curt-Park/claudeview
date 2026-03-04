@@ -178,9 +178,13 @@ func renderExpandedToolCall(tc *model.ToolCall, maxWidth int) string {
 	// Show full result content
 	resultStr := expandResult(tc)
 	if resultStr != "" {
-		wrapped := ansi.Wrap(resultStr, maxWidth-4, "")
-		for _, rl := range strings.Split(wrapped, "\n") {
-			lines = append(lines, "    "+StyleDim.Render(rl))
+		indent := "    "
+		contentWidth := maxWidth - len(indent)
+		if contentWidth < 20 {
+			contentWidth = 20
+		}
+		for _, rl := range strings.Split(resultStr, "\n") {
+			lines = append(lines, indent+ansi.Wrap(StyleDim.Render(rl), contentWidth, ""))
 		}
 	}
 
