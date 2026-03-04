@@ -1,4 +1,6 @@
-# claudeview: Terminal Dashboard for Claude Code
+<p align="center">
+  <img src="assets/banner.svg" alt="claudeview — Terminal Dashboard for Claude Code" width="800">
+</p>
 
 **What is it?**
 

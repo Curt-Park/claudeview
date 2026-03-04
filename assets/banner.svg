@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="800" height="200">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+
+    <!-- Title gradient -->
+    <linearGradient id="title-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#58a6ff"/>
+      <stop offset="100%" stop-color="#bc8cff"/>
+    </linearGradient>
+
+    <!-- Soft glow filter for title -->
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="200" rx="8" ry="8" fill="url(#bg)"/>
+
+  <!-- Left TUI decorative elements — terminal table rows -->
+  <g opacity="0.25">
+    <!-- Row lines -->
+    <rect x="30" y="60" width="80" height="2" rx="1" fill="#8b949e"/>
+    <rect x="30" y="72" width="60" height="2" rx="1" fill="#8b949e"/>
+    <rect x="30" y="84" width="70" height="2" rx="1" fill="#8b949e"/>
+    <rect x="30" y="96" width="50" height="2" rx="1" fill="#8b949e"/>
+    <rect x="30" y="108" width="65" height="2" rx="1" fill="#8b949e"/>
+    <rect x="30" y="120" width="55" height="2" rx="1" fill="#8b949e"/>
+    <rect x="30" y="132" width="75" height="2" rx="1" fill="#8b949e"/>
+
+    <!-- Column separator -->
+    <line x1="55" y1="55" x2="55" y2="138" stroke="#8b949e" stroke-width="1" stroke-dasharray="3,3"/>
+
+    <!-- Cursor highlight -->
+    <rect x="28" y="82" width="85" height="8" rx="2" fill="#58a6ff" opacity="0.3"/>
+  </g>
+
+  <!-- Right TUI decorative elements — terminal table rows -->
+  <g opacity="0.25">
+    <rect x="690" y="60" width="80" height="2" rx="1" fill="#8b949e"/>
+    <rect x="700" y="72" width="60" height="2" rx="1" fill="#8b949e"/>
+    <rect x="695" y="84" width="70" height="2" rx="1" fill="#8b949e"/>
+    <rect x="710" y="96" width="50" height="2" rx="1" fill="#8b949e"/>
+    <rect x="698" y="108" width="65" height="2" rx="1" fill="#8b949e"/>
+    <rect x="705" y="120" width="55" height="2" rx="1" fill="#8b949e"/>
+    <rect x="692" y="132" width="75" height="2" rx="1" fill="#8b949e"/>
+
+    <!-- Column separator -->
+    <line x1="720" y1="55" x2="720" y2="138" stroke="#8b949e" stroke-width="1" stroke-dasharray="3,3"/>
+
+    <!-- Cursor highlight -->
+    <rect x="688" y="94" width="75" height="8" rx="2" fill="#bc8cff" opacity="0.3"/>
+  </g>
+
+  <!-- Title text -->
+  <text x="400" y="100" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="48" font-weight="bold" fill="url(#title-grad)" filter="url(#glow)">claudeview</text>
+
+  <!-- Tagline -->
+  <text x="400" y="135" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="16" fill="#8b949e" letter-spacing="3">TERMINAL DASHBOARD FOR CLAUDE CODE</text>
+</svg>
