@@ -37,6 +37,10 @@ type rootModel struct {
     pluginsView     *view.ResourceView[*model.Plugin]
     pluginItemsView *view.ResourceView[*model.PluginItem]
     memoriesView    *view.ResourceView[*model.Memory]
+    chatView        *view.ResourceView[ui.ChatItem]
+
+    // Cached chat items for the chat table
+    chatItems []ui.ChatItem
 
     // Static info (set once at startup)
     userStr       string
@@ -51,7 +55,7 @@ type rootModel struct {
 
 On `Init`, it fires `loadData()` synchronously, then async reloads via `loadDataAsync()` which sends a `dataLoadedMsg` back into the update loop. This keeps the initial render fast while data refreshes in the background.
 
-`dataLoadedMsg` carries resource-specific payloads including `turns []model.Turn`, `subagentTurns [][]model.Turn`, and `subagentTypes []model.AgentType` for session-chat refresh. `loadDataAsync()` handles `ResourceSessionChat` by reading `app.SelectedSessionFilePath` and `app.SelectedSessionSubagentDir` (captured before the goroutine) and calling `dp.GetTurns()` and `transcript.ScanSubagents()`. On receipt, `app.SelectedTurns`, `app.SubagentTurns`, and `app.SubagentTypes` are updated directly (bypassing `syncView` table logic).
+`dataLoadedMsg` carries resource-specific payloads including `turns []model.Turn`, `subagentTurns [][]model.Turn`, and `subagentTypes []model.AgentType` for history view refresh. `loadDataAsync()` handles `ResourceHistory`/`ResourceHistoryDetail` by reading `app.SelectedSessionFilePath` and `app.SelectedSessionSubagentDir` (captured before the goroutine) and calling `dp.GetTurns()` and `transcript.ScanSubagents()`. On receipt, `app.SelectedTurns`, `app.SubagentTurns`, and `app.SubagentTypes` are updated, then `RebuildChatItems()` refreshes the flattened chat item list and `syncView` updates the table.
 
 ## DataProvider Implementations
 

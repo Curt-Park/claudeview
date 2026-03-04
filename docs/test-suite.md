@@ -14,7 +14,7 @@ Tests span four packages. `internal/ui` has the largest test surface (integratio
 |-------------------------|-------------------------------------------------------------|
 | `app_test.go`           | AppModel integration — key flows, navigation, state transitions |
 | `render_test.go`        | Full render output assertions / golden snapshots            |
-| `detail_render_test.go` | `RenderPluginItemDetail` and `RenderMemoryDetail` output    |
+| `detail_render_test.go` | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail` output |
 | `filter_test.go`        | `FilterModel` unit tests                                    |
 | `crumbs_test.go`        | `CrumbsModel` unit tests                                    |
 | `menu_test.go`          | `MenuModel` and nav hint unit tests                         |

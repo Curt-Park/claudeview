@@ -19,11 +19,12 @@ Resource-specific table renderers. One file per resource type plus shared helper
 | `plugins.go`      | columns + `pluginRow`; scope, enabled/disabled, skill/cmd/hook counts|
 | `plugin_items.go` | columns + `pluginItemRow` for `ResourceView[*model.PluginItem]`; `NewPluginItemsView` |
 | `memories.go`     | columns + `memoryRow` for `ResourceView[*model.Memory]`              |
+| `chat.go`         | columns + `chatRow` for `ResourceView[ui.ChatItem]`; `NewChatView`   |
 | `helpers.go`      | Shared formatting utilities (`truncateHash`, `ShortID`)              |
 
 ## Generic ResourceView[T]
 
-All 6 resource views use the same generic type:
+All 7 resource views use the same generic type:
 
 ```go
 type RowBuilder[T any] func(items []T, index int, flatMode bool) ui.Row
@@ -48,10 +49,11 @@ When `flat=true`, extra parent-context columns are prepended:
 | Resource  | Base columns                                              |
 |-----------|-----------------------------------------------------------|
 | Projects  | NAME(flex,55%), SESSIONS(8), LAST ACTIVE(11)             |
-| Sessions  | NAME(10), TOPIC(flex,35%), TURNS(6), AGENTS(6), TOKENS(flex,25%), LAST ACTIVE(11) |
+| Sessions  | NAME(10), TOPIC(flex,35%), TURNS(6), AGENTS(6), MODEL:TOKEN(flex,25%), LAST ACTIVE(11) |
 | Agents    | NAME(flex,20%), TYPE(16), STATUS(10), LAST ACTIVITY(flex,35%) |
 | Plugins   | NAME(flex,25%), VERSION(10), SCOPE(8), STATUS(10), SKILLS(7), COMMANDS(9), HOOKS(6), AGENTS(7), MCPS(5), INSTALLED(12) |
 | Memories  | NAME(18), TITLE(flex,45%), SIZE(8), MODIFIED(11)         |
+| Chat      | NAME(10), MESSAGE(flex,50%), ACTION(16), MODEL:TOKEN(flex,20%), DURATION(14) |
 
 ## Related
 

@@ -21,7 +21,7 @@ Core data models used across transcript parsing, config loading, UI rendering, a
 | `memory.go`   | `Memory` — Name, Title, Path, Size, ModTime; `SizeStr()`, `LastModified()` |
 | `resource.go` | `ResourceType` constants; `ResolveResource(s)`; `AllResourceNames()`    |
 | `status.go`   | `Status` string type and constants                                      |
-| `format.go`   | `FormatAge(d)` — human-friendly duration; `FormatSize(b)` — human-friendly byte size |
+| `format.go`   | `FormatAge(d)` — human-friendly duration; `FormatTokenCount(n)` — "1.5k", "1.5M"; `FormatSize(b)` — human-friendly byte size |
 
 ## ResourceType Constants
 
@@ -34,7 +34,8 @@ ResourceMemory           = "memories"
 ResourcePluginDetail     = "plugin-detail"
 ResourcePluginItemDetail = "plugin-item-detail"
 ResourceMemoryDetail     = "memory-detail"
-ResourceSessionChat      = "session-chat"
+ResourceHistory          = "history"
+ResourceHistoryDetail    = "history-detail"
 ```
 
 ## Status Constants

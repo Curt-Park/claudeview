@@ -98,7 +98,7 @@ Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`
 | TOPIC       | flex (max 35%) | first line of session topic / summary        |
 | TURNS       | 6              | conversation turn count                      |
 | AGENTS      | 6              | agent count                                  |
-| TOKENS      | flex (max 25%) | token usage string (input + output)          |
+| MODEL:TOKEN | flex (max 25%) | per-model token string (e.g. `opus:125k sonnet:50k`) |
 | LAST ACTIVE | 11             | time since last modification                 |
 
 Each row optionally shows a **subtitle line** (dimmed) with model, cost, and status metadata, indented under TOPIC.
@@ -172,10 +172,12 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 - `j/k` / `ctrl+d/u`: scroll content
 - `esc`: return to Plugin Detail table
 
-### 3. Session Chat (content view)
-- Activated by `enter` on a Sessions row (resource → `session-chat`)
-- Renders a conversation timeline: user bubbles (right-aligned, blue), Claude bubbles (left-aligned, green), subagent bubbles (indented, purple)
-- **Follow mode** (default on entry): auto-scrolls to the latest content — like `tail -f`
+### 3. Session History (table view)
+- Activated by `enter` on a Sessions row (resource → `history`)
+- Renders a navigable table of chat items (NAME, MESSAGE, ACTION, MODEL:TOKEN, DURATION)
+- Each row is a grouped turn: user messages, Claude responses with tool calls, or subagent responses
+- `enter` on a row → history-detail (content view showing expanded turn detail)
+- **Follow mode** (default on entry): auto-scrolls to the latest row — like `tail -f`
   - `k` / `ctrl+u` / `g`: scroll up, disables follow mode (position locked)
   - `G`: jumps to bottom, re-enables follow mode
   - `j` / `ctrl+d`: scrolls down; re-enables follow mode when bottom is reached
@@ -208,7 +210,7 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 | `G`               | go to bottom                                                      |
 | `ctrl+d` / `pgdn` | page down (half page)                                             |
 | `ctrl+u` / `pgup` | page up (half page)                                               |
-| `enter`           | drill down (projects→sessions; sessions→agents; plugins/memories→detail) |
+| `enter`           | drill down (projects→sessions; sessions→history; plugins/memories→detail) |
 | `esc`             | clear filter (if active); otherwise navigate back                 |
 
 ### Filter Mode (`/`)
@@ -226,7 +228,8 @@ Each row optionally shows a **subtitle line** (dimmed) with model, cost, and sta
 ```
 projects
   └─→ sessions (filtered by project)
-        └─→ session-chat  [leaf, content view, follow mode]
+        └─→ history  [table view, follow mode]
+              └─→ history-detail  [leaf, content view]
 
 [p] plugins  ──→  plugin-detail  ──→  plugin-item-detail  [leaf]
 [m] memories ──→  memory-detail  (project context required)

@@ -33,7 +33,7 @@ main.go
 | `internal/config`    | settings.json, installed_plugins.json parsers                   |
 | `internal/model`     | Data models: Project, Session, Agent, ToolCall, Plugin, Memory  |
 | `internal/ui`        | Bubble Tea AppModel + chrome components                         |
-| `internal/view`      | Generic `ResourceView[T]` + 6 resource constructors             |
+| `internal/view`      | Generic `ResourceView[T]` + 7 resource constructors             |
 | `internal/demo`      | Synthetic demo data generator                                   |
 
 ## DataProvider Interface
@@ -52,7 +52,7 @@ type DataProvider interface {
 ## Resource Hierarchy
 
 ```
-projects → sessions → session-chat  [leaf, content view]
+projects → sessions → history → history-detail  [leaf, content view]
 plugins  → plugin-detail → plugin-item-detail  [leaf]
 memories → memory-detail  (requires project context)
 ```
