@@ -92,7 +92,7 @@ type DataProvider interface {
 Three top-level renderers:
 
 - **`RenderChatItemDetail(items []ChatItem, selectedIdx, width int)`** — renders the detail view for a selected chat item. For subagent items (`IsSubagent && SubagentIdx >= 0`), renders all turns from the same subagent group. For regular items, renders a single item with header, text, thinking blocks, and tool call details.
-- **`ChatItemKey(item ChatItem)`** — returns a unique fingerprint (timestamp + role + SubagentIdx + first tool name) used by `RebuildChatItems` to re-resolve the selected item after async rebuilds without drift.
+- **`ChatItemKey(item ChatItem)`** — returns a unique fingerprint (timestamp + role + SubagentIdx + first tool name + text prefix) used by `RebuildChatItems` to re-resolve the selected item after async rebuilds without drift. The text prefix (first 32 chars) disambiguates consecutive turns with identical timestamp/role (e.g. local command outputs at the same second).
 - **`RenderPluginItemDetail(item, width)`** — renders a plugin item's content with header and optional hook script blocks.
 - **`RenderMemoryDetail(m, width)`** — reads and wraps a memory file's raw Markdown content.
 
