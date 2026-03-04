@@ -141,13 +141,18 @@ func renderExpandedToolCall(tc *model.ToolCall, maxWidth int) string {
 	headerLine := "  " + name + "  " + StyleDim.Render(inputFull) + "  " + statusStr + durationStr
 
 	var lines []string
-	lines = append(lines, headerLine)
+	lines = append(lines, ansi.Wrap(headerLine, maxWidth, ""))
 
 	// Show full result content
 	resultStr := expandResult(tc)
 	if resultStr != "" {
+		indent := "    "
+		contentWidth := maxWidth - len(indent)
+		if contentWidth < 20 {
+			contentWidth = 20
+		}
 		for _, rl := range strings.Split(resultStr, "\n") {
-			lines = append(lines, "    "+StyleDim.Render(rl))
+			lines = append(lines, indent+ansi.Wrap(StyleDim.Render(rl), contentWidth, ""))
 		}
 	}
 
