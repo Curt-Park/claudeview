@@ -54,7 +54,7 @@ func agentDisplayName(t model.AgentType) string {
 }
 
 // RenderChatItemDetail renders the detail view for a selected ChatItem.
-// For subagent items, it renders all turns from the same subagent group.
+// For subagent items, it renders the primary turn plus all ExtraTurns (the full transcript).
 // For regular items (user, assistant, divider), it renders a single item.
 func RenderChatItemDetail(items []ChatItem, selectedIdx, width int) string {
 	if selectedIdx < 0 || selectedIdx >= len(items) {
@@ -62,14 +62,17 @@ func RenderChatItemDetail(items []ChatItem, selectedIdx, width int) string {
 	}
 	sel := items[selectedIdx]
 
-	// Subagent: render all turns from the same subagent group.
-	if sel.IsSubagent && sel.SubagentIdx >= 0 {
+	// Subagent: render primary turn + all extra turns as full transcript.
+	if sel.IsSubagent {
 		var allLines []string
-		for _, item := range items {
-			if item.IsSubagent && item.SubagentIdx == sel.SubagentIdx {
-				allLines = append(allLines, renderChatItem(item, width)...)
-				allLines = append(allLines, "") // blank line between turns
-			}
+		allLines = append(allLines, renderChatItem(ChatItem{
+			Turn: sel.Turn, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
+		}, width)...)
+		for _, et := range sel.ExtraTurns {
+			allLines = append(allLines, "") // blank line between turns
+			allLines = append(allLines, renderChatItem(ChatItem{
+				Turn: et, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
+			}, width)...)
 		}
 		return strings.Join(allLines, "\n")
 	}

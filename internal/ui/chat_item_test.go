@@ -110,7 +110,7 @@ func TestDividerChatItem_Labels(t *testing.T) {
 	}
 }
 
-func TestBuildChatItems_SubagentIdxSet(t *testing.T) {
+func TestBuildChatItems_SubagentCollapsed(t *testing.T) {
 	mainTurns := []model.Turn{
 		{Role: "user", Text: "hello"},
 		{Role: "assistant", Text: "delegating", ToolCalls: []*model.ToolCall{{Name: "Task"}}},
@@ -133,7 +133,7 @@ func TestBuildChatItems_SubagentIdxSet(t *testing.T) {
 		}
 	}
 
-	// Collect subagent items and verify their SubagentIdx values
+	// Each subagent should produce exactly 1 collapsed ChatItem
 	var sub0Items, sub1Items []ChatItem
 	for _, item := range items {
 		if item.IsSubagent && item.SubagentIdx == 0 {
@@ -143,22 +143,29 @@ func TestBuildChatItems_SubagentIdxSet(t *testing.T) {
 			sub1Items = append(sub1Items, item)
 		}
 	}
-	if len(sub0Items) != 2 {
-		t.Errorf("expected 2 items with SubagentIdx=0, got %d", len(sub0Items))
+	if len(sub0Items) != 1 {
+		t.Fatalf("expected 1 collapsed item for SubagentIdx=0, got %d", len(sub0Items))
 	}
 	if len(sub1Items) != 1 {
-		t.Errorf("expected 1 item with SubagentIdx=1, got %d", len(sub1Items))
+		t.Fatalf("expected 1 collapsed item for SubagentIdx=1, got %d", len(sub1Items))
 	}
-	// Verify agent types are propagated
-	for _, item := range sub0Items {
-		if item.AgentType != model.AgentTypeExplore {
-			t.Errorf("expected AgentType=Explore for sub0, got %v", item.AgentType)
-		}
+	// sub0 has 2 assistant turns: first as Turn, second as ExtraTurns
+	if sub0Items[0].Turn.Text != "sub0-turn1" {
+		t.Errorf("expected Turn.Text=sub0-turn1, got %q", sub0Items[0].Turn.Text)
 	}
-	for _, item := range sub1Items {
-		if item.AgentType != model.AgentTypePlan {
-			t.Errorf("expected AgentType=Plan for sub1, got %v", item.AgentType)
-		}
+	if len(sub0Items[0].ExtraTurns) != 1 || sub0Items[0].ExtraTurns[0].Text != "sub0-turn2" {
+		t.Errorf("expected 1 ExtraTurn with sub0-turn2, got %d extra turns", len(sub0Items[0].ExtraTurns))
+	}
+	// sub1 has 1 assistant turn: no ExtraTurns
+	if len(sub1Items[0].ExtraTurns) != 0 {
+		t.Errorf("expected 0 ExtraTurns for sub1, got %d", len(sub1Items[0].ExtraTurns))
+	}
+	// Verify agent types
+	if sub0Items[0].AgentType != model.AgentTypeExplore {
+		t.Errorf("expected AgentType=Explore for sub0, got %v", sub0Items[0].AgentType)
+	}
+	if sub1Items[0].AgentType != model.AgentTypePlan {
+		t.Errorf("expected AgentType=Plan for sub1, got %v", sub1Items[0].AgentType)
 	}
 }
 
@@ -180,10 +187,16 @@ func TestBuildChatItems_AgentToolName(t *testing.T) {
 			subItems = append(subItems, item)
 		}
 	}
-	if len(subItems) != 2 {
-		t.Fatalf("expected 2 subagent items for Agent tool call, got %d", len(subItems))
+	if len(subItems) != 1 {
+		t.Fatalf("expected 1 collapsed subagent item for Agent tool call, got %d", len(subItems))
 	}
-	if subItems[0].SubagentIdx != 0 || subItems[1].SubagentIdx != 0 {
-		t.Errorf("expected SubagentIdx=0 for both, got %d and %d", subItems[0].SubagentIdx, subItems[1].SubagentIdx)
+	if subItems[0].SubagentIdx != 0 {
+		t.Errorf("expected SubagentIdx=0, got %d", subItems[0].SubagentIdx)
+	}
+	if subItems[0].Turn.Text != "agent-turn1" {
+		t.Errorf("expected Turn.Text=agent-turn1, got %q", subItems[0].Turn.Text)
+	}
+	if len(subItems[0].ExtraTurns) != 1 {
+		t.Errorf("expected 1 ExtraTurn, got %d", len(subItems[0].ExtraTurns))
 	}
 }

@@ -293,15 +293,21 @@ func TestRenderPluginItemDetail_Hook_NoScriptsShowsOnlyJSON(t *testing.T) {
 }
 
 func TestRenderChatItemDetail_SubagentFullTranscript(t *testing.T) {
+	// Subagent is now a single collapsed ChatItem with ExtraTurns.
 	items := []ui.ChatItem{
 		{Turn: model.Turn{Role: "user", Text: "Do something"}, SubagentIdx: -1},
 		{Turn: model.Turn{Role: "assistant", Text: "Sure, let me delegate."}, SubagentIdx: -1},
-		{Turn: model.Turn{Role: "assistant", Text: "Step 1: searching files"}, IsSubagent: true, AgentType: model.AgentTypeExplore, SubagentIdx: 0},
-		{Turn: model.Turn{Role: "assistant", Text: "Step 2: found results"}, IsSubagent: true, AgentType: model.AgentTypeExplore, SubagentIdx: 0},
+		{
+			Turn:        model.Turn{Role: "assistant", Text: "Step 1: searching files"},
+			ExtraTurns:  []model.Turn{{Role: "assistant", Text: "Step 2: found results"}},
+			IsSubagent:  true,
+			AgentType:   model.AgentTypeExplore,
+			SubagentIdx: 0,
+		},
 		{Turn: model.Turn{Role: "assistant", Text: "Done!"}, SubagentIdx: -1},
 	}
 
-	// Select the first subagent turn (index 2) — should render both subagent turns.
+	// Select the collapsed subagent item (index 2) — should render both turns.
 	got := ui.RenderChatItemDetail(items, 2, 120)
 	if !strings.Contains(got, "Step 1: searching files") {
 		t.Errorf("expected first subagent turn in output, got:\n%s", got)
@@ -315,12 +321,6 @@ func TestRenderChatItemDetail_SubagentFullTranscript(t *testing.T) {
 	}
 	if strings.Contains(got, "Done!") {
 		t.Errorf("expected regular assistant turn excluded from subagent transcript, got:\n%s", got)
-	}
-
-	// Select the second subagent turn (index 3) — should render same group.
-	got2 := ui.RenderChatItemDetail(items, 3, 120)
-	if !strings.Contains(got2, "Step 1: searching files") || !strings.Contains(got2, "Step 2: found results") {
-		t.Errorf("expected full subagent group from either turn, got:\n%s", got2)
 	}
 }
 

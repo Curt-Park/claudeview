@@ -185,7 +185,8 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 	var items []ChatItem
 	subIdx := 0
 
-	// interleaveSubagents appends subagent ChatItems for each Task tool call in the turn.
+	// interleaveSubagents appends one collapsed ChatItem per subagent for each Agent/Task tool call.
+	// The first assistant turn becomes the primary Turn; remaining assistant turns go into ExtraTurns.
 	interleaveSubagents := func(toolCalls []*model.ToolCall) {
 		for _, tc := range toolCalls {
 			if (tc.Name == "Task" || tc.Name == "Agent") && subIdx < len(subagentTurns) {
@@ -193,15 +194,27 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 				if subIdx < len(subagentTypes) {
 					agentType = subagentTypes[subIdx]
 				}
+				var first *model.Turn
+				var extra []model.Turn
 				for _, st := range subagentTurns[subIdx] {
-					if st.Role == "assistant" {
-						items = append(items, ChatItem{
-							Turn:        st,
-							IsSubagent:  true,
-							AgentType:   agentType,
-							SubagentIdx: subIdx,
-						})
+					if st.Role != "assistant" {
+						continue
 					}
+					if first == nil {
+						cp := st
+						first = &cp
+					} else {
+						extra = append(extra, st)
+					}
+				}
+				if first != nil {
+					items = append(items, ChatItem{
+						Turn:        *first,
+						ExtraTurns:  extra,
+						IsSubagent:  true,
+						AgentType:   agentType,
+						SubagentIdx: subIdx,
+					})
 				}
 				subIdx++
 			}
