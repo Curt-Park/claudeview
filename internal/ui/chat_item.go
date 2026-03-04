@@ -88,12 +88,13 @@ func (c ChatItem) ActionLabel() string {
 	}
 	tc := allTC[0]
 	name := tc.Name
-	if tc.Name == "Task" || tc.Name == "Agent" {
+	switch tc.Name {
+	case "Task", "Agent":
 		name = "Agent"
 		if agentType := extractStringField(tc, "subagent_type"); agentType != "" {
 			name += ":" + agentType
 		}
-	} else if tc.Name == "Skill" {
+	case "Skill":
 		if skillName := extractStringField(tc, "skill"); skillName != "" {
 			name = "Skill:" + skillName
 		}
