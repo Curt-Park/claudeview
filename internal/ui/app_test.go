@@ -434,7 +434,7 @@ func TestDrilldownSessionsToSessionChat(t *testing.T) {
 	s := &model.Session{ID: "sess-abc123", FilePath: "/tmp/fake.jsonl"}
 	app := newApp(model.ResourceSessions)
 	app.Table.SetRows([]ui.Row{{
-		Cells: []string{s.ShortID(), "topic", "2", "10", "1k", "1h"},
+		Cells: []string{"", s.ShortID(), "topic", "2", "10", "1k", "1h"},
 		Data:  s,
 	}})
 
@@ -691,7 +691,7 @@ func TestJumpPreservesFilterStack(t *testing.T) {
 
 	// Drill into sessions — filterStack=["proj"], filter=""
 	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
-	app.Table.SetRows([]ui.Row{{Cells: []string{s.ShortID(), "topic", "1", "1", "sonnet:1k", "1h"}, Data: s}})
+	app.Table.SetRows([]ui.Row{{Cells: []string{"", s.ShortID(), "topic", "1", "1", "sonnet:1k", "1h"}, Data: s}})
 
 	// Jump to plugins — saves {Filter:"", FilterStack:["proj"]}
 	app = updateApp(app, keyMsg("p"))
@@ -722,7 +722,7 @@ func TestSessionChat_FollowMode_InitialDrillDown(t *testing.T) {
 	s := &model.Session{ID: "sess-abc123", FilePath: "/tmp/fake.jsonl"}
 	app := newApp(model.ResourceSessions)
 	app.Table.SetRows([]ui.Row{{
-		Cells: []string{s.ShortID(), "topic", "2", "10", "1k", "1h"},
+		Cells: []string{"", s.ShortID(), "topic", "2", "10", "1k", "1h"},
 		Data:  s,
 	}})
 
@@ -792,6 +792,113 @@ func TestSessionChat_NavigateBack_ClearsState(t *testing.T) {
 	}
 	if app.ChatFollow {
 		t.Error("expected ChatFollow=false after navigating back from session-chat")
+	}
+}
+
+func TestSlugGroupDrillDown(t *testing.T) {
+	s1 := &model.Session{ID: "sess-1", Slug: "fizzy-stallman", FilePath: "/tmp/s1.jsonl"}
+	s2 := &model.Session{ID: "sess-2", Slug: "fizzy-stallman", FilePath: "/tmp/s2.jsonl"}
+	// s2 is the representative with GroupSessions set (as GroupSessionsBySlug would produce)
+	s2.GroupSessions = []*model.Session{s1, s2}
+	s3 := &model.Session{ID: "sess-3", FilePath: "/tmp/s3.jsonl"} // no slug
+	app := newApp(model.ResourceSessions)
+	app.Table.SetRows([]ui.Row{
+		{Cells: []string{"fizzy-stallman", s2.GroupNameCell(), "topic2", "5", "3", "3k", "30m"}, Data: s2},
+		{Cells: []string{"", s3.ShortID(), "topic3", "1", "1", "500", "5m"}, Data: s3},
+	})
+
+	// Drill into s2 (group representative) — should populate SlugSessions
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.Resource != model.ResourceHistory {
+		t.Fatalf("expected resource=history, got %s", app.Resource)
+	}
+	if len(app.SlugSessions) != 2 {
+		t.Fatalf("expected 2 SlugSessions, got %d", len(app.SlugSessions))
+	}
+	if app.SlugSessions[0].ID != "sess-1" || app.SlugSessions[1].ID != "sess-2" {
+		t.Errorf("expected SlugSessions=[sess-1,sess-2], got [%s,%s]", app.SlugSessions[0].ID, app.SlugSessions[1].ID)
+	}
+}
+
+func TestSlugGroupDrillDown_NoSlug(t *testing.T) {
+	s := &model.Session{ID: "sess-solo", FilePath: "/tmp/solo.jsonl"} // no slug
+	app := newApp(model.ResourceSessions)
+	app.Table.SetRows([]ui.Row{
+		{Cells: []string{"", s.ShortID(), "topic", "2", "1", "1k", "1h"}, Data: s},
+	})
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.Resource != model.ResourceHistory {
+		t.Fatalf("expected resource=history, got %s", app.Resource)
+	}
+	if app.SlugSessions != nil {
+		t.Errorf("expected nil SlugSessions for no-slug session, got %d", len(app.SlugSessions))
+	}
+}
+
+func TestSlugGroupNavigateBack_ClearsState(t *testing.T) {
+	s1 := &model.Session{ID: "sess-1", Slug: "fizzy-stallman", FilePath: "/tmp/s1.jsonl"}
+	s2 := &model.Session{ID: "sess-2", Slug: "fizzy-stallman", FilePath: "/tmp/s2.jsonl"}
+	s2.GroupSessions = []*model.Session{s1, s2}
+	app := newApp(model.ResourceSessions)
+	app.Table.SetRows([]ui.Row{
+		{Cells: []string{"fizzy-stallman", s2.GroupNameCell(), "topic2", "5", "2", "3k", "30m"}, Data: s2},
+	})
+
+	// Drill into slug group
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+	if len(app.SlugSessions) != 2 {
+		t.Fatalf("expected 2 SlugSessions after drill-down, got %d", len(app.SlugSessions))
+	}
+
+	// Navigate back
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEsc})
+	if app.Resource != model.ResourceSessions {
+		t.Errorf("expected resource=sessions after Esc, got %s", app.Resource)
+	}
+	if app.SlugSessions != nil {
+		t.Errorf("expected SlugSessions cleared after navigate-back, got %d", len(app.SlugSessions))
+	}
+}
+
+func TestDividerSkippedDuringNavigation(t *testing.T) {
+	normal1 := ui.ChatItem{Turn: model.Turn{Role: "user", Text: "hello"}}
+	divider := ui.ChatItem{IsDivider: true, DividerLabel: "── session 2/2 ──"}
+	normal2 := ui.ChatItem{Turn: model.Turn{Role: "assistant", Text: "hi"}}
+	items := []ui.ChatItem{normal1, divider, normal2}
+	app := newApp(model.ResourceHistory)
+	app.ChatItems = items
+	app.Table.SetRows(chatItemRows(items))
+	app.Table.Selected = 0
+
+	// j should skip divider (index 1) and land on index 2
+	app = updateApp(app, keyMsg("j"))
+	if app.Table.Selected != 2 {
+		t.Errorf("expected Selected=2 after j (skipping divider), got %d", app.Table.Selected)
+	}
+
+	// k should skip divider (index 1) and land on index 0
+	app = updateApp(app, keyMsg("k"))
+	if app.Table.Selected != 0 {
+		t.Errorf("expected Selected=0 after k (skipping divider), got %d", app.Table.Selected)
+	}
+}
+
+func TestDividerSkippedOnDrillDown(t *testing.T) {
+	divider := ui.ChatItem{IsDivider: true, DividerLabel: "── session 2/2 ──"}
+	normal := ui.ChatItem{Turn: model.Turn{Role: "user", Text: "hello"}}
+	app := newApp(model.ResourceHistory)
+	app.ChatItems = []ui.ChatItem{normal, divider}
+	app.Table.SetRows(chatItemRows([]ui.ChatItem{normal, divider}))
+	app.Table.Selected = 1 // select the divider row
+
+	app = updateApp(app, tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Should remain on history (divider is not drillable)
+	if app.Resource != model.ResourceHistory {
+		t.Errorf("expected to stay on history when entering on divider, got %s", app.Resource)
 	}
 }
 

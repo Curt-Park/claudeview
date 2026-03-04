@@ -12,8 +12,8 @@ Reads Claude Code JSONL transcript files. Provides the data backbone for the liv
 
 | File        | Purpose                                                                           |
 |-------------|-----------------------------------------------------------------------------------|
-| `types.go`  | Wire types for JSONL decoding: `entry` (single JSONL line), `messageContent` (polymorphic content block), `Usage` (token counts: InputTokens, OutputTokens, CacheCreationInputTokens, CacheReadInputTokens), `assistantMessage`, `userMessage` (with `textContent()` and `toolResults()` helpers) |
-| `parser.go` | `ParsedTranscript`, `Turn`, `ToolCall`, `SessionAggregates`, `TranscriptCache` — intermediate parsing types; `ParseFile(path)`, `Parse(r)`, `ParseAggregatesIncremental(path, agg)`, `ParseFileIncremental(path, cache)` |
+| `types.go`  | Wire types for JSONL decoding: `entry` (single JSONL line, includes `Slug` field), `messageContent` (polymorphic content block), `Usage` (token counts: InputTokens, OutputTokens, CacheCreationInputTokens, CacheReadInputTokens), `assistantMessage`, `userMessage` (with `textContent()` and `toolResults()` helpers) |
+| `parser.go` | `ParsedTranscript`, `Turn`, `ToolCall`, `SessionAggregates` (includes `Slug`), `TranscriptCache` — intermediate parsing types; `ParseFile(path)`, `Parse(r)`, `ParseAggregatesIncremental(path, agg)` (captures slug from first entry), `ParseFileIncremental(path, cache)` |
 | `scanner.go`| `SessionInfo`, `ProjectInfo` — directory scan types; `ScanProjects(claudeDir)`, `ScanSubagents(dir)`, `CountSubagents(dir)` |
 
 ## JSONL Format

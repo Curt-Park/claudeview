@@ -43,14 +43,14 @@ The info panel occupies 5+ rows and renders five columns:
 
 ```
 Project:      <full-width path — left-truncated if long>
-Session:      <value>   <j/k> down/up    </> filter    <p> plugins   <ctrl+c> quit
+Session Slug: <value>   <j/k> down/up    </> filter    <p> plugins   <ctrl+c> quit
 User:         <value>   <G/g> bottom/top               <m> memories
 Claude Code:  <value>   <ctrl+d/u> page down/up
 claudeview:   <value>   <enter> (context)
               ...       <esc> (context)
 ```
 
-- **Col 0**: `labelW=14` + value; total ~32 chars
+- **Col 0**: `labelW=14` + value; total ~32 chars (`leftW`). Values are truncated with "…" to stay within `leftW` and keep columns aligned.
 - **Col 1**: nav commands (j/k, G/g, ctrl+d/u, enter/esc — context-sensitive)
 - **Col 2**: util commands (`/` filter)
 - **Col 3**: p/m jump shortcuts (context-sensitive)
@@ -94,18 +94,21 @@ Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`
 | Column      | Width          | Description                                  |
 |-------------|----------------|----------------------------------------------|
 | PROJECT     | 20             | parent project hash (flat access only)       |
-| NAME        | 10             | session short ID (first 8 chars)             |
+| SLUG        | 16             | slug identifier (shared across plan/execute transitions) |
+| SESSION_IDs | 19             | session short ID(s): `d2559feb` for solo, `d2559feb..360eb907` for groups |
 | TOPIC       | flex (max 35%) | first line of session topic / summary        |
-| TURNS       | 6              | conversation turn count                      |
-| AGENTS      | 6              | agent count                                  |
+| TURNS       | 6              | conversation turn count (aggregated for groups) |
+| AGENTS      | 6              | agent count (aggregated for groups)          |
 | MODEL:TOKEN | flex (max 25%) | per-model token string (e.g. `opus:125k sonnet:50k`) |
 | LAST ACTIVE | 11             | time since last modification                 |
 
-Each row optionally shows a **subtitle line** (dimmed) with model, cost, and status metadata, indented under TOPIC.
+Each row optionally shows a **subtitle line** (dimmed) with branch and file size metadata, indented under TOPIC.
+
+**Slug grouping**: Sessions sharing a `slug` field (same conversation across plan/execute transitions) are collapsed into a single representative row via `GroupSessionsBySlug`. The SESSION_IDs cell shows `first..last` short IDs for groups. Groups are sorted by latest ModTime descending; within a group, sessions are sorted by ModTime ascending. Aggregated fields: NumTurns, AgentCount, FileSize, TokensByModel.
 
 **Note**: PROJECT column only shown in flat access (via `p`/`m` jump, or no project selected).
 
-**Navigation**: Enter → Session Chat (content view for the selected session)
+**Navigation**: Enter → Session Chat. When entering a session that belongs to a slug group, all sessions in the group are merged into a single history view with divider rows (`── session N/M ──`) between each session's turns. Divider rows cannot be drilled into (enter is a no-op).
 
 ### 3. Agents
 
@@ -263,7 +266,7 @@ Tests in `internal/ui/` (`package ui_test`):
 |-------------------------|---------------------------------------------------|
 | `app_test.go`           | AppModel integration — key flows, state transitions |
 | `render_test.go`        | Full render output / golden snapshots             |
-| `detail_render_test.go` | Plugin detail and memory detail rendering         |
+| `detail_render_test.go` | Plugin detail, memory detail, chat item detail (including full subagent transcript) rendering |
 | `filter_test.go`        | Filter component unit tests                       |
 | `crumbs_test.go`        | Breadcrumb component unit tests                   |
 | `menu_test.go`          | Menu / nav hint unit tests                        |

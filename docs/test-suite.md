@@ -12,9 +12,10 @@ Tests span four packages. `internal/ui` has the largest test surface (integratio
 
 | File                    | Coverage                                                    |
 |-------------------------|-------------------------------------------------------------|
-| `app_test.go`           | AppModel integration — key flows, navigation, state transitions |
+| `app_test.go`           | AppModel integration — key flows, navigation, state transitions, slug group drill-down/navigate-back |
+| `chat_item_test.go`     | `BuildMergedChatItems`, `SubagentIdx` assignment, content-less primary skip, negative `TimeLabel`, divider label methods |
 | `render_test.go`        | Full render output assertions / golden snapshots            |
-| `detail_render_test.go` | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail` output |
+| `detail_render_test.go` | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail` output (including full subagent transcript rendering) |
 | `filter_test.go`        | `FilterModel` unit tests                                    |
 | `crumbs_test.go`        | `CrumbsModel` unit tests                                    |
 | `menu_test.go`          | `MenuModel` and nav hint unit tests                         |
@@ -25,8 +26,8 @@ Tests span four packages. `internal/ui` has the largest test surface (integratio
 | Package                | Files                                        | Count |
 |------------------------|----------------------------------------------|-------|
 | `internal/config`      | `settings_test.go`, `plugins_test.go`        | ~15   |
-| `internal/model`       | `agent_test.go`, `session_test.go`, `project_test.go`, `tool_call_test.go`, `plugin_test.go`, `resource_test.go`, `turn_test.go` | ~33 |
-| `internal/transcript`  | `scanner_test.go`, `parser_test.go`          | ~11   |
+| `internal/model`       | `agent_test.go`, `session_test.go`, `project_test.go`, `tool_call_test.go`, `plugin_test.go`, `resource_test.go`, `turn_test.go`, `slug_group_test.go` | ~43 |
+| `internal/transcript`  | `scanner_test.go`, `parser_test.go` (includes slug extraction tests) | ~13 |
 
 ## Pattern
 
@@ -47,3 +48,4 @@ make test   # go test -race -count=1 ./...
 - [[ui-package]] — `AppModel` under test
 - [[ui-spec]] — spec behaviors verified by these tests
 - [[pre-completion-checklist]] — requires `make test` before completing any task
+- [[tmux-e2e-testing]] — visual verification of TUI via tmux

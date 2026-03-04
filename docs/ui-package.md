@@ -14,13 +14,14 @@ Implements the Bubble Tea application model and all reusable chrome components.
 |-----------------------|----------------------------------------------------------------|
 | `app.go`              | `AppModel` — root Bubble Tea model; key events, layout, mode   |
 | `table_view.go`       | `TableView` — scrollable table with filter, selection          |
-| `detail_render.go`    | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail` — string renderers |
+| `detail_render.go`    | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail`, `ChatItemKey`, `capLines` — string renderers and helpers |
 | `header.go`           | Info panel (5-column layout: info, nav, util, shortcuts, quit) |
 | `menu.go`             | `MenuModel` — nav/util item lists and key highlight state      |
 | `crumbs.go`           | `CrumbsModel` — breadcrumb trail                               |
 | `flash.go`            | `FlashModel` — ephemeral status/error message                  |
 | `filter.go`           | `FilterModel` — `/`-triggered filter input bar                 |
-| `chat_item.go`        | `ChatItem` — wraps Turn with subagent metadata; `BuildChatItems`, `ActionLabel`, `ModelTokenLabel`, `TimeLabel` |
+| `chat_item.go`        | `ChatItem` — wraps Turn with subagent metadata (`IsSubagent`, `AgentType`, `SubagentIdx`), divider support (`IsDivider`, `DividerLabel`); `agentDisplayName` (unexported helper for display labels); `BuildChatItems`, `BuildMergedChatItems` (multi-session with divider rows), `MessagePreview` (delegates to `cleanTextPreview` for system-content handling), `cleanTextPreview`, `extractXMLContent`, `ActionLabel`, `ModelTokenLabel`, `TimeLabel` |
+| `chat_item_test.go`   | Tests for `BuildMergedChatItems`, `SubagentIdx` assignment, divider labels, `cleanTextPreview`, and `MessagePreview` cleaned text |
 | `styles.go`           | Lip Gloss style definitions shared across components           |
 
 ## AppModel
@@ -31,7 +32,7 @@ Implements the Bubble Tea application model and all reusable chrome components.
 - `Table` — active `TableView`
 - `Info`, `Menu`, `Crumbs`, `Flash`, `Filter` — chrome components
 - `Width`, `Height` — terminal dimensions
-- `SelectedProjectHash`, `SelectedSessionID`, `SelectedAgentID` — drill-down context
+- `SelectedProjectHash`, `SelectedSessionID`, `SelectedSessionSlug`, `SelectedAgentID` — drill-down context
 - `SelectedPlugin`, `SelectedPluginItem`, `SelectedMemory` — detail view context
 - `SelectedTurns []model.Turn` — main agent turns for history view
 - `SubagentTurns [][]model.Turn` — per-subagent turn slices (parallel to Task tool calls)
@@ -39,6 +40,8 @@ Implements the Bubble Tea application model and all reusable chrome components.
 - `ChatFollow bool` — follow mode flag; when true, history view auto-scrolls to bottom (tail -f)
 - `SelectedSessionFilePath string` — JSONL file path of selected session (for async refresh)
 - `SelectedSessionSubagentDir string` — subagent directory for selected session (for async refresh)
+- `SlugSessions []*model.Session` — all sessions in the selected slug group (len > 1 when merged view)
+- `slugGroupTurns`, `slugGroupSubTurns`, `slugGroupSubTypes` — per-session turn data for slug group
 - `inFilter bool` — filter input mode flag
 - `filterStack []string` — saved parent filters across drill-downs
 - `jumpFrom *jumpFromState` — saved state for esc-to-restore after p/m jump
@@ -88,7 +91,8 @@ type DataProvider interface {
 
 Three top-level renderers:
 
-- **`RenderChatItemDetail(item ChatItem, width)`** — renders a single chat item's expanded detail view: header with speaker/model/time/tokens, text content, thinking blocks, and tool call details with input/output.
+- **`RenderChatItemDetail(items []ChatItem, selectedIdx, width int)`** — renders the detail view for a selected chat item. For subagent items (`IsSubagent && SubagentIdx >= 0`), renders all turns from the same subagent group. For regular items, renders a single item with header, text, thinking blocks, and tool call details.
+- **`ChatItemKey(item ChatItem)`** — returns a unique fingerprint (timestamp + role + SubagentIdx + first tool name + text prefix) used by `RebuildChatItems` to re-resolve the selected item after async rebuilds without drift. The text prefix (first 32 chars) disambiguates consecutive turns with identical timestamp/role (e.g. local command outputs at the same second).
 - **`RenderPluginItemDetail(item, width)`** — renders a plugin item's content with header and optional hook script blocks.
 - **`RenderMemoryDetail(m, width)`** — reads and wraps a memory file's raw Markdown content.
 

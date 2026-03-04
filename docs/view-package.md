@@ -14,12 +14,12 @@ Resource-specific table renderers. One file per resource type plus shared helper
 |-------------------|----------------------------------------------------------------------|
 | `resource_view.go`| `ResourceView[T]` — generic table view; `RowBuilder[T]`; `Sync()`   |
 | `projects.go`     | columns + `projectRow` for `ResourceView[*model.Project]`            |
-| `sessions.go`     | columns + `sessionRow`; flat mode; subtitle line (model/cost/status) |
+| `sessions.go`     | columns + `sessionRow`; flat mode; subtitle line (branch/size); SLUG + SESSION_IDs columns with `GroupNameCell()` for slug groups |
 | `agents.go`       | columns + `agentRow`; flat mode; tree prefix for subagents           |
 | `plugins.go`      | columns + `pluginRow`; scope, enabled/disabled, skill/cmd/hook counts|
 | `plugin_items.go` | columns + `pluginItemRow` for `ResourceView[*model.PluginItem]`; `NewPluginItemsView` |
 | `memories.go`     | columns + `memoryRow` for `ResourceView[*model.Memory]`              |
-| `chat.go`         | columns + `chatRow` for `ResourceView[ui.ChatItem]`; `NewChatView`   |
+| `chat.go`         | columns + `chatRow` for `ResourceView[ui.ChatItem]`; `NewChatView`; divider row handling for merged slug groups |
 | `helpers.go`      | Shared formatting utilities (`truncateHash`, `ShortID`)              |
 
 ## Generic ResourceView[T]
@@ -49,7 +49,7 @@ When `flat=true`, extra parent-context columns are prepended:
 | Resource  | Base columns                                              |
 |-----------|-----------------------------------------------------------|
 | Projects  | NAME(flex,55%), SESSIONS(8), LAST ACTIVE(11)             |
-| Sessions  | NAME(10), TOPIC(flex,35%), TURNS(6), AGENTS(6), MODEL:TOKEN(flex,25%), LAST ACTIVE(11) |
+| Sessions  | SLUG(16), SESSION_IDs(19), TOPIC(flex,35%), TURNS(6), AGENTS(6), MODEL:TOKEN(flex,25%), LAST ACTIVE(11) |
 | Agents    | NAME(flex,20%), TYPE(16), STATUS(10), LAST ACTIVITY(flex,35%) |
 | Plugins   | NAME(flex,25%), VERSION(10), SCOPE(8), STATUS(10), SKILLS(7), COMMANDS(9), HOOKS(6), AGENTS(7), MCPS(5), INSTALLED(12) |
 | Memories  | NAME(18), TITLE(flex,45%), SIZE(8), MODIFIED(11)         |

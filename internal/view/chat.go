@@ -14,6 +14,19 @@ var chatColumns = []ui.Column{
 
 func chatRow(items []ui.ChatItem, i int, _ bool) ui.Row {
 	c := items[i]
+	if c.IsDivider {
+		return ui.Row{
+			Cells: []string{
+				"",
+				c.DividerLabel,
+				"",
+				"",
+				"",
+			},
+			Data: c,
+			Skip: true,
+		}
+	}
 	var prev *ui.ChatItem
 	if i > 0 {
 		prev = &items[i-1]

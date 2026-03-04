@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -91,6 +92,12 @@ type dataLoadedMsg struct {
 	subagentTurns [][]model.Turn
 	subagentTypes []model.AgentType
 	resource      model.ResourceType
+
+	// Slug group reload data
+	slugGroupSessions []*model.Session // refreshed slug group membership
+	slugGroupTurns    [][]model.Turn
+	slugGroupSubTurns [][][]model.Turn
+	slugGroupSubTypes [][]model.AgentType
 }
 
 // rootModel wraps AppModel and manages actual resource data.
@@ -240,7 +247,7 @@ func (rm *rootModel) syncView() {
 
 func (rm *rootModel) updateInfo() {
 	rm.app.Info.Project = rm.app.SelectedProjectHash
-	rm.app.Info.Session = view.ShortID(rm.app.SelectedSessionID, 8)
+	rm.app.Info.Session = rm.app.SelectedSessionSlug
 	rm.app.Info.User = rm.userStr
 	rm.app.Info.ClaudeVersion = rm.claudeVersion
 	rm.app.Info.AppVersion = AppVersion
@@ -283,9 +290,17 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case model.ResourceMemory:
 				rm.memories = msg.memories
 			case model.ResourceHistory, model.ResourceHistoryDetail:
-				rm.app.SelectedTurns = msg.turns
-				rm.app.SubagentTurns = msg.subagentTurns
-				rm.app.SubagentTypes = msg.subagentTypes
+				// Update slug group membership if new sessions were detected.
+				if len(msg.slugGroupSessions) > 0 {
+					rm.app.SlugSessions = msg.slugGroupSessions
+				}
+				if len(msg.slugGroupTurns) > 1 {
+					rm.app.SetSlugGroupData(msg.slugGroupTurns, msg.slugGroupSubTurns, msg.slugGroupSubTypes)
+				} else {
+					rm.app.SelectedTurns = msg.turns
+					rm.app.SubagentTurns = msg.subagentTurns
+					rm.app.SubagentTypes = msg.subagentTypes
+				}
 				rm.app.RebuildChatItems()
 				rm.chatItems = rm.app.ChatItems
 			}
@@ -318,6 +333,7 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 	selectedPlugin := rm.app.SelectedPlugin
 	sessionFilePath := rm.app.SelectedSessionFilePath
 	subagentDir := rm.app.SelectedSessionSubagentDir
+	slugSessions := rm.app.SlugSessions
 	dp := rm.dp
 	return func() tea.Msg {
 		msg := dataLoadedMsg{resource: resource}
@@ -337,19 +353,67 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
 		case model.ResourceHistory, model.ResourceHistoryDetail:
-			if sessionFilePath != "" {
-				msg.turns = dp.GetTurns(sessionFilePath)
-			}
-			if subagentDir != "" {
-				subInfos, _ := transcript.ScanSubagents(subagentDir)
-				for _, si := range subInfos {
-					msg.subagentTurns = append(msg.subagentTurns, dp.GetTurns(si.FilePath))
-					msg.subagentTypes = append(msg.subagentTypes, detectAgentType(si.ID))
+			// Re-scan sessions to detect newly created sessions in the slug group.
+			freshSlug := refreshSlugGroup(dp, projectHash, sessionID, slugSessions)
+			if len(freshSlug) > 1 {
+				msg.slugGroupSessions = freshSlug
+				for _, s := range freshSlug {
+					turns := dp.GetTurns(s.FilePath)
+					msg.slugGroupTurns = append(msg.slugGroupTurns, turns)
+					var subTurns [][]model.Turn
+					if s.SubagentDir != "" {
+						subInfos, _ := transcript.ScanSubagents(s.SubagentDir)
+						for _, si := range subInfos {
+							subTurns = append(subTurns, dp.GetTurns(si.FilePath))
+						}
+					}
+					msg.slugGroupSubTurns = append(msg.slugGroupSubTurns, subTurns)
+					msg.slugGroupSubTypes = append(msg.slugGroupSubTypes, extractSubagentTypes(turns))
 				}
+			} else {
+				if sessionFilePath != "" {
+					msg.turns = dp.GetTurns(sessionFilePath)
+				}
+				if subagentDir != "" {
+					subInfos, _ := transcript.ScanSubagents(subagentDir)
+					for _, si := range subInfos {
+						msg.subagentTurns = append(msg.subagentTurns, dp.GetTurns(si.FilePath))
+					}
+				}
+				msg.subagentTypes = extractSubagentTypes(msg.turns)
 			}
 		}
 		return msg
 	}
+}
+
+// refreshSlugGroup re-scans sessions for the project and returns the updated
+// slug group membership. This detects newly created sessions under the same slug.
+// Returns the fresh slug group if it has >1 members, otherwise nil (single session).
+func refreshSlugGroup(dp ui.DataProvider, projectHash, sessionID string, currentSlug []*model.Session) []*model.Session {
+	// Determine the slug we're tracking.
+	var slug string
+	if len(currentSlug) > 0 {
+		slug = currentSlug[0].Slug
+	}
+	if slug == "" {
+		// Not a slug group — check if a new session joined to form one.
+		allSessions := dp.GetSessions(projectHash)
+		for _, s := range allSessions {
+			if s.ID == sessionID && s.IsGroupRepresentative() {
+				return s.GroupSessions
+			}
+		}
+		return nil
+	}
+	// Re-scan and find the matching slug group.
+	allSessions := dp.GetSessions(projectHash)
+	for _, s := range allSessions {
+		if s.Slug == slug && s.IsGroupRepresentative() {
+			return s.GroupSessions
+		}
+	}
+	return currentSlug
 }
 
 func (rm *rootModel) View() string {
@@ -474,7 +538,7 @@ func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
 			sessions = append(sessions, s)
 		}
 	}
-	return sessions
+	return model.GroupSessionsBySlug(sessions)
 }
 
 func (l *liveDataProvider) GetAgents(sessionID string) []*model.Agent {
@@ -590,6 +654,7 @@ func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Ses
 	s.NumTurns = agg.NumTurns
 	s.Topic = agg.Topic
 	s.Branch = agg.Branch
+	s.Slug = agg.Slug
 	s.ToolCallCount = agg.TotalToolCalls
 	s.AgentCount = 1 + transcript.CountSubagents(si.SubagentDir)
 	if info, err := os.Stat(si.FilePath); err == nil {
@@ -600,6 +665,33 @@ func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Ses
 	for m, u := range agg.TokensByModel {
 		s.TokensByModel[m] = model.TokenCount{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}
 	}
+
+	// Merge subagent token data into session totals
+	if si.SubagentDir != "" {
+		subInfos, _ := transcript.ScanSubagents(si.SubagentDir)
+		for _, sub := range subInfos {
+			l.mu.Lock()
+			subCached := l.aggCache[sub.FilePath]
+			l.mu.Unlock()
+
+			subAgg, err := transcript.ParseAggregatesIncremental(sub.FilePath, subCached)
+			if err != nil {
+				continue
+			}
+
+			l.mu.Lock()
+			l.aggCache[sub.FilePath] = subAgg
+			l.mu.Unlock()
+
+			for m, u := range subAgg.TokensByModel {
+				cur := s.TokensByModel[m]
+				cur.InputTokens += u.InputTokens
+				cur.OutputTokens += u.OutputTokens
+				s.TokensByModel[m] = cur
+			}
+		}
+	}
+
 	return s
 }
 
@@ -636,9 +728,20 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 		IsSubagent: false,
 	}
 
-	// Parse main transcript tool calls
+	// Parse main transcript for tool calls and subagent type extraction
+	var subTypes []model.AgentType
 	if parsed, err := transcript.ParseFile(s.FilePath); err == nil {
 		populateToolCalls(mainAgent, s.ID, parsed)
+		var calls []toolCallInfo
+		for _, t := range parsed.Turns {
+			if t.Role != "assistant" {
+				continue
+			}
+			for _, tc := range t.ToolCalls {
+				calls = append(calls, toolCallInfo{Name: tc.Name, Input: tc.Input})
+			}
+		}
+		subTypes = extractAgentTypesFromCalls(calls)
 	}
 
 	agents := []*model.Agent{mainAgent}
@@ -647,11 +750,15 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 	if s.SubagentDir != "" {
 		subInfos, err := transcript.ScanSubagents(s.SubagentDir)
 		if err == nil {
-			for _, si := range subInfos {
+			for i, si := range subInfos {
+				agentType := model.AgentTypeGeneral
+				if i < len(subTypes) {
+					agentType = subTypes[i]
+				}
 				sub := &model.Agent{
 					ID:         si.ID,
 					SessionID:  s.ID,
-					Type:       model.AgentTypeGeneral,
+					Type:       agentType,
 					Status:     model.StatusDone,
 					FilePath:   si.FilePath,
 					IsSubagent: true,
@@ -660,7 +767,6 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 				// Parse subagent transcript
 				if subParsed, err := transcript.ParseFile(si.FilePath); err == nil {
 					populateToolCalls(sub, s.ID, subParsed)
-					sub.Type = detectAgentType(si.ID)
 				}
 				agents = append(agents, sub)
 			}
@@ -729,17 +835,38 @@ func mdTitle(path string) string {
 	return ""
 }
 
-// detectAgentType infers agent type from its ID or filename.
-func detectAgentType(id string) model.AgentType {
-	lower := strings.ToLower(id)
-	switch {
-	case strings.Contains(lower, "explore"):
-		return model.AgentTypeExplore
-	case strings.Contains(lower, "plan"):
-		return model.AgentTypePlan
-	case strings.Contains(lower, "bash"):
-		return model.AgentTypeBash
-	default:
-		return model.AgentTypeGeneral
+// toolCallInfo holds the minimal fields needed to extract subagent types,
+// allowing a single implementation to work with both model.Turn and transcript.Turn.
+type toolCallInfo struct {
+	Name  string
+	Input json.RawMessage
+}
+
+// extractAgentTypesFromCalls reads Agent/Task tool calls and returns the subagent_type
+// value for each, in call order. This matches the positional order used by
+// BuildChatItems to interleave subagent turns.
+func extractAgentTypesFromCalls(calls []toolCallInfo) []model.AgentType {
+	var types []model.AgentType
+	for _, c := range calls {
+		if c.Name != "Agent" && c.Name != "Task" {
+			continue
+		}
+		types = append(types, model.AgentTypeFromInput(c.Input))
 	}
+	return types
+}
+
+// extractSubagentTypes collects Agent/Task tool calls from model.Turn slices
+// and delegates to extractAgentTypesFromCalls.
+func extractSubagentTypes(turns []model.Turn) []model.AgentType {
+	var calls []toolCallInfo
+	for _, t := range turns {
+		if t.Role != "assistant" {
+			continue
+		}
+		for _, tc := range t.ToolCalls {
+			calls = append(calls, toolCallInfo{Name: tc.Name, Input: tc.Input})
+		}
+	}
+	return extractAgentTypesFromCalls(calls)
 }

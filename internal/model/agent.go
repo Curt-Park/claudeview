@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -80,4 +81,20 @@ func (a *Agent) TreePrefix(isLast bool) string {
 		return "  └─ "
 	}
 	return "  ├─ "
+}
+
+// AgentTypeFromInput reads the subagent_type field from a tool call's JSON input.
+func AgentTypeFromInput(input json.RawMessage) AgentType {
+	if input == nil {
+		return AgentTypeGeneral
+	}
+	var m map[string]any
+	if err := json.Unmarshal(input, &m); err != nil {
+		return AgentTypeGeneral
+	}
+	v, ok := m["subagent_type"].(string)
+	if !ok || v == "" {
+		return AgentTypeGeneral
+	}
+	return AgentType(v)
 }

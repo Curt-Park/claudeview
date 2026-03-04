@@ -60,7 +60,7 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 
 	// --- Data rows ---
 	otherRows := []struct{ label, value string }{
-		{"Session:", val(info.Session)},
+		{"Session Slug:", val(info.Session)},
 		{"User:", val(info.User)},
 		{"Claude Code:", val(info.ClaudeVersion)},
 		{"claudeview:", val(info.AppVersion)},
@@ -133,7 +133,16 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 			styledLabel := StyleKey.Render(row.label)
 			labelVis := lipgloss.Width(styledLabel)
 			labelPad := strings.Repeat(" ", max(labelW-labelVis, 1))
-			leftPart = styledLabel + labelPad + row.value
+			// Truncate value so the left column never exceeds leftW.
+			maxValW := leftW - labelVis - len(labelPad)
+			valStr := row.value
+			if valVisW := lipgloss.Width(valStr); valVisW > maxValW && maxValW > 1 {
+				runes := []rune(valStr)
+				if len(runes) > maxValW {
+					valStr = string(runes[:maxValW-1]) + "…"
+				}
+			}
+			leftPart = styledLabel + labelPad + valStr
 			leftVis := lipgloss.Width(leftPart)
 			// Always place nav at column leftW+2 so all rows align.
 			leftPadding = strings.Repeat(" ", max(leftW+2-leftVis, 1))

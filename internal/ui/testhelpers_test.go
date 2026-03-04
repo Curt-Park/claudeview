@@ -72,7 +72,7 @@ func sessionRows(n int) []ui.Row {
 	for i := range rows {
 		s := &model.Session{ID: strings.Repeat("c", 8) + strings.Repeat("d", i+1)}
 		rows[i] = ui.Row{
-			Cells: []string{s.ShortID(), "Refactor auth module", "2", "10", "sonnet:5k", "1h"},
+			Cells: []string{"", s.ShortID(), "Refactor auth module", "2", "10", "sonnet:5k", "1h"},
 			Data:  s,
 		}
 	}
@@ -96,6 +96,7 @@ func chatItemRows(items []ui.ChatItem) []ui.Row {
 				item.TimeLabel(prev),
 			},
 			Data: item,
+			Skip: item.IsDivider,
 		}
 	}
 	return rows

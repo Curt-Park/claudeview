@@ -4,3 +4,5 @@ bin/
 *.out
 coverage.txt
 .vscode
+.worktrees
+claudeview

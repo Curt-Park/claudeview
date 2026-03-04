@@ -109,9 +109,10 @@ func TestRenderPluginItemDetail_Hook_ShowsCommandScripts(t *testing.T) {
 
 func TestRenderChatItemDetail_UserBubble(t *testing.T) {
 	item := ui.ChatItem{
-		Turn: model.Turn{Role: "user", Text: "Hello, Claude!", Timestamp: time.Date(2026, 3, 2, 9, 13, 0, 0, time.UTC)},
+		Turn:        model.Turn{Role: "user", Text: "Hello, Claude!", Timestamp: time.Date(2026, 3, 2, 9, 13, 0, 0, time.UTC)},
+		SubagentIdx: -1,
 	}
-	got := ui.RenderChatItemDetail(item, 80)
+	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 80)
 	if !strings.Contains(got, "Hello, Claude!") {
 		t.Errorf("expected user text in output, got:\n%s", got)
 	}
@@ -125,9 +126,10 @@ func TestRenderChatItemDetail_UserBubble(t *testing.T) {
 
 func TestRenderChatItemDetail_MultilineUserBubble(t *testing.T) {
 	item := ui.ChatItem{
-		Turn: model.Turn{Role: "user", Text: "Requirement:\n- req1\n- req2", Timestamp: time.Now()},
+		Turn:        model.Turn{Role: "user", Text: "Requirement:\n- req1\n- req2", Timestamp: time.Now()},
+		SubagentIdx: -1,
 	}
-	got := ui.RenderChatItemDetail(item, 80)
+	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 80)
 	if !strings.Contains(got, "req1") || !strings.Contains(got, "req2") {
 		t.Errorf("expected multiline text preserved, got:\n%s", got)
 	}
@@ -143,8 +145,9 @@ func TestRenderChatItemDetail_ClaudeBubble(t *testing.T) {
 			OutputTokens: 100,
 			Timestamp:    time.Date(2026, 3, 2, 9, 14, 0, 0, time.UTC),
 		},
+		SubagentIdx: -1,
 	}
-	got := ui.RenderChatItemDetail(item, 120)
+	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
 	if !strings.Contains(got, "네, 시작하겠습니다.") {
 		t.Errorf("expected assistant text, got:\n%s", got)
 	}
@@ -161,9 +164,10 @@ func TestRenderChatItemDetail_ClaudeBubble(t *testing.T) {
 
 func TestRenderChatItemDetail_ThinkingDim(t *testing.T) {
 	item := ui.ChatItem{
-		Turn: model.Turn{Role: "assistant", Text: "response", Thinking: "let me think about this carefully"},
+		Turn:        model.Turn{Role: "assistant", Text: "response", Thinking: "let me think about this carefully"},
+		SubagentIdx: -1,
 	}
-	got := ui.RenderChatItemDetail(item, 120)
+	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
 	if !strings.Contains(got, "think") {
 		t.Errorf("expected thinking content in output, got:\n%s", got)
 	}
@@ -181,8 +185,9 @@ func TestRenderChatItemDetail_ToolCallLines(t *testing.T) {
 				{Name: "Bash", Input: json.RawMessage(`{"command":"make test"}`), IsError: true},
 			},
 		},
+		SubagentIdx: -1,
 	}
-	got := ui.RenderChatItemDetail(item, 120)
+	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
 	if !strings.Contains(got, "Read") {
 		t.Errorf("expected 'Read' tool name, got:\n%s", got)
 	}
@@ -196,11 +201,12 @@ func TestRenderChatItemDetail_ToolCallLines(t *testing.T) {
 
 func TestRenderChatItemDetail_SubagentBubble(t *testing.T) {
 	item := ui.ChatItem{
-		Turn:       model.Turn{Text: "Found 42 files.", ModelName: "claude-sonnet-4-6", Role: "assistant"},
-		IsSubagent: true,
-		AgentType:  model.AgentTypeExplore,
+		Turn:        model.Turn{Text: "Found 42 files.", ModelName: "claude-sonnet-4-6", Role: "assistant"},
+		IsSubagent:  true,
+		AgentType:   model.AgentTypeExplore,
+		SubagentIdx: 0,
 	}
-	got := ui.RenderChatItemDetail(item, 120)
+	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
 	if !strings.Contains(got, "Found 42 files.") {
 		t.Errorf("expected subagent text in output, got:\n%s", got)
 	}
@@ -233,8 +239,9 @@ func TestRenderChatItemDetail_GroupedWithExtraTurns(t *testing.T) {
 				},
 			},
 		},
+		SubagentIdx: -1,
 	}
-	got := ui.RenderChatItemDetail(item, 120)
+	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
 
 	// Primary text should be visible
 	if !strings.Contains(got, "Let me check the code.") {
@@ -251,10 +258,7 @@ func TestRenderChatItemDetail_GroupedWithExtraTurns(t *testing.T) {
 	if !strings.Contains(got, "Edit") {
 		t.Errorf("expected extra turn tool call 'Edit', got:\n%s", got)
 	}
-	// Separator
-	if !strings.Contains(got, "continued") {
-		t.Errorf("expected '── continued ──' separator, got:\n%s", got)
-	}
+	// No separator — ExtraTurns flow naturally after primary turn
 	// Aggregated tokens: 500+100+300+50 = 950
 	if !strings.Contains(got, "950") {
 		t.Errorf("expected aggregated token count 950, got:\n%s", got)
@@ -282,5 +286,66 @@ func TestRenderPluginItemDetail_Hook_NoScriptsShowsOnlyJSON(t *testing.T) {
 	}
 	if !strings.Contains(got, "PreToolUse") {
 		t.Errorf("expected hook name in output, got %q", got)
+	}
+}
+
+func TestRenderChatItemDetail_SubagentFullTranscript(t *testing.T) {
+	// Subagent is now a single collapsed ChatItem with ExtraTurns.
+	items := []ui.ChatItem{
+		{Turn: model.Turn{Role: "user", Text: "Do something"}, SubagentIdx: -1},
+		{Turn: model.Turn{Role: "assistant", Text: "Sure, let me delegate."}, SubagentIdx: -1},
+		{
+			Turn:        model.Turn{Role: "assistant", Text: "Step 1: searching files"},
+			ExtraTurns:  []model.Turn{{Role: "assistant", Text: "Step 2: found results"}},
+			IsSubagent:  true,
+			AgentType:   model.AgentTypeExplore,
+			SubagentIdx: 0,
+		},
+		{Turn: model.Turn{Role: "assistant", Text: "Done!"}, SubagentIdx: -1},
+	}
+
+	// Select the collapsed subagent item (index 2) — should render both turns.
+	got := ui.RenderChatItemDetail(items, 2, 120)
+	if !strings.Contains(got, "Step 1: searching files") {
+		t.Errorf("expected first subagent turn in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Step 2: found results") {
+		t.Errorf("expected second subagent turn in output, got:\n%s", got)
+	}
+	// Should NOT contain non-subagent turns.
+	if strings.Contains(got, "Do something") {
+		t.Errorf("expected user turn excluded from subagent transcript, got:\n%s", got)
+	}
+	if strings.Contains(got, "Done!") {
+		t.Errorf("expected regular assistant turn excluded from subagent transcript, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_RegularAssistantSingleTurn(t *testing.T) {
+	items := []ui.ChatItem{
+		{Turn: model.Turn{Role: "user", Text: "Hello"}, SubagentIdx: -1},
+		{Turn: model.Turn{Role: "assistant", Text: "Hi there"}, SubagentIdx: -1},
+		{Turn: model.Turn{Role: "assistant", Text: "Subagent work"}, IsSubagent: true, SubagentIdx: 0},
+	}
+
+	// Select regular assistant (index 1) — should render only that single turn.
+	got := ui.RenderChatItemDetail(items, 1, 120)
+	if !strings.Contains(got, "Hi there") {
+		t.Errorf("expected assistant text, got:\n%s", got)
+	}
+	if strings.Contains(got, "Subagent work") {
+		t.Errorf("expected subagent turn excluded from regular assistant detail, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_OutOfBounds(t *testing.T) {
+	items := []ui.ChatItem{
+		{Turn: model.Turn{Role: "user", Text: "Hello"}, SubagentIdx: -1},
+	}
+	if got := ui.RenderChatItemDetail(items, -1, 80); got != "" {
+		t.Errorf("expected empty for negative index, got %q", got)
+	}
+	if got := ui.RenderChatItemDetail(items, 5, 80); got != "" {
+		t.Errorf("expected empty for out-of-range index, got %q", got)
 	}
 }

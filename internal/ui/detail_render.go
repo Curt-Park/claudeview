@@ -11,20 +11,6 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
-func shortModel(m string) string {
-	lower := strings.ToLower(m)
-	switch {
-	case strings.Contains(lower, "opus"):
-		return "opus"
-	case strings.Contains(lower, "sonnet"):
-		return "sonnet"
-	case strings.Contains(lower, "haiku"):
-		return "haiku"
-	default:
-		return m
-	}
-}
-
 func subagentIcon(t model.AgentType) string {
 	switch t {
 	case model.AgentTypeExplore:
@@ -38,28 +24,55 @@ func subagentIcon(t model.AgentType) string {
 	}
 }
 
-func agentDisplayName(t model.AgentType) string {
-	switch t {
-	case model.AgentTypeExplore:
-		return "Explorer"
-	case model.AgentTypePlan:
-		return "Planner"
-	case model.AgentTypeBash:
-		return "Bash"
-	case model.AgentTypeGeneral:
-		return "General"
-	default:
-		return "Agent"
+// RenderChatItemDetail renders the detail view for a selected ChatItem.
+// For subagent items, it renders the primary turn plus all ExtraTurns (the full transcript).
+// For regular items (user, assistant, divider), it renders a single item.
+func RenderChatItemDetail(items []ChatItem, selectedIdx, width int) string {
+	if selectedIdx < 0 || selectedIdx >= len(items) {
+		return ""
 	}
+	sel := items[selectedIdx]
+
+	// Subagent: render primary turn + all extra turns as full transcript.
+	if sel.IsSubagent {
+		var allLines []string
+		allLines = append(allLines, renderChatItem(ChatItem{
+			Turn: sel.Turn, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
+		}, width)...)
+		for _, et := range sel.ExtraTurns {
+			allLines = append(allLines, "") // blank line between turns
+			allLines = append(allLines, renderChatItem(ChatItem{
+				Turn: et, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
+			}, width)...)
+		}
+		return strings.Join(allLines, "\n")
+	}
+
+	return strings.Join(renderChatItem(sel, width), "\n")
 }
 
-// RenderChatItemDetail renders a single ChatItem as flat text (no bubble borders),
-// similar to RenderPluginItemDetail: a styled header line followed by full-width content.
-// For grouped items (with ExtraTurns), all tool calls are rendered after the primary turn.
-func RenderChatItemDetail(item ChatItem, width int) string {
+// ChatItemKey returns a unique fingerprint for a ChatItem, used to re-resolve
+// the selected item after async rebuilds.
+func ChatItemKey(item ChatItem) string {
+	key := item.Turn.Timestamp.String() + "|" + item.Turn.Role + "|" + fmt.Sprintf("%d", item.SubagentIdx)
+	if tcs := item.AllToolCalls(); len(tcs) > 0 {
+		key += "|" + tcs[0].Name
+	}
+	// Include text prefix to disambiguate items with identical timestamp/role
+	// (e.g. consecutive user turns from local commands at the same second).
+	if t := item.Turn.Text; len(t) > 32 {
+		key += "|" + t[:32]
+	} else if t != "" {
+		key += "|" + t
+	}
+	return key
+}
+
+// renderChatItem renders a single ChatItem as flat text lines.
+func renderChatItem(item ChatItem, width int) []string {
 	turn := item.Turn
 
-	// Build header: WHO · model · time · tokens (aggregated)
+	// Build header: WHO · model · time · tokens
 	var headerParts []string
 	if item.IsSubagent {
 		icon := subagentIcon(item.AgentType)
@@ -69,7 +82,7 @@ func RenderChatItemDetail(item ChatItem, width int) string {
 	} else {
 		headerParts = append(headerParts, StyleChatHeader.Render("Claude"))
 	}
-	if m := shortModel(turn.ModelName); m != "" {
+	if m := model.ShortModelName(turn.ModelName); m != "" {
 		headerParts = append(headerParts, StyleDim.Render(m))
 	}
 	if !turn.Timestamp.IsZero() {
@@ -103,14 +116,15 @@ func RenderChatItemDetail(item ChatItem, width int) string {
 		parts = append(parts, renderExpandedToolCall(tc, width))
 	}
 
-	// ExtraTurns: separator + thinking + tool calls for each grouped turn
+	// ExtraTurns: separator + thinking + text + tool calls for each grouped turn
 	for _, et := range item.ExtraTurns {
 		parts = append(parts, "")
-		parts = append(parts, StyleDim.Render("── continued ──"))
 		if et.Thinking != "" {
-			parts = append(parts, "")
 			parts = append(parts, StyleChatThinking.Render("── thinking ──"))
 			parts = append(parts, ansi.Wrap(et.Thinking, width, ""))
+		}
+		if et.Text != "" {
+			parts = append(parts, ansi.Wrap(et.Text, width, ""))
 		}
 		for _, tc := range et.ToolCalls {
 			parts = append(parts, "")
@@ -118,7 +132,7 @@ func RenderChatItemDetail(item ChatItem, width int) string {
 		}
 	}
 
-	return strings.Join(parts, "\n")
+	return parts
 }
 
 // renderExpandedToolCall renders a tool call with full input and result.
@@ -167,11 +181,7 @@ func expandResult(tc *model.ToolCall) string {
 	// Try string result
 	var s string
 	if err := json.Unmarshal(tc.Result, &s); err == nil {
-		// Cap at reasonable length for display
-		lines := strings.Split(s, "\n")
-		if len(lines) > 30 {
-			lines = append(lines[:30], fmt.Sprintf("... (%d more lines)", len(lines)-30))
-		}
+		lines := capLines(strings.Split(s, "\n"), 30)
 		return strings.Join(lines, "\n")
 	}
 	// Try array of content blocks
@@ -185,14 +195,19 @@ func expandResult(tc *model.ToolCall) string {
 		}
 		if len(texts) > 0 {
 			result := strings.Join(texts, "\n")
-			lines := strings.Split(result, "\n")
-			if len(lines) > 30 {
-				lines = append(lines[:30], fmt.Sprintf("... (%d more lines)", len(lines)-30))
-			}
+			lines := capLines(strings.Split(result, "\n"), 30)
 			return strings.Join(lines, "\n")
 		}
 	}
 	return ""
+}
+
+// capLines truncates a slice of lines, appending a summary if it exceeds max.
+func capLines(lines []string, max int) []string {
+	if len(lines) > max {
+		return append(lines[:max], fmt.Sprintf("... (%d more lines)", len(lines)-max))
+	}
+	return lines
 }
 
 // RenderPluginItemDetail renders the content of a selected plugin item.

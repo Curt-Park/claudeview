@@ -51,8 +51,15 @@ type AppModel struct {
 	SubagentTurns              [][]model.Turn
 	SubagentTypes              []model.AgentType
 	ChatFollow                 bool   // true = auto-scroll to bottom (tail -f mode)
+	SelectedSessionSlug        string // slug for the selected session (shown in header)
 	SelectedSessionFilePath    string // for async reload
 	SelectedSessionSubagentDir string // for async subagent reload
+
+	// Slug group: all sessions in the selected slug group (len > 1 when merged)
+	SlugSessions      []*model.Session
+	slugGroupTurns    [][]model.Turn      // per-session turns for slug group
+	slugGroupSubTurns [][][]model.Turn    // per-session subagent turns
+	slugGroupSubTypes [][]model.AgentType // per-session subagent types
 
 	// Chat table state
 	ChatItems        []ChatItem // flattened selectable items
@@ -274,9 +281,7 @@ func (m AppModel) contentMaxOffset() int {
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
 	case model.ResourceHistoryDetail:
-		if m.SelectedChatItem >= 0 && m.SelectedChatItem < len(m.ChatItems) {
-			contentStr = RenderChatItemDetail(m.ChatItems[m.SelectedChatItem], m.contentWidth())
-		}
+		contentStr = RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
 	default:
 		return 0
 	}
@@ -342,8 +347,64 @@ func (m *AppModel) updateChatFollow(msg tea.KeyMsg) {
 }
 
 // RebuildChatItems rebuilds the flattened ChatItems list from current turn data.
+// In history-detail, re-resolves SelectedChatItem and adjusts ContentOffset
+// so the view doesn't jump when ExtraTurns grouping changes on refresh.
 func (m *AppModel) RebuildChatItems() {
-	m.ChatItems = BuildChatItems(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes)
+	// Save the selected item's identity before rebuild.
+	var prevKey string
+	inDetail := m.Resource == model.ResourceHistoryDetail
+	if inDetail && m.SelectedChatItem >= 0 && m.SelectedChatItem < len(m.ChatItems) {
+		prevKey = ChatItemKey(m.ChatItems[m.SelectedChatItem])
+	}
+
+	if len(m.SlugSessions) > 1 {
+		ids := make([]string, len(m.SlugSessions))
+		for i, s := range m.SlugSessions {
+			ids[i] = s.ShortID()
+		}
+		m.ChatItems = BuildMergedChatItems(m.slugGroupTurns, m.slugGroupSubTurns, m.slugGroupSubTypes, ids)
+	} else {
+		m.ChatItems = BuildChatItems(m.SelectedTurns, m.SubagentTurns, m.SubagentTypes)
+	}
+
+	// Re-resolve the selected item so it stays on the same turn after regrouping.
+	if inDetail && prevKey != "" {
+		for i, item := range m.ChatItems {
+			if ChatItemKey(item) == prevKey {
+				m.SelectedChatItem = i
+				break
+			}
+		}
+	}
+}
+
+// loadSlugGroupTurns loads turns from all sessions in the slug group.
+func (m *AppModel) loadSlugGroupTurns() {
+	m.slugGroupTurns = nil
+	m.slugGroupSubTurns = nil
+	m.slugGroupSubTypes = nil
+	for _, s := range m.SlugSessions {
+		turns := m.DataProvider.GetTurns(s.FilePath)
+		m.slugGroupTurns = append(m.slugGroupTurns, turns)
+		agents := m.DataProvider.GetAgents(s.ID)
+		var subTurns [][]model.Turn
+		var subTypes []model.AgentType
+		for _, a := range agents {
+			if a.IsSubagent && a.FilePath != "" {
+				subTurns = append(subTurns, m.DataProvider.GetTurns(a.FilePath))
+				subTypes = append(subTypes, a.Type)
+			}
+		}
+		m.slugGroupSubTurns = append(m.slugGroupSubTurns, subTurns)
+		m.slugGroupSubTypes = append(m.slugGroupSubTypes, subTypes)
+	}
+}
+
+// SetSlugGroupData updates the slug group turn data (used by async reload).
+func (m *AppModel) SetSlugGroupData(turns [][]model.Turn, subTurns [][][]model.Turn, subTypes [][]model.AgentType) {
+	m.slugGroupTurns = turns
+	m.slugGroupSubTurns = subTurns
+	m.slugGroupSubTypes = subTypes
 }
 
 // refreshMenu updates the menu nav and util items based on current state.
@@ -428,17 +489,23 @@ func (m *AppModel) navigateBack() {
 		m.switchResource(model.ResourceHistory)
 	case model.ResourceHistory:
 		m.SelectedSessionID = ""
+		m.SelectedSessionSlug = ""
 		m.SelectedSessionFilePath = ""
 		m.SelectedSessionSubagentDir = ""
 		m.SelectedTurns = nil
 		m.SubagentTurns = nil
 		m.SubagentTypes = nil
+		m.SlugSessions = nil
+		m.slugGroupTurns = nil
+		m.slugGroupSubTurns = nil
+		m.slugGroupSubTypes = nil
 		m.ChatFollow = false
 		m.ChatItems = nil
 		m.popFilter()
 		m.switchResource(model.ResourceSessions)
 	case model.ResourceAgents:
 		m.SelectedSessionID = ""
+		m.SelectedSessionSlug = ""
 		m.popFilter()
 		m.switchResource(model.ResourceSessions)
 	case model.ResourceSessions:
@@ -465,8 +532,12 @@ func (m *AppModel) drillDown() {
 	switch m.Resource {
 	case model.ResourceHistory:
 		if ci, ok := row.Data.(ChatItem); ok {
+			if ci.IsDivider {
+				return // skip divider rows
+			}
+			ciKey := ChatItemKey(ci)
 			for i, item := range m.ChatItems {
-				if item.Turn.Timestamp.Equal(ci.Turn.Timestamp) && item.Turn.Role == ci.Turn.Role {
+				if ChatItemKey(item) == ciKey {
 					m.SelectedChatItem = i
 					break
 				}
@@ -482,16 +553,24 @@ func (m *AppModel) drillDown() {
 	case model.ResourceSessions:
 		if s, ok := row.Data.(*model.Session); ok {
 			m.SelectedSessionID = s.ID
+			m.SelectedSessionSlug = s.Slug
 			m.SelectedSessionFilePath = s.FilePath
 			m.SelectedSessionSubagentDir = s.SubagentDir
-			m.SelectedTurns = m.DataProvider.GetTurns(s.FilePath)
-			agents := m.DataProvider.GetAgents(s.ID)
-			m.SubagentTurns = nil
-			m.SubagentTypes = nil
-			for _, a := range agents {
-				if a.IsSubagent && a.FilePath != "" {
-					m.SubagentTurns = append(m.SubagentTurns, m.DataProvider.GetTurns(a.FilePath))
-					m.SubagentTypes = append(m.SubagentTypes, a.Type)
+
+			if s.IsGroupRepresentative() {
+				m.SlugSessions = s.GroupSessions
+				m.loadSlugGroupTurns()
+			} else {
+				m.SlugSessions = nil
+				m.SelectedTurns = m.DataProvider.GetTurns(s.FilePath)
+				agents := m.DataProvider.GetAgents(s.ID)
+				m.SubagentTurns = nil
+				m.SubagentTypes = nil
+				for _, a := range agents {
+					if a.IsSubagent && a.FilePath != "" {
+						m.SubagentTurns = append(m.SubagentTurns, m.DataProvider.GetTurns(a.FilePath))
+						m.SubagentTypes = append(m.SubagentTypes, a.Type)
+					}
 				}
 			}
 		}
@@ -588,9 +667,7 @@ func (m AppModel) View() string {
 	case model.ResourceMemoryDetail:
 		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
 	case model.ResourceHistoryDetail:
-		if m.SelectedChatItem >= 0 && m.SelectedChatItem < len(m.ChatItems) {
-			contentStr = RenderChatItemDetail(m.ChatItems[m.SelectedChatItem], m.contentWidth())
-		}
+		contentStr = RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
 	default:
 		contentStr = m.Table.View()
 	}

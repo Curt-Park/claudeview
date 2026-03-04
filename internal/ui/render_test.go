@@ -106,7 +106,7 @@ func TestRenderInfoPanelAtProjectsLevelShowsDashes(t *testing.T) {
 	t.Cleanup(func() { _ = tm.Quit() })
 
 	waitForOutput(t, tm, func(bts []byte) bool {
-		return containsStr("Project:")(bts) && containsStr("Session:")(bts)
+		return containsStr("Project:")(bts) && containsStr("Session Slug:")(bts)
 	})
 }
 

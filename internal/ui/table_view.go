@@ -24,8 +24,10 @@ type Row struct {
 	Cells          []string
 	Subtitle       string // optional second line shown in dimmed style
 	SubtitleIndent int    // leading spaces before the subtitle text
+	SubtitlePrefix string // optional leading text before indent spaces (e.g. "│" tree connector)
 	Data           any    // original data object
 	Hot            bool   // true if this row was recently updated (for highlight)
+	Skip           bool   // true if this row should be skipped during navigation (e.g. dividers)
 }
 
 // rowLineCount returns the number of display lines this row occupies.
@@ -65,6 +67,7 @@ func (t *TableView) SetRows(rows []Row) {
 	} else if t.Selected >= n {
 		t.Selected = n - 1
 	}
+	t.nudgeSkip(1)
 }
 
 // SelectedRow returns the currently selected row (from the filtered set).
@@ -76,35 +79,39 @@ func (t *TableView) SelectedRow() *Row {
 	return &rows[t.Selected]
 }
 
-// MoveUp moves the selection up within the filtered set.
+// MoveUp moves the selection up within the filtered set, skipping Skip rows.
 func (t *TableView) MoveUp() {
 	if t.Selected > 0 {
 		t.Selected--
 	}
+	t.nudgeSkip(-1)
 	t.ensureVisible()
 }
 
-// MoveDown moves the selection down within the filtered set.
+// MoveDown moves the selection down within the filtered set, skipping Skip rows.
 func (t *TableView) MoveDown() {
 	if t.Selected < t.FilteredCount()-1 {
 		t.Selected++
 	}
+	t.nudgeSkip(1)
 	t.ensureVisible()
 }
 
-// GotoTop moves to the first row of the filtered set.
+// GotoTop moves to the first non-Skip row of the filtered set.
 func (t *TableView) GotoTop() {
 	t.Selected = 0
 	t.Offset = 0
+	t.nudgeSkip(1)
 }
 
-// GotoBottom moves to the last row of the filtered set.
+// GotoBottom moves to the last non-Skip row of the filtered set.
 func (t *TableView) GotoBottom() {
 	n := t.FilteredCount()
 	if n == 0 {
 		return
 	}
 	t.Selected = n - 1
+	t.nudgeSkip(-1)
 	t.ensureVisible()
 }
 
@@ -113,18 +120,45 @@ func (t *TableView) dataRows() int {
 	return max(t.Height-1, 1)
 }
 
-// PageUp moves up by half a page.
+// PageUp moves up by half a page, skipping Skip rows.
 func (t *TableView) PageUp() {
 	half := max(1, t.dataRows()/2)
 	t.Selected = max(0, t.Selected-half)
+	t.nudgeSkip(-1)
 	t.ensureVisible()
 }
 
-// PageDown moves down by half a page within the filtered set.
+// PageDown moves down by half a page within the filtered set, skipping Skip rows.
 func (t *TableView) PageDown() {
 	half := max(1, t.dataRows()/2)
 	t.Selected = min(t.FilteredCount()-1, t.Selected+half)
+	t.nudgeSkip(1)
 	t.ensureVisible()
+}
+
+// nudgeSkip moves Selected in the given direction (+1 or -1) until it lands on
+// a non-Skip row. If no non-Skip row exists in that direction, it tries the
+// opposite direction. This ensures the cursor never rests on a divider row.
+func (t *TableView) nudgeSkip(dir int) {
+	rows := t.filteredRows()
+	n := len(rows)
+	if n == 0 {
+		return
+	}
+	// Try moving in the preferred direction.
+	for t.Selected >= 0 && t.Selected < n && rows[t.Selected].Skip {
+		t.Selected += dir
+	}
+	// Clamp and try opposite direction if we went out of bounds or hit a skip.
+	if t.Selected < 0 || t.Selected >= n {
+		t.Selected = max(0, min(n-1, t.Selected))
+	}
+	opp := -dir
+	for t.Selected >= 0 && t.Selected < n && rows[t.Selected].Skip {
+		t.Selected += opp
+	}
+	// Final clamp.
+	t.Selected = max(0, min(n-1, t.Selected))
 }
 
 func (t *TableView) ensureVisible() {
@@ -382,8 +416,9 @@ func (t TableView) renderRow(row Row, widths []int, selected bool) string {
 // indented by row.SubtitleIndent spaces to align under a specific column.
 // When selected is true the row's selection background is applied.
 func (t TableView) renderSubtitleLine(row Row, selected bool) string {
-	prefix := strings.Repeat(" ", max(0, row.SubtitleIndent))
-	text := prefix + row.Subtitle
+	prefixW := lipgloss.Width(row.SubtitlePrefix)
+	indent := strings.Repeat(" ", max(0, row.SubtitleIndent-prefixW))
+	text := row.SubtitlePrefix + indent + row.Subtitle
 	padded := padRight(text, t.Width)
 	if selected {
 		return StyleRowSubtitleSelected.Width(t.Width).Render(padded)
