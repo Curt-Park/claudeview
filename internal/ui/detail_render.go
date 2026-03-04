@@ -138,14 +138,15 @@ func renderChatItem(item ChatItem, width int) []string {
 		parts = append(parts, renderExpandedToolCall(tc, width))
 	}
 
-	// ExtraTurns: separator + thinking + tool calls for each grouped turn
+	// ExtraTurns: separator + thinking + text + tool calls for each grouped turn
 	for _, et := range item.ExtraTurns {
 		parts = append(parts, "")
-		parts = append(parts, StyleDim.Render("── continued ──"))
 		if et.Thinking != "" {
-			parts = append(parts, "")
 			parts = append(parts, StyleChatThinking.Render("── thinking ──"))
 			parts = append(parts, ansi.Wrap(et.Thinking, width, ""))
+		}
+		if et.Text != "" {
+			parts = append(parts, ansi.Wrap(et.Text, width, ""))
 		}
 		for _, tc := range et.ToolCalls {
 			parts = append(parts, "")

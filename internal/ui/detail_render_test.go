@@ -258,10 +258,7 @@ func TestRenderChatItemDetail_GroupedWithExtraTurns(t *testing.T) {
 	if !strings.Contains(got, "Edit") {
 		t.Errorf("expected extra turn tool call 'Edit', got:\n%s", got)
 	}
-	// Separator
-	if !strings.Contains(got, "continued") {
-		t.Errorf("expected '── continued ──' separator, got:\n%s", got)
-	}
+	// No separator — ExtraTurns flow naturally after primary turn
 	// Aggregated tokens: 500+100+300+50 = 950
 	if !strings.Contains(got, "950") {
 		t.Errorf("expected aggregated token count 950, got:\n%s", got)
