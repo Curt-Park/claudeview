@@ -69,7 +69,7 @@ Both implement `ui.DataProvider`:
 | Flag           | Effect                                                     |
 |----------------|------------------------------------------------------------|
 | `--demo`       | Use `demoDataProvider` instead of live filesystem data     |
-| `--render-once`| Render a single frame and exit (for snapshot testing)      |
+| `--update`     | Self-update to the latest GitHub release                   |
 
 ## Helper Functions
 

@@ -50,7 +50,11 @@ cd claudeview
 make install
 ```
 
-Then run `claudeview` to start on the projects view, or `claudeview --demo` with synthetic data.
+Then run `claudeview` to start on the projects view, or `claudeview --demo` with synthetic data. To self-update to the latest release:
+
+```bash
+claudeview --update
+```
 
 **Development**
 
