@@ -6,6 +6,10 @@
 
 claudeview is a zero-setup TUI that gives you full observability into Claude Code sessions. It reads `~/.claude/` directly — no hooks, no config, no agents to run. Projects, sessions, agents, tool calls, plugins, and memories are all navigable from a single terminal interface with live-streaming updates.
 
+<p align="center">
+  <img src="assets/demo.gif" alt="claudeview demo — real-time monitoring of Claude Code" width="800">
+</p>
+
 **Core Design**
 
 The dashboard follows the k9s model: hierarchical drill-down with vim-style navigation. `j/k` to move, `enter` to drill down, `esc` to go back, `/` to filter. Every view refreshes on a 1-second tick, and the history view supports follow mode — auto-scrolling to the latest turn like `tail -f` as Claude writes.
