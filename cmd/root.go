@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -353,16 +354,14 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 					turns := dp.GetTurns(s.FilePath)
 					msg.slugGroupTurns = append(msg.slugGroupTurns, turns)
 					var subTurns [][]model.Turn
-					var subTypes []model.AgentType
 					if s.SubagentDir != "" {
 						subInfos, _ := transcript.ScanSubagents(s.SubagentDir)
 						for _, si := range subInfos {
 							subTurns = append(subTurns, dp.GetTurns(si.FilePath))
-							subTypes = append(subTypes, detectAgentType(si.ID))
 						}
 					}
 					msg.slugGroupSubTurns = append(msg.slugGroupSubTurns, subTurns)
-					msg.slugGroupSubTypes = append(msg.slugGroupSubTypes, subTypes)
+					msg.slugGroupSubTypes = append(msg.slugGroupSubTypes, extractSubagentTypes(turns))
 				}
 			} else {
 				if sessionFilePath != "" {
@@ -372,9 +371,9 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 					subInfos, _ := transcript.ScanSubagents(subagentDir)
 					for _, si := range subInfos {
 						msg.subagentTurns = append(msg.subagentTurns, dp.GetTurns(si.FilePath))
-						msg.subagentTypes = append(msg.subagentTypes, detectAgentType(si.ID))
 					}
 				}
+				msg.subagentTypes = extractSubagentTypes(msg.turns)
 			}
 		}
 		return msg
@@ -693,9 +692,11 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 		IsSubagent: false,
 	}
 
-	// Parse main transcript tool calls
+	// Parse main transcript for tool calls and subagent type extraction
+	var subTypes []model.AgentType
 	if parsed, err := transcript.ParseFile(s.FilePath); err == nil {
 		populateToolCalls(mainAgent, s.ID, parsed)
+		subTypes = extractSubagentTypesFromTranscript(parsed.Turns)
 	}
 
 	agents := []*model.Agent{mainAgent}
@@ -704,11 +705,15 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 	if s.SubagentDir != "" {
 		subInfos, err := transcript.ScanSubagents(s.SubagentDir)
 		if err == nil {
-			for _, si := range subInfos {
+			for i, si := range subInfos {
+				agentType := model.AgentTypeGeneral
+				if i < len(subTypes) {
+					agentType = subTypes[i]
+				}
 				sub := &model.Agent{
 					ID:         si.ID,
 					SessionID:  s.ID,
-					Type:       model.AgentTypeGeneral,
+					Type:       agentType,
 					Status:     model.StatusDone,
 					FilePath:   si.FilePath,
 					IsSubagent: true,
@@ -717,7 +722,6 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 				// Parse subagent transcript
 				if subParsed, err := transcript.ParseFile(si.FilePath); err == nil {
 					populateToolCalls(sub, s.ID, subParsed)
-					sub.Type = detectAgentType(si.ID)
 				}
 				agents = append(agents, sub)
 			}
@@ -786,17 +790,54 @@ func mdTitle(path string) string {
 	return ""
 }
 
-// detectAgentType infers agent type from its ID or filename.
-func detectAgentType(id string) model.AgentType {
-	lower := strings.ToLower(id)
-	switch {
-	case strings.Contains(lower, "explore"):
-		return model.AgentTypeExplore
-	case strings.Contains(lower, "plan"):
-		return model.AgentTypePlan
-	case strings.Contains(lower, "bash"):
-		return model.AgentTypeBash
-	default:
+// extractSubagentTypes reads Agent/Task tool calls from model.Turn slices and returns
+// the subagent_type value for each, in call order. This matches the positional
+// order used by BuildChatItems to interleave subagent turns.
+func extractSubagentTypes(turns []model.Turn) []model.AgentType {
+	var types []model.AgentType
+	for _, t := range turns {
+		if t.Role != "assistant" {
+			continue
+		}
+		for _, tc := range t.ToolCalls {
+			if tc.Name != "Agent" && tc.Name != "Task" {
+				continue
+			}
+			types = append(types, agentTypeFromInput(tc.Input))
+		}
+	}
+	return types
+}
+
+// extractSubagentTypesFromTranscript reads Agent/Task tool calls from transcript.Turn slices.
+func extractSubagentTypesFromTranscript(turns []transcript.Turn) []model.AgentType {
+	var types []model.AgentType
+	for _, t := range turns {
+		if t.Role != "assistant" {
+			continue
+		}
+		for _, tc := range t.ToolCalls {
+			if tc.Name != "Agent" && tc.Name != "Task" {
+				continue
+			}
+			types = append(types, agentTypeFromInput(tc.Input))
+		}
+	}
+	return types
+}
+
+// agentTypeFromInput reads the subagent_type field from a tool call's JSON input.
+func agentTypeFromInput(input json.RawMessage) model.AgentType {
+	if input == nil {
 		return model.AgentTypeGeneral
 	}
+	var m map[string]any
+	if err := json.Unmarshal(input, &m); err != nil {
+		return model.AgentTypeGeneral
+	}
+	v, ok := m["subagent_type"].(string)
+	if !ok || v == "" {
+		return model.AgentTypeGeneral
+	}
+	return model.AgentType(v)
 }
