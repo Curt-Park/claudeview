@@ -360,9 +360,9 @@ func TestRenderChatItemDetail_AgentCallCompact(t *testing.T) {
 	if !strings.Contains(got, "Explorer") {
 		t.Errorf("expected agent name 'Explorer' in output, got:\n%s", got)
 	}
-	// Agent call shows result preview.
-	if !strings.Contains(got, "Found 42 files") {
-		t.Errorf("expected result preview in output, got:\n%s", got)
+	// Agent call shows full result.
+	if !strings.Contains(got, "Found 42 files matching the pattern.") {
+		t.Errorf("expected full result in output, got:\n%s", got)
 	}
 	// Regular tool call still shows full detail with status marker.
 	if !strings.Contains(got, "Read") {

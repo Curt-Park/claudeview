@@ -24,23 +24,24 @@ func subagentIcon(t model.AgentType) string {
 	}
 }
 
-// renderAgentCallLine renders a compact line for an Agent/Task tool call:
-// icon + agent name, followed by a one-line preview of the sub-agent's result.
+// renderAgentCallLine renders an Agent/Task tool call: icon + agent name header,
+// followed by the full result message.
 func renderAgentCallLine(tc *model.ToolCall, maxWidth int) string {
 	agentType := model.AgentTypeFromInput(tc.Input)
 	icon := subagentIcon(agentType)
 	name := agentDisplayName(agentType)
-	label := "  " + StyleChatToolName.Render(icon+" "+name)
-	if result := expandResult(tc); result != "" {
-		for _, l := range strings.Split(result, "\n") {
-			l = strings.TrimSpace(l)
-			if l != "" {
-				label += "  " + StyleDim.Render(l)
-				break
-			}
-		}
+	header := "  " + StyleChatToolName.Render(icon+" "+name)
+	result := expandResult(tc)
+	if result == "" {
+		return header
 	}
-	return ansi.Wrap(label, maxWidth, "")
+	var lines []string
+	lines = append(lines, header)
+	lines = append(lines, "")
+	for _, l := range strings.Split(result, "\n") {
+		lines = append(lines, ansi.Wrap(StyleDim.Render(l), maxWidth, ""))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // RenderChatItemDetail renders the detail view for a selected ChatItem.
