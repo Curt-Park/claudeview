@@ -338,6 +338,44 @@ func TestRenderChatItemDetail_RegularAssistantSingleTurn(t *testing.T) {
 	}
 }
 
+func TestRenderChatItemDetail_AgentCallCompact(t *testing.T) {
+	// Agent/Task tool calls in a Claude turn should render as compact icon+name,
+	// not the full input/result block.
+	taskInput, _ := json.Marshal(map[string]string{"subagent_type": "Explore"})
+	item := ui.ChatItem{
+		Turn: model.Turn{
+			Role: "assistant",
+			Text: "delegating",
+			ToolCalls: []*model.ToolCall{
+				{Name: "Agent", Input: taskInput},
+				{Name: "Read", Input: json.RawMessage(`{"file_path":"app.go"}`)},
+			},
+		},
+		SubagentIdx: -1,
+	}
+	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
+
+	// Agent call should show icon+name, not "✓" or result details.
+	if !strings.Contains(got, "Explorer") {
+		t.Errorf("expected agent name 'Explorer' in output, got:\n%s", got)
+	}
+	// Regular tool call still shows full detail.
+	if !strings.Contains(got, "Read") {
+		t.Errorf("expected 'Read' tool in output, got:\n%s", got)
+	}
+	// Agent call should NOT show result expansion markers.
+	if strings.Contains(got, "✓") && strings.Contains(got, "Agent") {
+		// Only fail if the ✓ is associated with the Agent call line, not Read.
+		// We check by confirming the Read ✓ is present but Agent has no ✓ on its line.
+		lines := strings.Split(got, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "Explorer") && strings.Contains(line, "✓") {
+				t.Errorf("Agent call line should not contain ✓, got: %q", line)
+			}
+		}
+	}
+}
+
 func TestRenderChatItemDetail_OutOfBounds(t *testing.T) {
 	items := []ui.ChatItem{
 		{Turn: model.Turn{Role: "user", Text: "Hello"}, SubagentIdx: -1},

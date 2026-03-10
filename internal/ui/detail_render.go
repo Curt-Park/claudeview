@@ -24,6 +24,15 @@ func subagentIcon(t model.AgentType) string {
 	}
 }
 
+// renderAgentCallLine renders a compact single line for an Agent/Task tool call,
+// showing only the icon and agent type name (details are in the sub-agent row).
+func renderAgentCallLine(tc *model.ToolCall) string {
+	agentType := model.AgentTypeFromInput(tc.Input)
+	icon := subagentIcon(agentType)
+	name := agentDisplayName(agentType)
+	return "  " + StyleChatToolName.Render(icon+" "+name)
+}
+
 // RenderChatItemDetail renders the detail view for a selected ChatItem.
 // For subagent items, it renders the primary turn plus all ExtraTurns (the full transcript).
 // For regular items (user, assistant, divider), it renders a single item.
@@ -113,7 +122,11 @@ func renderChatItem(item ChatItem, width int) []string {
 
 	for _, tc := range turn.ToolCalls {
 		parts = append(parts, "")
-		parts = append(parts, renderExpandedToolCall(tc, width))
+		if tc.Name == "Agent" || tc.Name == "Task" {
+			parts = append(parts, renderAgentCallLine(tc))
+		} else {
+			parts = append(parts, renderExpandedToolCall(tc, width))
+		}
 	}
 
 	// ExtraTurns: separator + thinking + text + tool calls for each grouped turn
@@ -128,7 +141,11 @@ func renderChatItem(item ChatItem, width int) []string {
 		}
 		for _, tc := range et.ToolCalls {
 			parts = append(parts, "")
-			parts = append(parts, renderExpandedToolCall(tc, width))
+			if tc.Name == "Agent" || tc.Name == "Task" {
+				parts = append(parts, renderAgentCallLine(tc))
+			} else {
+				parts = append(parts, renderExpandedToolCall(tc, width))
+			}
 		}
 	}
 
