@@ -32,7 +32,23 @@ func renderAgentCallLine(tc *model.ToolCall, subItem *ChatItem, maxWidth int) st
 	agentType := model.AgentTypeFromInput(tc.Input)
 	icon := subagentIcon(agentType)
 	name := agentDisplayName(agentType)
-	header := "  " + StyleChatToolName.Render(icon+" "+name)
+	headerParts := []string{StyleChatToolName.Render(icon + " " + name)}
+	if subItem != nil {
+		if m := model.ShortModelName(subItem.Turn.ModelName); m != "" {
+			headerParts = append(headerParts, StyleDim.Render(m))
+		}
+		if !subItem.Turn.Timestamp.IsZero() {
+			headerParts = append(headerParts, StyleChatTimestamp.Render(subItem.Turn.Timestamp.Format("15:04")))
+		}
+		totalTok := subItem.Turn.InputTokens + subItem.Turn.OutputTokens
+		for _, et := range subItem.ExtraTurns {
+			totalTok += et.InputTokens + et.OutputTokens
+		}
+		if totalTok > 0 {
+			headerParts = append(headerParts, StyleChatTokens.Render(model.FormatTokenCount(totalTok)+" tok"))
+		}
+	}
+	header := "  " + strings.Join(headerParts, "  ")
 	result := expandResult(tc)
 	if result == "" && subItem != nil {
 		result = lastAssistantText(*subItem)
@@ -160,7 +176,7 @@ func renderChatItem(item ChatItem, subItems []ChatItem, width int) []string {
 	}
 
 	agentIdx := 0
-	renderTC := func(tc *model.ToolCall) string {
+	renderTC := func(tc *model.ToolCall, currentTurn model.Turn) string {
 		if tc.Name == "Agent" || tc.Name == "Task" {
 			var si *ChatItem
 			if agentIdx < len(subItems) {
@@ -169,12 +185,12 @@ func renderChatItem(item ChatItem, subItems []ChatItem, width int) []string {
 			agentIdx++
 			return renderAgentCallLine(tc, si, width)
 		}
-		return renderExpandedToolCall(tc, width)
+		return renderExpandedToolCall(tc, currentTurn, width)
 	}
 
 	for _, tc := range turn.ToolCalls {
 		parts = append(parts, "")
-		parts = append(parts, renderTC(tc))
+		parts = append(parts, renderTC(tc, turn))
 	}
 
 	// ExtraTurns: separator + thinking + text + tool calls for each grouped turn
@@ -189,7 +205,7 @@ func renderChatItem(item ChatItem, subItems []ChatItem, width int) []string {
 		}
 		for _, tc := range et.ToolCalls {
 			parts = append(parts, "")
-			parts = append(parts, renderTC(tc))
+			parts = append(parts, renderTC(tc, et))
 		}
 	}
 
@@ -197,7 +213,7 @@ func renderChatItem(item ChatItem, subItems []ChatItem, width int) []string {
 }
 
 // renderExpandedToolCall renders a tool call with full input and result.
-func renderExpandedToolCall(tc *model.ToolCall, maxWidth int) string {
+func renderExpandedToolCall(tc *model.ToolCall, turn model.Turn, maxWidth int) string {
 	name := StyleChatToolName.Render("▸ " + tc.Name)
 	inputFull := tc.InputSummary()
 
@@ -213,7 +229,12 @@ func renderExpandedToolCall(tc *model.ToolCall, maxWidth int) string {
 		durationStr = " " + StyleChatTimestamp.Render(tc.DurationString())
 	}
 
-	headerLine := "  " + name + "  " + StyleDim.Render(inputFull) + "  " + statusStr + durationStr
+	modelStr := ""
+	if m := model.ShortModelName(turn.ModelName); m != "" {
+		modelStr = "  " + StyleDim.Render(m)
+	}
+
+	headerLine := "  " + name + "  " + StyleDim.Render(inputFull) + "  " + statusStr + durationStr + modelStr
 
 	var lines []string
 	lines = append(lines, ansi.Wrap(headerLine, maxWidth, ""))
