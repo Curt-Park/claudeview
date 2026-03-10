@@ -292,6 +292,34 @@ func TestMessagePreview_CleanedText(t *testing.T) {
 	}
 }
 
+func TestWhoLabel_TreeConnector(t *testing.T) {
+	mid := ChatItem{
+		IsSubagent:    true,
+		AgentType:     model.AgentTypeExplore,
+		SubagentIdx:   0,
+		TreeConnector: "├─",
+	}
+	if got := mid.WhoLabel(); got != "├─ Explorer" {
+		t.Errorf("expected '├─ Explorer', got %q", got)
+	}
+
+	last := ChatItem{
+		IsSubagent:    true,
+		AgentType:     model.AgentTypePlan,
+		SubagentIdx:   1,
+		TreeConnector: "└─",
+	}
+	if got := last.WhoLabel(); got != "└─ Planner" {
+		t.Errorf("expected '└─ Planner', got %q", got)
+	}
+
+	// Sub-agent with no connector (empty) still works.
+	bare := ChatItem{IsSubagent: true, AgentType: model.AgentTypeGeneral, SubagentIdx: 0}
+	if got := bare.WhoLabel(); got != "Agent" {
+		t.Errorf("expected 'Agent', got %q", got)
+	}
+}
+
 func TestTimeLabel_NegativeDuration(t *testing.T) {
 	now := time.Now()
 	prev := ChatItem{Turn: model.Turn{Timestamp: now}}

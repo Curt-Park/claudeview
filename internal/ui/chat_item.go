@@ -13,13 +13,14 @@ import (
 // It wraps a Turn with metadata about whether it's from a subagent.
 // ExtraTurns holds subsequent tool-only assistant turns grouped under this item.
 type ChatItem struct {
-	Turn         model.Turn
-	ExtraTurns   []model.Turn // subsequent tool-only turns merged into this group
-	IsSubagent   bool
-	AgentType    model.AgentType
-	SubagentIdx  int // index into subagentTurns; -1 for non-subagent items
-	IsDivider    bool
-	DividerLabel string
+	Turn          model.Turn
+	ExtraTurns    []model.Turn // subsequent tool-only turns merged into this group
+	IsSubagent    bool
+	AgentType     model.AgentType
+	SubagentIdx   int // index into subagentTurns; -1 for non-subagent items
+	IsDivider     bool
+	DividerLabel  string
+	TreeConnector string // "├─", "└─", or "" for non-sub-agent items
 }
 
 // AllToolCalls collects tool calls from the primary Turn and all ExtraTurns.
@@ -41,7 +42,7 @@ func agentDisplayName(t model.AgentType) string {
 	case model.AgentTypeBash:
 		return "Bash"
 	case model.AgentTypeGeneral:
-		return "General"
+		return "Agent"
 	default:
 		return "Agent"
 	}
@@ -53,7 +54,11 @@ func (c ChatItem) WhoLabel() string {
 		return ""
 	}
 	if c.IsSubagent {
-		return agentDisplayName(c.AgentType)
+		name := agentDisplayName(c.AgentType)
+		if c.TreeConnector != "" {
+			return c.TreeConnector + " " + name
+		}
+		return name
 	}
 	switch c.Turn.Role {
 	case "user":
