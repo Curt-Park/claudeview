@@ -27,7 +27,6 @@ type rootModel struct {
     dp          ui.DataProvider
     projects    []*model.Project
     sessions    []*model.Session
-    agents      []*model.Agent
     plugins     []*model.Plugin
     pluginItems []*model.PluginItem
     memories    []*model.Memory
@@ -35,7 +34,6 @@ type rootModel struct {
     // Resource views (eagerly initialized)
     projectsView    *view.ResourceView[*model.Project]
     sessionsView    *view.ResourceView[*model.Session]
-    agentsView      *view.ResourceView[*model.Agent]
     pluginsView     *view.ResourceView[*model.Plugin]
     pluginItemsView *view.ResourceView[*model.PluginItem]
     memoriesView    *view.ResourceView[*model.Memory]

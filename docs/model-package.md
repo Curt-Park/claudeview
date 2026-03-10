@@ -20,7 +20,7 @@ Core data models used across transcript parsing, config loading, UI rendering, a
 | `tool_call.go`| `ToolCall` — ID, SessionID, AgentID, Name, Input/Result (json.RawMessage), IsError, Timestamp; `InputSummary()` |
 | `plugin.go`   | `Plugin` — Name, Version, Scope, Marketplace, Enabled, InstalledAt, CacheDir, SkillCount, CommandCount, HookCount, AgentCount, MCPCount; `CountSkills/Commands/Hooks/Agents/MCPs(cacheDir)` + `List*` variants; `PluginItem` — Name, Category, CacheDir; `ListPluginItems(cacheDir)`, `ReadPluginItemContent(item)`, `HookScript` — Path, Content; `ReadHookCommandScripts(item)` — reads script files referenced by hook commands (expands `${CLAUDE_PLUGIN_ROOT}`); `normalizeJSON(raw)` |
 | `memory.go`   | `Memory` — Name, Title, Path, Size, ModTime; `SizeStr()`, `LastModified()` |
-| `resource.go` | `ResourceType` constants; `ResolveResource(s)`; `AllResourceNames()`    |
+| `resource.go` | `ResourceType` constants                                                |
 | `status.go`   | `Status` string type and constants                                      |
 | `format.go`   | `FormatAge(d)` — human-friendly duration; `FormatTokenCount(n)` — "1.5k", "1.5M"; `ShortModelName(model)` — short model identifier ("opus", "sonnet", "haiku", or last dash-segment); `FormatSize(b)` — human-friendly byte size |
 
@@ -29,7 +29,6 @@ Core data models used across transcript parsing, config loading, UI rendering, a
 ```go
 ResourceProjects         = "projects"
 ResourceSessions         = "sessions"
-ResourceAgents           = "agents"
 ResourcePlugins          = "plugins"
 ResourceMemory           = "memories"
 ResourcePluginDetail     = "plugin-detail"

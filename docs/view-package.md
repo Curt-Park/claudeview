@@ -15,7 +15,6 @@ Resource-specific table renderers. One file per resource type plus shared helper
 | `resource_view.go`| `ResourceView[T]` — generic table view; `RowBuilder[T]`; `Sync()`   |
 | `projects.go`     | columns + `projectRow` for `ResourceView[*model.Project]`            |
 | `sessions.go`     | columns + `sessionRow`; flat mode; subtitle line (branch/size); SLUG + SESSION_IDs columns with `GroupNameCell()` for slug groups |
-| `agents.go`       | columns + `agentRow`; flat mode; tree prefix for subagents           |
 | `plugins.go`      | columns + `pluginRow`; scope, enabled/disabled, skill/cmd/hook counts|
 | `plugin_items.go` | columns + `pluginItemRow` for `ResourceView[*model.PluginItem]`; `NewPluginItemsView` |
 | `memories.go`     | columns + `memoryRow` for `ResourceView[*model.Memory]`              |
@@ -24,7 +23,7 @@ Resource-specific table renderers. One file per resource type plus shared helper
 
 ## Generic ResourceView[T]
 
-All 7 resource views use the same generic type:
+All 6 resource views use the same generic type:
 
 ```go
 type RowBuilder[T any] func(items []T, index int, flatMode bool) ui.Row
@@ -42,7 +41,6 @@ func (v *ResourceView[T]) Sync(items []T, w, h, sel, off int, filter string, fla
 
 When `flat=true`, extra parent-context columns are prepended:
 - Sessions: `PROJECT` (20)
-- Agents: `SESSION` (12)
 
 ## Column Widths (summary)
 
@@ -50,7 +48,6 @@ When `flat=true`, extra parent-context columns are prepended:
 |-----------|-----------------------------------------------------------|
 | Projects  | NAME(flex,55%), SESSIONS(8), LAST ACTIVE(11)             |
 | Sessions  | SLUG(16), SESSION_IDs(19), TOPIC(flex,35%), TURNS(6), AGENTS(6), MODEL:TOKEN(flex,25%), LAST ACTIVE(11) |
-| Agents    | NAME(flex,20%), TYPE(16), STATUS(10), LAST ACTIVITY(flex,35%) |
 | Plugins   | NAME(flex,25%), VERSION(10), SCOPE(8), STATUS(10), SKILLS(7), COMMANDS(9), HOOKS(6), AGENTS(7), MCPS(5), INSTALLED(12) |
 | Memories  | NAME(18), TITLE(flex,45%), SIZE(8), MODIFIED(11)         |
 | Chat      | NAME(10), MESSAGE(flex,50%), ACTION(16), MODEL:TOKEN(flex,20%), DURATION(14) |

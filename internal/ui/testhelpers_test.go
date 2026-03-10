@@ -143,8 +143,3 @@ func waitForOutput(t *testing.T, tm *teatest.TestModel, condition func([]byte) b
 func containsStr(s string) func([]byte) bool {
 	return func(bts []byte) bool { return strings.Contains(string(bts), s) }
 }
-
-// notContainsStr returns true if output does NOT contain s.
-func notContainsStr(s string) func([]byte) bool {
-	return func(bts []byte) bool { return !strings.Contains(string(bts), s) }
-}

@@ -72,21 +72,6 @@ func TestRenderFilterTypingUpdatesTitle(t *testing.T) {
 	waitForOutput(t, tm, containsStr("Projects(xyz)"))
 }
 
-func TestRenderFlashShownOnCommandSwitch(t *testing.T) {
-	dp := &mockDP{}
-	tm := newTestModel(t, model.ResourceProjects, dp, projectRows(2))
-	t.Cleanup(func() { _ = tm.Quit() })
-
-	waitForOutput(t, tm, containsStr("Projects(all)[2]"))
-	sendKey(tm, ":")
-	for _, ch := range "sessions" {
-		sendKey(tm, string(ch))
-	}
-	tm.Type("\r")
-
-	waitForOutput(t, tm, notContainsStr("Projects(all)"))
-}
-
 func TestRenderDrilldownBreadcrumbPushed(t *testing.T) {
 	p := &model.Project{Hash: "proj-xyz"}
 	dp := &mockDP{}

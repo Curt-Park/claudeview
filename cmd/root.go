@@ -38,10 +38,9 @@ var rootCmd = &cobra.Command{
 	Use:   "claudeview",
 	Short: "Terminal dashboard for Claude Code sessions",
 	Long: `claudeview is a terminal UI for monitoring Claude Code sessions,
-agents, tool calls, tasks, plugins, and MCP servers.
+tool calls, plugins, and MCP servers.
 
-Navigate with j/k, Enter to drill down, l for logs, d for detail.
-Use : to switch resource types (sessions, agents, tools, tasks, plugins, mcp).`,
+Navigate with j/k, Enter to drill down, / to filter, p for plugins, m for memories.`,
 	RunE: run,
 }
 
@@ -74,7 +73,6 @@ func run(cmd *cobra.Command, args []string) error {
 type dataLoadedMsg struct {
 	projects      []*model.Project
 	sessions      []*model.Session
-	agents        []*model.Agent
 	plugins       []*model.Plugin
 	pluginItems   []*model.PluginItem
 	memories      []*model.Memory
@@ -96,7 +94,6 @@ type rootModel struct {
 	dp          ui.DataProvider
 	projects    []*model.Project
 	sessions    []*model.Session
-	agents      []*model.Agent
 	plugins     []*model.Plugin
 	pluginItems []*model.PluginItem
 	memories    []*model.Memory
@@ -104,7 +101,6 @@ type rootModel struct {
 	// Resource views (eagerly initialized in newRootModel)
 	projectsView    *view.ResourceView[*model.Project]
 	sessionsView    *view.ResourceView[*model.Session]
-	agentsView      *view.ResourceView[*model.Agent]
 	pluginsView     *view.ResourceView[*model.Plugin]
 	pluginItemsView *view.ResourceView[*model.PluginItem]
 	memoriesView    *view.ResourceView[*model.Memory]
@@ -133,7 +129,6 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		claudeVersion:   detectClaudeVersion(),
 		projectsView:    view.NewProjectsView(0, 0),
 		sessionsView:    view.NewSessionsView(0, 0),
-		agentsView:      view.NewAgentsView(0, 0),
 		pluginsView:     view.NewPluginsView(0, 0),
 		pluginItemsView: view.NewPluginItemsView(0, 0),
 		memoriesView:    view.NewMemoriesView(0, 0),
@@ -175,8 +170,6 @@ func (rm *rootModel) loadData() {
 		rm.projects = rm.dp.GetProjects()
 	case model.ResourceSessions:
 		rm.sessions = rm.dp.GetSessions(rm.app.SelectedProjectHash)
-	case model.ResourceAgents:
-		rm.agents = rm.dp.GetAgents(rm.app.SelectedSessionID)
 	case model.ResourcePlugins:
 		rm.plugins = rm.dp.GetPlugins(rm.app.SelectedProjectHash)
 	case model.ResourcePluginDetail:
@@ -216,8 +209,6 @@ func (rm *rootModel) syncView() {
 		rm.app.Table = rm.projectsView.Sync(rm.projects, w, h, cur.sel, cur.off, flt, false)
 	case model.ResourceSessions:
 		rm.app.Table = rm.sessionsView.Sync(rm.sessions, w, h, cur.sel, cur.off, flt, rm.app.SelectedProjectHash == "")
-	case model.ResourceAgents:
-		rm.app.Table = rm.agentsView.Sync(rm.agents, w, h, cur.sel, cur.off, flt, rm.app.SelectedSessionID == "")
 	case model.ResourcePlugins:
 		rm.app.Table = rm.pluginsView.Sync(rm.plugins, w, h, cur.sel, cur.off, flt, false)
 	case model.ResourcePluginDetail:
@@ -271,8 +262,6 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rm.projects = msg.projects
 			case model.ResourceSessions:
 				rm.sessions = msg.sessions
-			case model.ResourceAgents:
-				rm.agents = msg.agents
 			case model.ResourcePlugins:
 				rm.plugins = msg.plugins
 			case model.ResourcePluginDetail:
@@ -332,8 +321,6 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			msg.projects = dp.GetProjects()
 		case model.ResourceSessions:
 			msg.sessions = dp.GetSessions(projectHash)
-		case model.ResourceAgents:
-			msg.agents = dp.GetAgents(sessionID)
 		case model.ResourcePlugins:
 			msg.plugins = dp.GetPlugins(projectHash)
 		case model.ResourcePluginDetail:
