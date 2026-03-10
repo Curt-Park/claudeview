@@ -319,18 +319,29 @@ func TestWhoLabel_TreeConnector(t *testing.T) {
 		t.Errorf("expected 'Agent', got %q", got)
 	}
 
-	// Custom agent types: use the part after the last ":".
+	// Custom agent types use the full subagent_type string.
 	custom := ChatItem{
 		IsSubagent:    true,
 		AgentType:     model.AgentType("feature-dev:code-reviewer"),
 		SubagentIdx:   0,
 		TreeConnector: "└─",
 	}
-	if got := custom.WhoLabel(); got != "└─ code-reviewer" {
-		t.Errorf("expected '└─ code-reviewer', got %q", got)
+	if got := custom.WhoLabel(); got != "└─ feature-dev:code-reviewer" {
+		t.Errorf("expected '└─ feature-dev:code-reviewer', got %q", got)
 	}
 
-	// Type with no colon falls back to the full string.
+	// Different namespace stays distinct.
+	custom2 := ChatItem{
+		IsSubagent:    true,
+		AgentType:     model.AgentType("superpowers:code-reviewer"),
+		SubagentIdx:   0,
+		TreeConnector: "└─",
+	}
+	if got := custom2.WhoLabel(); got != "└─ superpowers:code-reviewer" {
+		t.Errorf("expected '└─ superpowers:code-reviewer', got %q", got)
+	}
+
+	// Type with no colon uses the full string.
 	noColon := ChatItem{
 		IsSubagent:  true,
 		AgentType:   model.AgentType("claude-code-guide"),
