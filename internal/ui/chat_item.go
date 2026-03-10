@@ -107,9 +107,18 @@ func (c ChatItem) MessagePreview(max int) string {
 		}
 	}
 
-	// Add first tool call with its input summary
-	if allTC := c.AllToolCalls(); len(allTC) > 0 {
-		tc := allTC[0]
+	// Add first non-agent tool call with its input summary.
+	// Agent/Task calls are omitted: their details live in the sub-agent rows.
+	allTC := c.AllToolCalls()
+	var firstNonAgent *model.ToolCall
+	for _, tc := range allTC {
+		if tc.Name != "Agent" && tc.Name != "Task" {
+			firstNonAgent = tc
+			break
+		}
+	}
+	if firstNonAgent != nil {
+		tc := firstNonAgent
 		toolStr := "▸ " + tc.Name
 		if summary := tc.InputSummary(); summary != "" {
 			toolStr += " " + summary
