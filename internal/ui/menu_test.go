@@ -44,25 +44,11 @@ func TestTableNavItems(t *testing.T) {
 		t.Error("TableNavItems(projects): missing 'enter' key")
 	}
 
-	// Agents: esc present, no enter (leaf node — no tools drill-down)
-	agentNav := ui.TableNavItems(model.ResourceAgents, false)
-	hasEscAgents := false
-	for _, item := range agentNav {
-		if item.Key == "enter" {
-			t.Error("TableNavItems(agents): unexpected 'enter' key")
-		}
-		if item.Key == "esc" {
-			hasEscAgents = true
-		}
-	}
-	if !hasEscAgents {
-		t.Error("TableNavItems(agents): missing 'esc' key")
-	}
 }
 
 func TestTableUtilItemsHasFilter(t *testing.T) {
 	for _, rt := range []model.ResourceType{
-		model.ResourceSessions, model.ResourceAgents, model.ResourceProjects,
+		model.ResourceSessions, model.ResourceProjects,
 	} {
 		util := ui.TableUtilItems(rt)
 		hasFilter := false
@@ -80,7 +66,7 @@ func TestTableUtilItemsHasFilter(t *testing.T) {
 func TestTableNavItemsWithFilter(t *testing.T) {
 	// When hasFilter=true, esc should show "clear filter" for all resource types
 	for _, rt := range []model.ResourceType{
-		model.ResourceProjects, model.ResourceSessions, model.ResourceAgents,
+		model.ResourceProjects, model.ResourceSessions,
 	} {
 		nav := ui.TableNavItems(rt, true)
 		escDesc := ""

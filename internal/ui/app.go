@@ -41,7 +41,6 @@ type AppModel struct {
 	// Navigation context (set on drill-down)
 	SelectedProjectHash string
 	SelectedSessionID   string
-	SelectedAgentID     string
 	SelectedPlugin      *model.Plugin
 	SelectedPluginItem  *model.PluginItem
 	SelectedMemory      *model.Memory
@@ -86,7 +85,6 @@ type jumpFromState struct {
 	Resource            model.ResourceType
 	SelectedProjectHash string
 	SelectedSessionID   string
-	SelectedAgentID     string
 	Crumbs              CrumbsModel
 	Filter              string
 	FilterStack         []string
@@ -116,6 +114,7 @@ type DataProvider interface {
 	GetSessions(projectHash string) []*model.Session
 	GetAgents(sessionID string) []*model.Agent
 	GetPlugins(projectHash string) []*model.Plugin
+	GetPluginItems(plugin *model.Plugin) []*model.PluginItem
 	GetMemories(projectHash string) []*model.Memory
 	GetTurns(filePath string) []model.Turn
 }
@@ -427,7 +426,6 @@ func (m *AppModel) jumpTo(rt model.ResourceType) {
 		Resource:            m.Resource,
 		SelectedProjectHash: m.SelectedProjectHash,
 		SelectedSessionID:   m.SelectedSessionID,
-		SelectedAgentID:     m.SelectedAgentID,
 		Crumbs:              m.Crumbs,
 		Filter:              m.Table.Filter,
 		FilterStack:         m.filterStack,
@@ -462,7 +460,6 @@ func (m *AppModel) navigateBack() {
 			m.Resource = m.jumpFrom.Resource
 			m.SelectedProjectHash = m.jumpFrom.SelectedProjectHash
 			m.SelectedSessionID = m.jumpFrom.SelectedSessionID
-			m.SelectedAgentID = m.jumpFrom.SelectedAgentID
 			m.Crumbs = m.jumpFrom.Crumbs
 			m.Table.Filter = m.jumpFrom.Filter
 			m.Filter.Input = m.jumpFrom.Filter
@@ -475,7 +472,6 @@ func (m *AppModel) navigateBack() {
 			m.Resource = model.ResourceProjects
 			m.SelectedProjectHash = ""
 			m.SelectedSessionID = ""
-			m.SelectedAgentID = ""
 			m.Crumbs.Reset(string(model.ResourceProjects))
 			m.ContentOffset = 0
 			m.refreshMenu()
@@ -501,11 +497,6 @@ func (m *AppModel) navigateBack() {
 		m.slugGroupSubTypes = nil
 		m.ChatFollow = false
 		m.ChatItems = nil
-		m.popFilter()
-		m.switchResource(model.ResourceSessions)
-	case model.ResourceAgents:
-		m.SelectedSessionID = ""
-		m.SelectedSessionSlug = ""
 		m.popFilter()
 		m.switchResource(model.ResourceSessions)
 	case model.ResourceSessions:

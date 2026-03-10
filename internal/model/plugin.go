@@ -153,6 +153,7 @@ type PluginItem struct {
 	Name     string
 	Category string // "skill", "command", "hook", "agent", "mcp"
 	CacheDir string
+	Content  string // pre-filled content; when non-empty, overrides filesystem read
 }
 
 // ListPluginItems aggregates all items from all categories for a plugin.
@@ -178,6 +179,9 @@ func ListPluginItems(cacheDir string) []*PluginItem {
 
 // ReadPluginItemContent returns the textual content for a plugin item.
 func ReadPluginItemContent(item *PluginItem) string {
+	if item.Content != "" {
+		return item.Content
+	}
 	cd := contentDir(item.CacheDir)
 	switch item.Category {
 	case "skill":

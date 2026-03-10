@@ -29,12 +29,13 @@ type mockDP struct {
 	turns    []model.Turn
 }
 
-func (m *mockDP) GetProjects() []*model.Project         { return m.projects }
-func (m *mockDP) GetSessions(_ string) []*model.Session { return m.sessions }
-func (m *mockDP) GetAgents(_ string) []*model.Agent     { return m.agents }
-func (m *mockDP) GetPlugins(_ string) []*model.Plugin   { return m.plugins }
-func (m *mockDP) GetMemories(_ string) []*model.Memory  { return m.memories }
-func (m *mockDP) GetTurns(_ string) []model.Turn        { return m.turns }
+func (m *mockDP) GetProjects() []*model.Project                      { return m.projects }
+func (m *mockDP) GetSessions(_ string) []*model.Session              { return m.sessions }
+func (m *mockDP) GetAgents(_ string) []*model.Agent                  { return m.agents }
+func (m *mockDP) GetPlugins(_ string) []*model.Plugin                { return m.plugins }
+func (m *mockDP) GetPluginItems(_ *model.Plugin) []*model.PluginItem { return nil }
+func (m *mockDP) GetMemories(_ string) []*model.Memory               { return m.memories }
+func (m *mockDP) GetTurns(_ string) []model.Turn                     { return m.turns }
 
 // newApp creates an AppModel pre-sized for tests.
 func newApp(resource model.ResourceType) ui.AppModel {
@@ -142,9 +143,4 @@ func waitForOutput(t *testing.T, tm *teatest.TestModel, condition func([]byte) b
 // containsStr returns true if output contains s.
 func containsStr(s string) func([]byte) bool {
 	return func(bts []byte) bool { return strings.Contains(string(bts), s) }
-}
-
-// notContainsStr returns true if output does NOT contain s.
-func notContainsStr(s string) func([]byte) bool {
-	return func(bts []byte) bool { return !strings.Contains(string(bts), s) }
 }

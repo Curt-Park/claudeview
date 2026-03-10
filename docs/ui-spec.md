@@ -26,7 +26,7 @@ claudeview is a k9s-style terminal dashboard for Claude Code sessions. The UI co
 │  [ Table | Plugin Detail | Memory Detail ]                                  │
 │                                                                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ BREADCRUMBS (1 row): projects > sessions > agents                           │
+│ BREADCRUMBS (1 row): projects > sessions > history                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ STATUS BAR (1 row): [flash | filter]                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -60,7 +60,7 @@ Panel height: `max(5, 1 + max(navCount, utilCount))`
 
 ### Context-Dependent Values
 
-| Field        | Projects level | Sessions level   | Agents+ level          |
+| Field        | Projects level | Sessions level   | History+ level         |
 |--------------|----------------|------------------|------------------------|
 | Project      | `--`           | selected project | selected project       |
 | Session      | `--`           | `--`             | selected session (8ch) |
@@ -110,19 +110,7 @@ Each row optionally shows a **subtitle line** (dimmed) with branch and file size
 
 **Navigation**: Enter → Session Chat. When entering a session that belongs to a slug group, all sessions in the group are merged into a single history view with divider rows (`── session N/M ──`) between each session's turns. Divider rows cannot be drilled into (enter is a no-op).
 
-### 3. Agents
-
-| Column        | Width          | Description                                |
-|---------------|----------------|--------------------------------------------|
-| SESSION       | 12             | parent session short ID (flat access only) |
-| NAME          | flex (max 20%) | tree-prefixed display name                 |
-| TYPE          | 16             | agent type string                          |
-| STATUS        | 10             | colored status                             |
-| LAST ACTIVITY | flex (max 35%) | last tool name + input summary             |
-
-**Note**: SESSION column only shown in flat access. Agents is a **leaf** — `enter` has no effect.
-
-### 4. Plugins
+### 3. Plugins
 
 | Column    | Width          | Description                           |
 |-----------|----------------|---------------------------------------|
@@ -139,7 +127,7 @@ Each row optionally shows a **subtitle line** (dimmed) with branch and file size
 
 **Navigation**: Enter → Plugin Detail
 
-### 5. Memories
+### 4. Memories
 
 | Column   | Width          | Description            |
 |----------|----------------|------------------------|
@@ -244,7 +232,7 @@ projects
 
 ### Breadcrumb Examples
 ```
-projects > sessions > agents
+projects > sessions > history
 plugins > plugin-detail > plugin-item-detail
 memories > memory-detail
 ```
