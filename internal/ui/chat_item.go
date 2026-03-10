@@ -266,12 +266,26 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 	// interleaveSubagents appends one collapsed ChatItem per subagent for each Agent/Task tool call.
 	// The first assistant turn becomes the primary Turn; remaining assistant turns go into ExtraTurns.
 	interleaveSubagents := func(toolCalls []*model.ToolCall) {
+		// Pre-count eligible agent calls in this batch.
+		batchSize := 0
+		for _, tc := range toolCalls {
+			if (tc.Name == "Task" || tc.Name == "Agent") && subIdx+batchSize < len(subagentTurns) {
+				batchSize++
+			}
+		}
+		batchPos := 0
 		for _, tc := range toolCalls {
 			if (tc.Name == "Task" || tc.Name == "Agent") && subIdx < len(subagentTurns) {
 				agentType := model.AgentTypeGeneral
 				if subIdx < len(subagentTypes) {
 					agentType = subagentTypes[subIdx]
 				}
+				connector := "├─"
+				if batchPos == batchSize-1 {
+					connector = "└─"
+				}
+				batchPos++
+
 				// Collect assistant turns, preferring one with text or tool calls as primary.
 				var allAssistant []model.Turn
 				for _, st := range subagentTurns[subIdx] {
@@ -287,24 +301,24 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 						if allAssistant[i].Text != "" || len(allAssistant[i].ToolCalls) > 0 {
 							first = &allAssistant[i]
 						} else {
-							extra = append(extra, allAssistant[i]) // content-less leading turns → ExtraTurns
+							extra = append(extra, allAssistant[i])
 						}
 					} else {
 						extra = append(extra, allAssistant[i])
 					}
 				}
-				// Fallback: use the first assistant turn even if content-less.
 				if first == nil && len(allAssistant) > 0 {
 					first = &allAssistant[0]
 					extra = allAssistant[1:]
 				}
 				if first != nil {
 					items = append(items, ChatItem{
-						Turn:        *first,
-						ExtraTurns:  extra,
-						IsSubagent:  true,
-						AgentType:   agentType,
-						SubagentIdx: subIdx,
+						Turn:          *first,
+						ExtraTurns:    extra,
+						IsSubagent:    true,
+						AgentType:     agentType,
+						SubagentIdx:   subIdx,
+						TreeConnector: connector,
 					})
 				}
 				subIdx++

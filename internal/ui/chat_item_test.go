@@ -320,6 +320,95 @@ func TestWhoLabel_TreeConnector(t *testing.T) {
 	}
 }
 
+func TestBuildChatItems_TreeConnectors_Single(t *testing.T) {
+	// One Agent call → sole sub-agent gets "└─".
+	mainTurns := []model.Turn{
+		{Role: "user", Text: "go"},
+		{Role: "assistant", Text: "delegating", ToolCalls: []*model.ToolCall{{Name: "Agent"}}},
+	}
+	sub := []model.Turn{{Role: "assistant", Text: "done"}}
+	items := BuildChatItems(mainTurns, [][]model.Turn{sub}, []model.AgentType{model.AgentTypeExplore})
+
+	var subItems []ChatItem
+	for _, it := range items {
+		if it.IsSubagent {
+			subItems = append(subItems, it)
+		}
+	}
+	if len(subItems) != 1 {
+		t.Fatalf("expected 1 sub-agent item, got %d", len(subItems))
+	}
+	if subItems[0].TreeConnector != "└─" {
+		t.Errorf("expected '└─', got %q", subItems[0].TreeConnector)
+	}
+}
+
+func TestBuildChatItems_TreeConnectors_Multiple(t *testing.T) {
+	// Two Agent calls in one parent turn → "├─" then "└─".
+	mainTurns := []model.Turn{
+		{Role: "user", Text: "go"},
+		{Role: "assistant", Text: "delegating", ToolCalls: []*model.ToolCall{
+			{Name: "Agent"},
+			{Name: "Agent"},
+		}},
+	}
+	sub0 := []model.Turn{{Role: "assistant", Text: "first"}}
+	sub1 := []model.Turn{{Role: "assistant", Text: "second"}}
+	items := BuildChatItems(
+		mainTurns,
+		[][]model.Turn{sub0, sub1},
+		[]model.AgentType{model.AgentTypeExplore, model.AgentTypePlan},
+	)
+
+	var subItems []ChatItem
+	for _, it := range items {
+		if it.IsSubagent {
+			subItems = append(subItems, it)
+		}
+	}
+	if len(subItems) != 2 {
+		t.Fatalf("expected 2 sub-agent items, got %d", len(subItems))
+	}
+	if subItems[0].TreeConnector != "├─" {
+		t.Errorf("expected '├─' for first, got %q", subItems[0].TreeConnector)
+	}
+	if subItems[1].TreeConnector != "└─" {
+		t.Errorf("expected '└─' for second, got %q", subItems[1].TreeConnector)
+	}
+}
+
+func TestBuildChatItems_TreeConnectors_SeparateTurns(t *testing.T) {
+	// Two parent turns, one Agent call each → each sub-agent gets "└─".
+	mainTurns := []model.Turn{
+		{Role: "user", Text: "go"},
+		{Role: "assistant", Text: "first batch", ToolCalls: []*model.ToolCall{{Name: "Agent"}}},
+		{Role: "assistant", Text: "second batch", ToolCalls: []*model.ToolCall{{Name: "Agent"}}},
+	}
+	sub0 := []model.Turn{{Role: "assistant", Text: "a"}}
+	sub1 := []model.Turn{{Role: "assistant", Text: "b"}}
+	items := BuildChatItems(
+		mainTurns,
+		[][]model.Turn{sub0, sub1},
+		[]model.AgentType{model.AgentTypeExplore, model.AgentTypePlan},
+	)
+
+	var subItems []ChatItem
+	for _, it := range items {
+		if it.IsSubagent {
+			subItems = append(subItems, it)
+		}
+	}
+	if len(subItems) != 2 {
+		t.Fatalf("expected 2 sub-agent items, got %d", len(subItems))
+	}
+	if subItems[0].TreeConnector != "└─" {
+		t.Errorf("expected '└─' for sub0, got %q", subItems[0].TreeConnector)
+	}
+	if subItems[1].TreeConnector != "└─" {
+		t.Errorf("expected '└─' for sub1, got %q", subItems[1].TreeConnector)
+	}
+}
+
 func TestTimeLabel_NegativeDuration(t *testing.T) {
 	now := time.Now()
 	prev := ChatItem{Turn: model.Turn{Timestamp: now}}
