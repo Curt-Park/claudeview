@@ -24,13 +24,23 @@ func subagentIcon(t model.AgentType) string {
 	}
 }
 
-// renderAgentCallLine renders a compact single line for an Agent/Task tool call,
-// showing only the icon and agent type name (details are in the sub-agent row).
-func renderAgentCallLine(tc *model.ToolCall) string {
+// renderAgentCallLine renders a compact line for an Agent/Task tool call:
+// icon + agent name, followed by a one-line preview of the sub-agent's result.
+func renderAgentCallLine(tc *model.ToolCall, maxWidth int) string {
 	agentType := model.AgentTypeFromInput(tc.Input)
 	icon := subagentIcon(agentType)
 	name := agentDisplayName(agentType)
-	return "  " + StyleChatToolName.Render(icon+" "+name)
+	label := "  " + StyleChatToolName.Render(icon+" "+name)
+	if result := expandResult(tc); result != "" {
+		for _, l := range strings.Split(result, "\n") {
+			l = strings.TrimSpace(l)
+			if l != "" {
+				label += "  " + StyleDim.Render(l)
+				break
+			}
+		}
+	}
+	return ansi.Wrap(label, maxWidth, "")
 }
 
 // RenderChatItemDetail renders the detail view for a selected ChatItem.
@@ -123,7 +133,7 @@ func renderChatItem(item ChatItem, width int) []string {
 	for _, tc := range turn.ToolCalls {
 		parts = append(parts, "")
 		if tc.Name == "Agent" || tc.Name == "Task" {
-			parts = append(parts, renderAgentCallLine(tc))
+			parts = append(parts, renderAgentCallLine(tc, width))
 		} else {
 			parts = append(parts, renderExpandedToolCall(tc, width))
 		}
@@ -142,7 +152,7 @@ func renderChatItem(item ChatItem, width int) []string {
 		for _, tc := range et.ToolCalls {
 			parts = append(parts, "")
 			if tc.Name == "Agent" || tc.Name == "Task" {
-				parts = append(parts, renderAgentCallLine(tc))
+				parts = append(parts, renderAgentCallLine(tc, width))
 			} else {
 				parts = append(parts, renderExpandedToolCall(tc, width))
 			}

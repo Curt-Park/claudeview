@@ -339,39 +339,39 @@ func TestRenderChatItemDetail_RegularAssistantSingleTurn(t *testing.T) {
 }
 
 func TestRenderChatItemDetail_AgentCallCompact(t *testing.T) {
-	// Agent/Task tool calls in a Claude turn should render as compact icon+name,
-	// not the full input/result block.
+	// Agent/Task tool calls in a Claude turn should render as compact icon+name
+	// with a one-line result preview — not the full input/result block.
 	taskInput, _ := json.Marshal(map[string]string{"subagent_type": "Explore"})
+	result, _ := json.Marshal("Found 42 files matching the pattern.")
 	item := ui.ChatItem{
 		Turn: model.Turn{
 			Role: "assistant",
 			Text: "delegating",
 			ToolCalls: []*model.ToolCall{
-				{Name: "Agent", Input: taskInput},
-				{Name: "Read", Input: json.RawMessage(`{"file_path":"app.go"}`)},
+				{Name: "Agent", Input: taskInput, Result: result},
+				{Name: "Read", Input: json.RawMessage(`{"file_path":"app.go"}`), Result: json.RawMessage(`"120 lines"`)},
 			},
 		},
 		SubagentIdx: -1,
 	}
 	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
 
-	// Agent call should show icon+name, not "✓" or result details.
+	// Agent call shows icon+name.
 	if !strings.Contains(got, "Explorer") {
 		t.Errorf("expected agent name 'Explorer' in output, got:\n%s", got)
 	}
-	// Regular tool call still shows full detail.
+	// Agent call shows result preview.
+	if !strings.Contains(got, "Found 42 files") {
+		t.Errorf("expected result preview in output, got:\n%s", got)
+	}
+	// Regular tool call still shows full detail with status marker.
 	if !strings.Contains(got, "Read") {
 		t.Errorf("expected 'Read' tool in output, got:\n%s", got)
 	}
-	// Agent call should NOT show result expansion markers.
-	if strings.Contains(got, "✓") && strings.Contains(got, "Agent") {
-		// Only fail if the ✓ is associated with the Agent call line, not Read.
-		// We check by confirming the Read ✓ is present but Agent has no ✓ on its line.
-		lines := strings.Split(got, "\n")
-		for _, line := range lines {
-			if strings.Contains(line, "Explorer") && strings.Contains(line, "✓") {
-				t.Errorf("Agent call line should not contain ✓, got: %q", line)
-			}
+	// Agent call line should NOT contain ✓/✗.
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, "Explorer") && (strings.Contains(line, "✓") || strings.Contains(line, "✗")) {
+			t.Errorf("Agent call line should not contain ✓/✗, got: %q", line)
 		}
 	}
 }
