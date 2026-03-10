@@ -114,6 +114,7 @@ type DataProvider interface {
 	GetSessions(projectHash string) []*model.Session
 	GetAgents(sessionID string) []*model.Agent
 	GetPlugins(projectHash string) []*model.Plugin
+	GetPluginItems(plugin *model.Plugin) []*model.PluginItem
 	GetMemories(projectHash string) []*model.Memory
 	GetTurns(filePath string) []model.Turn
 }

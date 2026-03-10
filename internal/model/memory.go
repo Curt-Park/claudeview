@@ -9,6 +9,7 @@ type Memory struct {
 	Title   string // first # heading in the file, empty if none
 	Size    int64
 	ModTime time.Time
+	Content string // pre-filled content; when non-empty, overrides filesystem read
 }
 
 // SizeStr formats the file size in a human-readable form.

@@ -235,6 +235,9 @@ func RenderMemoryDetail(m *model.Memory, width int) string {
 	if m == nil {
 		return ""
 	}
+	if m.Content != "" {
+		return ansi.Wrap(m.Content, width, "")
+	}
 	data, err := os.ReadFile(m.Path)
 	if err != nil {
 		return fmt.Sprintf("error reading %s: %v", m.Path, err)

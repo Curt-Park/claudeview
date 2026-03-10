@@ -174,7 +174,7 @@ func (rm *rootModel) loadData() {
 		rm.plugins = rm.dp.GetPlugins(rm.app.SelectedProjectHash)
 	case model.ResourcePluginDetail:
 		if rm.app.SelectedPlugin != nil {
-			rm.pluginItems = model.ListPluginItems(rm.app.SelectedPlugin.CacheDir)
+			rm.pluginItems = rm.dp.GetPluginItems(rm.app.SelectedPlugin)
 		}
 	case model.ResourceMemory:
 		rm.memories = rm.dp.GetMemories(rm.app.SelectedProjectHash)
@@ -325,7 +325,7 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			msg.plugins = dp.GetPlugins(projectHash)
 		case model.ResourcePluginDetail:
 			if selectedPlugin != nil {
-				msg.pluginItems = model.ListPluginItems(selectedPlugin.CacheDir)
+				msg.pluginItems = dp.GetPluginItems(selectedPlugin)
 			}
 		case model.ResourceMemory:
 			msg.memories = dp.GetMemories(projectHash)
@@ -443,10 +443,13 @@ func (d *demoDataProvider) GetAgents(sessionID string) []*model.Agent {
 	return []*model.Agent{}
 }
 func (d *demoDataProvider) GetPlugins(_ string) []*model.Plugin { return d.plugins }
+func (d *demoDataProvider) GetPluginItems(plugin *model.Plugin) []*model.PluginItem {
+	return demo.GeneratePluginItems(plugin.Name)
+}
 func (d *demoDataProvider) GetMemories(_ string) []*model.Memory {
 	return demo.GenerateMemories()
 }
-func (d *demoDataProvider) GetTurns(_ string) []model.Turn { return nil }
+func (d *demoDataProvider) GetTurns(_ string) []model.Turn { return demo.GenerateTurns() }
 
 // --- Live Data Provider ---
 
@@ -574,6 +577,10 @@ func (l *liveDataProvider) GetPlugins(projectHash string) []*model.Plugin {
 		})
 	}
 	return plugins
+}
+
+func (l *liveDataProvider) GetPluginItems(plugin *model.Plugin) []*model.PluginItem {
+	return model.ListPluginItems(plugin.CacheDir)
 }
 
 func (l *liveDataProvider) GetMemories(projectHash string) []*model.Memory {
