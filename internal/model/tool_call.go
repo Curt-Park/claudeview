@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -61,9 +62,14 @@ func (tc *ToolCall) InputSummary() string {
 		}
 	}
 
-	// Fallback: first string value
-	for _, v := range m {
-		if s, ok := v.(string); ok && s != "" {
+	// Fallback: first string value, keys sorted for determinism (map iteration is random).
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if s, ok := m[k].(string); ok && s != "" {
 			return singleLine(s)
 		}
 	}
