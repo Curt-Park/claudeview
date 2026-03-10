@@ -339,11 +339,10 @@ func TestRenderChatItemDetail_RegularAssistantSingleTurn(t *testing.T) {
 }
 
 func TestRenderChatItemDetail_AgentCallCompact(t *testing.T) {
-	// Agent/Task tool calls in a Claude turn should render as compact icon+name
-	// with a one-line result preview — not the full input/result block.
+	// Agent/Task tool calls in a Claude turn should render as icon+name + full result.
 	taskInput, _ := json.Marshal(map[string]string{"subagent_type": "Explore"})
 	result, _ := json.Marshal("Found 42 files matching the pattern.")
-	item := ui.ChatItem{
+	claudeItem := ui.ChatItem{
 		Turn: model.Turn{
 			Role: "assistant",
 			Text: "delegating",
@@ -354,25 +353,52 @@ func TestRenderChatItemDetail_AgentCallCompact(t *testing.T) {
 		},
 		SubagentIdx: -1,
 	}
-	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
+	items := []ui.ChatItem{claudeItem}
+	got := ui.RenderChatItemDetail(items, 0, 120)
 
-	// Agent call shows icon+name.
 	if !strings.Contains(got, "Explorer") {
 		t.Errorf("expected agent name 'Explorer' in output, got:\n%s", got)
 	}
-	// Agent call shows full result.
 	if !strings.Contains(got, "Found 42 files matching the pattern.") {
 		t.Errorf("expected full result in output, got:\n%s", got)
 	}
-	// Regular tool call still shows full detail with status marker.
 	if !strings.Contains(got, "Read") {
 		t.Errorf("expected 'Read' tool in output, got:\n%s", got)
 	}
-	// Agent call line should NOT contain ✓/✗.
 	for _, line := range strings.Split(got, "\n") {
 		if strings.Contains(line, "Explorer") && (strings.Contains(line, "✓") || strings.Contains(line, "✗")) {
 			t.Errorf("Agent call line should not contain ✓/✗, got: %q", line)
 		}
+	}
+}
+
+func TestRenderChatItemDetail_AgentCallFallbackToSubItem(t *testing.T) {
+	// When tc.Result is nil, the sub-agent ChatItem's last turn text is shown.
+	taskInput, _ := json.Marshal(map[string]string{"subagent_type": "Explore"})
+	claudeItem := ui.ChatItem{
+		Turn: model.Turn{
+			Role: "assistant",
+			Text: "delegating",
+			ToolCalls: []*model.ToolCall{
+				// No Result set (agent in progress).
+				{Name: "Agent", Input: taskInput},
+			},
+		},
+		SubagentIdx: -1,
+	}
+	subItem := ui.ChatItem{
+		Turn:        model.Turn{Role: "assistant", Text: "still searching..."},
+		ExtraTurns:  []model.Turn{{Role: "assistant", Text: "found the answer"}},
+		IsSubagent:  true,
+		AgentType:   model.AgentTypeExplore,
+		SubagentIdx: 0,
+	}
+	items := []ui.ChatItem{claudeItem, subItem}
+	got := ui.RenderChatItemDetail(items, 0, 120)
+
+	// Should show the last ExtraTurn text as fallback.
+	if !strings.Contains(got, "found the answer") {
+		t.Errorf("expected fallback sub-agent text in output, got:\n%s", got)
 	}
 }
 

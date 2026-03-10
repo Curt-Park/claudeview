@@ -26,12 +26,17 @@ func subagentIcon(t model.AgentType) string {
 
 // renderAgentCallLine renders an Agent/Task tool call: icon + agent name header,
 // followed by the full result message.
-func renderAgentCallLine(tc *model.ToolCall, maxWidth int) string {
+// subItem is the corresponding sub-agent ChatItem; its last turn text is used as
+// a fallback when tc.Result is not yet available (e.g. agent still in progress).
+func renderAgentCallLine(tc *model.ToolCall, subItem *ChatItem, maxWidth int) string {
 	agentType := model.AgentTypeFromInput(tc.Input)
 	icon := subagentIcon(agentType)
 	name := agentDisplayName(agentType)
 	header := "  " + StyleChatToolName.Render(icon+" "+name)
 	result := expandResult(tc)
+	if result == "" && subItem != nil {
+		result = lastAssistantText(*subItem)
+	}
 	if result == "" {
 		return header
 	}
@@ -42,6 +47,17 @@ func renderAgentCallLine(tc *model.ToolCall, maxWidth int) string {
 		lines = append(lines, ansi.Wrap(StyleDim.Render(l), maxWidth, ""))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// lastAssistantText returns the last non-empty text from a sub-agent ChatItem,
+// checking ExtraTurns in reverse order before falling back to the primary Turn.
+func lastAssistantText(item ChatItem) string {
+	for i := len(item.ExtraTurns) - 1; i >= 0; i-- {
+		if item.ExtraTurns[i].Text != "" {
+			return item.ExtraTurns[i].Text
+		}
+	}
+	return item.Turn.Text
 }
 
 // RenderChatItemDetail renders the detail view for a selected ChatItem.
@@ -58,17 +74,27 @@ func RenderChatItemDetail(items []ChatItem, selectedIdx, width int) string {
 		var allLines []string
 		allLines = append(allLines, renderChatItem(ChatItem{
 			Turn: sel.Turn, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
-		}, width)...)
+		}, nil, width)...)
 		for _, et := range sel.ExtraTurns {
 			allLines = append(allLines, "") // blank line between turns
 			allLines = append(allLines, renderChatItem(ChatItem{
 				Turn: et, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
-			}, width)...)
+			}, nil, width)...)
 		}
 		return strings.Join(allLines, "\n")
 	}
 
-	return strings.Join(renderChatItem(sel, width), "\n")
+	// For regular items, collect the sub-agent ChatItems that immediately follow
+	// so Agent/Task call lines can show content even when tc.Result is not yet set.
+	var subItems []ChatItem
+	for i := selectedIdx + 1; i < len(items); i++ {
+		if items[i].IsSubagent {
+			subItems = append(subItems, items[i])
+		} else if !items[i].IsDivider {
+			break
+		}
+	}
+	return strings.Join(renderChatItem(sel, subItems, width), "\n")
 }
 
 // ChatItemKey returns a unique fingerprint for a ChatItem, used to re-resolve
@@ -89,7 +115,9 @@ func ChatItemKey(item ChatItem) string {
 }
 
 // renderChatItem renders a single ChatItem as flat text lines.
-func renderChatItem(item ChatItem, width int) []string {
+// subItems provides the sub-agent ChatItems that follow this item (positional match
+// for Agent/Task calls) so their content can be shown when tc.Result is not set.
+func renderChatItem(item ChatItem, subItems []ChatItem, width int) []string {
 	turn := item.Turn
 
 	// Build header: WHO · model · time · tokens
@@ -131,13 +159,22 @@ func renderChatItem(item ChatItem, width int) []string {
 		parts = append(parts, ansi.Wrap(turn.Text, width, ""))
 	}
 
+	agentIdx := 0
+	renderTC := func(tc *model.ToolCall) string {
+		if tc.Name == "Agent" || tc.Name == "Task" {
+			var si *ChatItem
+			if agentIdx < len(subItems) {
+				si = &subItems[agentIdx]
+			}
+			agentIdx++
+			return renderAgentCallLine(tc, si, width)
+		}
+		return renderExpandedToolCall(tc, width)
+	}
+
 	for _, tc := range turn.ToolCalls {
 		parts = append(parts, "")
-		if tc.Name == "Agent" || tc.Name == "Task" {
-			parts = append(parts, renderAgentCallLine(tc, width))
-		} else {
-			parts = append(parts, renderExpandedToolCall(tc, width))
-		}
+		parts = append(parts, renderTC(tc))
 	}
 
 	// ExtraTurns: separator + thinking + text + tool calls for each grouped turn
@@ -152,11 +189,7 @@ func renderChatItem(item ChatItem, width int) []string {
 		}
 		for _, tc := range et.ToolCalls {
 			parts = append(parts, "")
-			if tc.Name == "Agent" || tc.Name == "Task" {
-				parts = append(parts, renderAgentCallLine(tc, width))
-			} else {
-				parts = append(parts, renderExpandedToolCall(tc, width))
-			}
+			parts = append(parts, renderTC(tc))
 		}
 	}
 
