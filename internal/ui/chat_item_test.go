@@ -318,6 +318,27 @@ func TestWhoLabel_TreeConnector(t *testing.T) {
 	if got := bare.WhoLabel(); got != "Agent" {
 		t.Errorf("expected 'Agent', got %q", got)
 	}
+
+	// Custom agent types: use the part after the last ":".
+	custom := ChatItem{
+		IsSubagent:    true,
+		AgentType:     model.AgentType("feature-dev:code-reviewer"),
+		SubagentIdx:   0,
+		TreeConnector: "└─",
+	}
+	if got := custom.WhoLabel(); got != "└─ code-reviewer" {
+		t.Errorf("expected '└─ code-reviewer', got %q", got)
+	}
+
+	// Type with no colon falls back to the full string.
+	noColon := ChatItem{
+		IsSubagent:  true,
+		AgentType:   model.AgentType("claude-code-guide"),
+		SubagentIdx: 0,
+	}
+	if got := noColon.WhoLabel(); got != "claude-code-guide" {
+		t.Errorf("expected 'claude-code-guide', got %q", got)
+	}
 }
 
 func TestBuildChatItems_TreeConnectors_Single(t *testing.T) {

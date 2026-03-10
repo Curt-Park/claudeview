@@ -44,7 +44,16 @@ func agentDisplayName(t model.AgentType) string {
 	case model.AgentTypeGeneral:
 		return "Agent"
 	default:
-		return "Agent"
+		// For custom types like "feature-dev:code-reviewer", use the part after
+		// the last ":" so the label is distinct (e.g. "code-reviewer").
+		s := string(t)
+		if i := strings.LastIndex(s, ":"); i >= 0 {
+			s = s[i+1:]
+		}
+		if s == "" {
+			return "Agent"
+		}
+		return s
 	}
 }
 
