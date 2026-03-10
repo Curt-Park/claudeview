@@ -212,36 +212,43 @@ func renderChatItem(item ChatItem, subItems []ChatItem, width int) []string {
 	return parts
 }
 
-// renderExpandedToolCall renders a tool call with full input and result.
+// renderExpandedToolCall renders a tool call in two-line Option-1 style:
+//
+//	▸ NAME  model  duration
+//	    input summary  ✓/✗
+//	    result...
 func renderExpandedToolCall(tc *model.ToolCall, turn model.Turn, maxWidth int) string {
-	name := StyleChatToolName.Render("▸ " + tc.Name)
-	inputFull := tc.InputSummary()
+	// Line 1: name + model + duration
+	headerParts := []string{StyleChatToolName.Render("▸ " + tc.Name)}
+	if m := model.ShortModelName(turn.ModelName); m != "" {
+		headerParts = append(headerParts, StyleDim.Render(m))
+	}
+	if tc.Duration > 0 {
+		headerParts = append(headerParts, StyleChatTimestamp.Render(tc.DurationString()))
+	}
+	headerLine := "  " + strings.Join(headerParts, "  ")
 
+	// Line 2 (indented): input summary + status
 	var statusStr string
 	if tc.IsError {
 		statusStr = StyleChatToolErr.Render("✗ error")
 	} else {
 		statusStr = StyleChatToolOK.Render("✓")
 	}
-
-	durationStr := ""
-	if tc.Duration > 0 {
-		durationStr = " " + StyleChatTimestamp.Render(tc.DurationString())
+	inputFull := tc.InputSummary()
+	inputLine := "    "
+	if inputFull != "" {
+		inputLine += ansi.Wrap(StyleDim.Render(inputFull)+"  "+statusStr, maxWidth-4, "")
+	} else {
+		inputLine += statusStr
 	}
-
-	modelStr := ""
-	if m := model.ShortModelName(turn.ModelName); m != "" {
-		modelStr = "  " + StyleDim.Render(m)
-	}
-
-	headerLine := "  " + name + "  " + StyleDim.Render(inputFull) + "  " + statusStr + durationStr + modelStr
 
 	var lines []string
 	lines = append(lines, ansi.Wrap(headerLine, maxWidth, ""))
+	lines = append(lines, inputLine)
 
-	// Show full result content
-	resultStr := expandResult(tc)
-	if resultStr != "" {
+	// Result lines (indented)
+	if resultStr := expandResult(tc); resultStr != "" {
 		indent := "    "
 		contentWidth := maxWidth - len(indent)
 		if contentWidth < 20 {
