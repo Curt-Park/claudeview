@@ -44,12 +44,16 @@ func agentDisplayName(t model.AgentType) string {
 	case model.AgentTypeGeneral:
 		return "Agent"
 	default:
-		// For custom types like "feature-dev:code-reviewer", use the full
-		// subagent_type string so namespaces are distinguishable.
-		if s := string(t); s != "" {
-			return s
+		// For custom types like "feature-dev:code-reviewer", use the part
+		// after the last ":" (e.g. "code-reviewer").
+		s := string(t)
+		if i := strings.LastIndex(s, ":"); i >= 0 {
+			s = s[i+1:]
 		}
-		return "Agent"
+		if s == "" {
+			return "Agent"
+		}
+		return s
 	}
 }
 
