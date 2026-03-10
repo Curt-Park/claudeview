@@ -242,8 +242,7 @@ func expandResult(tc *model.ToolCall) string {
 	// Try string result
 	var s string
 	if err := json.Unmarshal(tc.Result, &s); err == nil {
-		lines := capLines(strings.Split(s, "\n"), 30)
-		return strings.Join(lines, "\n")
+		return s
 	}
 	// Try array of content blocks
 	var arr []map[string]any
@@ -255,20 +254,10 @@ func expandResult(tc *model.ToolCall) string {
 			}
 		}
 		if len(texts) > 0 {
-			result := strings.Join(texts, "\n")
-			lines := capLines(strings.Split(result, "\n"), 30)
-			return strings.Join(lines, "\n")
+			return strings.Join(texts, "\n")
 		}
 	}
 	return ""
-}
-
-// capLines truncates a slice of lines, appending a summary if it exceeds max.
-func capLines(lines []string, max int) []string {
-	if len(lines) > max {
-		return append(lines[:max], fmt.Sprintf("... (%d more lines)", len(lines)-max))
-	}
-	return lines
 }
 
 // RenderPluginItemDetail renders the content of a selected plugin item.
