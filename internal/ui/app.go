@@ -17,6 +17,10 @@ type TickMsg time.Time
 // RefreshMsg signals data has been refreshed.
 type RefreshMsg struct{}
 
+// SyncViewMsg signals that the chat table needs to be re-synced immediately
+// (e.g. after expand/collapse of a ChatItem's tool call sub-rows).
+type SyncViewMsg struct{}
+
 // HighlightClearMsg clears the menu key highlight after HighlightDuration.
 type HighlightClearMsg struct{}
 
@@ -61,8 +65,10 @@ type AppModel struct {
 	slugGroupSubTypes [][]model.AgentType // per-session subagent types
 
 	// Chat table state
-	ChatItems        []ChatItem // flattened selectable items
-	SelectedChatItem int        // index of expanded item in detail view
+	ChatItems        []ChatItem      // flattened selectable items
+	SelectedChatItem int             // index of expanded item in detail view
+	ExpandedItems    map[string]bool // ChatItemKey → expanded (tool call sub-rows visible)
+	SelectedToolCall *ToolCallRow    // for tool-call-detail view
 
 	// Data providers (injected from outside)
 	DataProvider DataProvider
@@ -97,7 +103,8 @@ func isSubView(rt model.ResourceType) bool {
 	return rt == model.ResourcePluginDetail ||
 		rt == model.ResourcePluginItemDetail ||
 		rt == model.ResourceMemoryDetail ||
-		rt == model.ResourceHistoryDetail
+		rt == model.ResourceHistoryDetail ||
+		rt == model.ResourceToolCallDetail
 }
 
 // isContentView returns true for views that render flat text (not a table).
@@ -105,7 +112,8 @@ func isSubView(rt model.ResourceType) bool {
 func isContentView(rt model.ResourceType) bool {
 	return rt == model.ResourcePluginItemDetail ||
 		rt == model.ResourceMemoryDetail ||
-		rt == model.ResourceHistoryDetail
+		rt == model.ResourceHistoryDetail ||
+		rt == model.ResourceToolCallDetail
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -175,7 +183,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Highlight menu items only when not in filter input mode.
 		var highlightCmd tea.Cmd
 		if !m.inFilter {
-			m.Menu.SetHighlight(msg.String())
+			highlightKey := msg.String()
+			if highlightKey == " " {
+				highlightKey = "space"
+			}
+			m.Menu.SetHighlight(highlightKey)
 			highlightCmd = tea.Tick(HighlightDuration, func(time.Time) tea.Msg {
 				return HighlightClearMsg{}
 			})
@@ -191,7 +203,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "/":
 			if m.Resource != model.ResourceMemoryDetail && m.Resource != model.ResourcePluginItemDetail &&
-				m.Resource != model.ResourceHistoryDetail {
+				m.Resource != model.ResourceHistoryDetail && m.Resource != model.ResourceToolCallDetail {
 				m.inFilter = true
 				m.Filter.Activate()
 				m.refreshMenu()
@@ -259,29 +271,47 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// View transition: clear highlight so next view doesn't show stale flash.
 		m.Menu.ClearHighlight()
-		m.drillDown()
+		if m.Resource == model.ResourceHistory {
+			m.drillDetailFromRow()
+		} else {
+			return m, m.drillDown()
+		}
+	case " ":
+		if m.Resource == model.ResourceHistory {
+			return m, m.toggleExpansion()
+		}
 	default:
 		if isContentView(m.Resource) {
 			m.updateContentScroll(msg)
 		} else {
 			m.updateChatFollow(msg)
 			m.Table.Update(msg)
+			m.refreshMenu()
 		}
 	}
 	return m, nil
 }
 
-// contentMaxOffset returns the maximum scroll offset for the current content view.
-func (m AppModel) contentMaxOffset() int {
-	var contentStr string
+// renderContentForResource renders the content string for the current content-only view.
+// Returns "" for non-content views (table views).
+func (m AppModel) renderContentForResource() string {
 	switch m.Resource {
 	case model.ResourcePluginItemDetail:
-		contentStr = RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
+		return RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
 	case model.ResourceMemoryDetail:
-		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
+		return RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
 	case model.ResourceHistoryDetail:
-		contentStr = RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
-	default:
+		return RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
+	case model.ResourceToolCallDetail:
+		return RenderToolCallDetail(m.SelectedToolCall, m.contentWidth())
+	}
+	return ""
+}
+
+// contentMaxOffset returns the maximum scroll offset for the current content view.
+func (m AppModel) contentMaxOffset() int {
+	contentStr := m.renderContentForResource()
+	if contentStr == "" {
 		return 0
 	}
 	lines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
@@ -408,9 +438,21 @@ func (m *AppModel) SetSlugGroupData(turns [][]model.Turn, subTurns [][][]model.T
 
 // refreshMenu updates the menu nav and util items based on current state.
 // hasFilter is true when a filter is active OR the filter input is open.
+// RefreshMenu is the exported entry point for callers outside this package (e.g. cmd/root.go)
+// that need to sync the menu after mutating Table state (expansion, cursor restoration).
+func (m *AppModel) RefreshMenu() { m.refreshMenu() }
+
 func (m *AppModel) refreshMenu() {
-	m.Menu.NavItems = TableNavItems(m.Resource, m.Table.Filter != "" || m.inFilter)
-	m.Menu.UtilItems = TableUtilItems(m.Resource)
+	hasFilter := m.Table.Filter != "" || m.inFilter
+	canExpand := false
+	if row := m.Table.SelectedRow(); row != nil {
+		if ci, ok := row.Data.(ChatItem); ok && !ci.IsDivider && len(ci.AllToolCalls()) > 0 {
+			canExpand = true
+		}
+	}
+	m.Menu.NavItems = TableNavItems(m.Resource, hasFilter)
+	m.Menu.ActionItems = TableActionItems(m.Resource, hasFilter, canExpand)
+	m.Menu.UtilItems = TableUtilItems(m.Resource, hasFilter)
 }
 
 // switchResource pops the breadcrumb, sets the resource, and refreshes the menu.
@@ -481,9 +523,12 @@ func (m *AppModel) navigateBack() {
 	// Navigate up the resource hierarchy
 	m.ContentOffset = 0
 	switch m.Resource {
+	case model.ResourceToolCallDetail:
+		m.switchResource(model.ResourceHistory)
 	case model.ResourceHistoryDetail:
 		m.switchResource(model.ResourceHistory)
 	case model.ResourceHistory:
+		m.ExpandedItems = nil
 		m.SelectedSessionID = ""
 		m.SelectedSessionSlug = ""
 		m.SelectedSessionFilePath = ""
@@ -515,27 +560,36 @@ func (m *AppModel) navigateBack() {
 	}
 }
 
-func (m *AppModel) drillDown() {
+// toggleExpansion expands or collapses the selected ChatItem's tool call sub-rows.
+// No-ops for dividers, user/assistant rows without tool calls, and ToolCallRow sub-rows.
+func (m *AppModel) toggleExpansion() tea.Cmd {
 	row := m.Table.SelectedRow()
 	if row == nil {
-		return
+		return nil
+	}
+	ci, ok := row.Data.(ChatItem)
+	if !ok || ci.IsDivider || len(ci.AllToolCalls()) == 0 {
+		return nil
+	}
+	key := ChatItemKey(ci)
+	if m.ExpandedItems == nil {
+		m.ExpandedItems = make(map[string]bool)
+	}
+	if m.ExpandedItems[key] {
+		delete(m.ExpandedItems, key)
+	} else {
+		m.ExpandedItems[key] = true
+	}
+	m.ChatFollow = false
+	return func() tea.Msg { return SyncViewMsg{} }
+}
+
+func (m *AppModel) drillDown() tea.Cmd {
+	row := m.Table.SelectedRow()
+	if row == nil {
+		return nil
 	}
 	switch m.Resource {
-	case model.ResourceHistory:
-		if ci, ok := row.Data.(ChatItem); ok {
-			if ci.IsDivider {
-				return // skip divider rows
-			}
-			ciKey := ChatItemKey(ci)
-			for i, item := range m.ChatItems {
-				if ChatItemKey(item) == ciKey {
-					m.SelectedChatItem = i
-					break
-				}
-			}
-			m.drillInto(model.ResourceHistoryDetail)
-		}
-		return
 	case model.ResourceProjects:
 		if p, ok := row.Data.(*model.Project); ok {
 			m.SelectedProjectHash = p.Hash
@@ -583,6 +637,158 @@ func (m *AppModel) drillDown() {
 		}
 		m.drillInto(model.ResourceMemoryDetail)
 	}
+	return nil
+}
+
+// drillDetail navigates to the full history detail view for the given ChatItem.
+func (m *AppModel) drillDetail(ci ChatItem) {
+	ciKey := ChatItemKey(ci)
+	for i, item := range m.ChatItems {
+		if ChatItemKey(item) == ciKey {
+			m.SelectedChatItem = i
+			break
+		}
+	}
+	m.drillInto(model.ResourceHistoryDetail)
+}
+
+// drillDetailFromRow navigates to the appropriate detail view for the currently
+// selected history row: message detail for ChatItem rows, tool call detail for sub-rows.
+func (m *AppModel) drillDetailFromRow() {
+	row := m.Table.SelectedRow()
+	if row == nil {
+		return
+	}
+	switch v := row.Data.(type) {
+	case ChatItem:
+		if !v.IsDivider {
+			m.drillDetail(v)
+		}
+	case ToolCallRow:
+		m.SelectedToolCall = &v
+		m.drillInto(model.ResourceToolCallDetail)
+	}
+}
+
+// ApplyExpansion inserts ToolCallRow sub-rows after each expanded ChatItem row
+// in the current Table and adds [+]/[-] indicators to expandable rows.
+// It preserves the cursor position by key.
+func (m *AppModel) ApplyExpansion() {
+	// Record the currently selected row's identity for cursor restoration.
+	var anchorCIKey string
+	var anchorTCName string
+	var anchorIsTCRow bool
+	if row := m.Table.SelectedRow(); row != nil {
+		switch v := row.Data.(type) {
+		case ChatItem:
+			anchorCIKey = ChatItemKey(v)
+		case ToolCallRow:
+			anchorCIKey = v.ChatItemKey
+			anchorTCName = v.ToolCall.Name
+			anchorIsTCRow = true
+		}
+	}
+
+	// Build expanded row slice, adding [+]/[-] indicators and inserting sub-rows.
+	var expanded []Row
+	for _, row := range m.Table.Rows {
+		ci, isChatItem := row.Data.(ChatItem)
+		if isChatItem && !ci.IsDivider && len(ci.AllToolCalls()) > 0 {
+			key := ChatItemKey(ci)
+			// Copy cells to avoid mutating the underlying array.
+			newCells := make([]string, len(row.Cells))
+			copy(newCells, row.Cells)
+			row.Cells = newCells
+			if m.ExpandedItems[key] {
+				row.Cells[0] += " [-]"
+				expanded = append(expanded, row)
+				// Insert sub-rows for tool calls in the primary turn.
+				for _, tc := range ci.Turn.ToolCalls {
+					expanded = append(expanded, buildToolCallSubRow(ToolCallRow{
+						ToolCall: tc, ParentTurn: ci.Turn, ChatItemKey: key,
+					}))
+				}
+				// Insert sub-rows for tool calls in each ExtraTurn.
+				for _, et := range ci.ExtraTurns {
+					for _, tc := range et.ToolCalls {
+						expanded = append(expanded, buildToolCallSubRow(ToolCallRow{
+							ToolCall: tc, ParentTurn: et, ChatItemKey: key,
+						}))
+					}
+				}
+			} else {
+				row.Cells[0] += " [+]"
+				expanded = append(expanded, row)
+			}
+		} else {
+			expanded = append(expanded, row)
+		}
+	}
+
+	m.Table.SetRows(expanded)
+
+	// Restore cursor to the anchor row by key.
+	if anchorCIKey == "" {
+		return
+	}
+	rows := m.Table.FilteredRows()
+	for i, row := range rows {
+		switch v := row.Data.(type) {
+		case ChatItem:
+			if !anchorIsTCRow && ChatItemKey(v) == anchorCIKey {
+				m.Table.Selected = i
+				m.Table.EnsureVisible()
+				return
+			}
+		case ToolCallRow:
+			if anchorIsTCRow && v.ChatItemKey == anchorCIKey && v.ToolCall.Name == anchorTCName {
+				m.Table.Selected = i
+				m.Table.EnsureVisible()
+				return
+			}
+		}
+	}
+}
+
+// buildToolCallSubRow constructs a table Row for a ToolCallRow sub-entry.
+func buildToolCallSubRow(tr ToolCallRow) Row {
+	tc := tr.ToolCall
+	displayName := tc.Name
+	if tc.Name == "Agent" || tc.Name == "Task" {
+		if agentType := extractStringField(tc, "subagent_type"); agentType != "" {
+			displayName = model.AgentType(agentType).DisplayLabel()
+		}
+	}
+	name := "  ▸ " + displayName
+
+	msg := tc.InputSummary()
+
+	var action string
+	if tc.IsError {
+		action = "✗"
+	} else {
+		action = "✓"
+	}
+
+	var modelTok string
+	if m := model.ShortModelName(tr.ParentTurn.ModelName); m != "" {
+		in, out := tr.ParentTurn.InputTokens, tr.ParentTurn.OutputTokens
+		if in > 0 || out > 0 {
+			modelTok = m + ":" + model.FormatTokenInOut(in, out)
+		} else {
+			modelTok = m
+		}
+	}
+
+	var dur string
+	if tc.Duration > 0 {
+		dur = tc.DurationString()
+	}
+
+	return Row{
+		Cells: []string{name, msg, action, modelTok, dur},
+		Data:  tr,
+	}
 }
 
 func (m *AppModel) drillInto(rt model.ResourceType) {
@@ -618,7 +824,7 @@ func (m AppModel) ContentHeight() int {
 func (m AppModel) contentHeight() int {
 	// Sum chrome heights dynamically so adding/removing UI rows only
 	// requires updating the relevant component's Height() method.
-	chrome := m.Info.Height(len(m.Menu.NavItems), len(m.Menu.UtilItems)) + // info panel (top)
+	chrome := m.Info.Height(len(m.Menu.NavItems), len(m.Menu.ActionItems), len(m.Menu.UtilItems)) + // info panel (top)
 		1 + // title bar (renderTitleBar → always 1 line)
 		m.Crumbs.Height() + // breadcrumb bar
 		m.Flash.Height() // status bar (Flash and Filter render the same 1 line)
@@ -652,14 +858,9 @@ func (m AppModel) View() string {
 	// --- 3. Content ---
 	var contentStr string
 	limit := m.contentHeight()
-	switch m.Resource {
-	case model.ResourcePluginItemDetail:
-		contentStr = RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
-	case model.ResourceMemoryDetail:
-		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
-	case model.ResourceHistoryDetail:
-		contentStr = RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
-	default:
+	if isContentView(m.Resource) {
+		contentStr = m.renderContentForResource()
+	} else {
 		contentStr = m.Table.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")

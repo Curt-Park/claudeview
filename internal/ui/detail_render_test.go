@@ -157,8 +157,9 @@ func TestRenderChatItemDetail_ClaudeBubble(t *testing.T) {
 	if !strings.Contains(got, "09:14") {
 		t.Errorf("expected timestamp, got:\n%s", got)
 	}
-	if !strings.Contains(got, "600") || !strings.Contains(got, "tok") {
-		t.Errorf("expected token count (600 total), got:\n%s", got)
+	// InputTokens=500, OutputTokens=100 → "500/100 tok"
+	if !strings.Contains(got, "500/100") || !strings.Contains(got, "tok") {
+		t.Errorf("expected token count (500/100 tok), got:\n%s", got)
 	}
 }
 
@@ -188,8 +189,11 @@ func TestRenderChatItemDetail_ToolCallLines(t *testing.T) {
 		SubagentIdx: -1,
 	}
 	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
+	if !strings.Contains(got, "done") {
+		t.Errorf("expected text 'done' in output, got:\n%s", got)
+	}
 	if !strings.Contains(got, "Read") {
-		t.Errorf("expected 'Read' tool name, got:\n%s", got)
+		t.Errorf("expected 'Read' tool summary in output, got:\n%s", got)
 	}
 	if !strings.Contains(got, "✓") {
 		t.Errorf("expected ✓ for successful tool, got:\n%s", got)
@@ -247,21 +251,19 @@ func TestRenderChatItemDetail_GroupedWithExtraTurns(t *testing.T) {
 	if !strings.Contains(got, "Let me check the code.") {
 		t.Errorf("expected primary text in output, got:\n%s", got)
 	}
-	// Primary tool call
+	// Tool call summaries should appear as one-liners.
 	if !strings.Contains(got, "Grep") {
 		t.Errorf("expected primary tool call 'Grep', got:\n%s", got)
 	}
-	// ExtraTurn tool calls
 	if !strings.Contains(got, "Read") {
 		t.Errorf("expected extra turn tool call 'Read', got:\n%s", got)
 	}
 	if !strings.Contains(got, "Edit") {
 		t.Errorf("expected extra turn tool call 'Edit', got:\n%s", got)
 	}
-	// No separator — ExtraTurns flow naturally after primary turn
-	// Aggregated tokens: 500+100+300+50 = 950
-	if !strings.Contains(got, "950") {
-		t.Errorf("expected aggregated token count 950, got:\n%s", got)
+	// Aggregated tokens: in=500+300=800, out=100+50=150 → "800/150"
+	if !strings.Contains(got, "800/150") {
+		t.Errorf("expected aggregated token count 800/150, got:\n%s", got)
 	}
 }
 
@@ -335,6 +337,74 @@ func TestRenderChatItemDetail_RegularAssistantSingleTurn(t *testing.T) {
 	}
 	if strings.Contains(got, "Subagent work") {
 		t.Errorf("expected subagent turn excluded from regular assistant detail, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_AgentCallCompact(t *testing.T) {
+	// Detail view shows only the text from the Claude turn, not tool calls.
+	taskInput, _ := json.Marshal(map[string]string{"subagent_type": "Explore"})
+	result, _ := json.Marshal("Found 42 files matching the pattern.")
+	claudeItem := ui.ChatItem{
+		Turn: model.Turn{
+			Role: "assistant",
+			Text: "delegating",
+			ToolCalls: []*model.ToolCall{
+				{Name: "Agent", Input: taskInput, Result: result},
+				{Name: "Read", Input: json.RawMessage(`{"file_path":"app.go"}`), Result: json.RawMessage(`"120 lines"`)},
+			},
+		},
+		SubagentIdx: -1,
+	}
+	items := []ui.ChatItem{claudeItem}
+	got := ui.RenderChatItemDetail(items, 0, 120)
+
+	// Text should be shown.
+	if !strings.Contains(got, "delegating") {
+		t.Errorf("expected text 'delegating' in output, got:\n%s", got)
+	}
+	// Tool call summaries should appear as one-liners.
+	if !strings.Contains(got, "Agent") {
+		t.Errorf("expected 'Agent' tool summary in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Read") {
+		t.Errorf("expected 'Read' tool summary in output, got:\n%s", got)
+	}
+}
+
+func TestRenderChatItemDetail_AgentCallFallbackToSubItem(t *testing.T) {
+	// Detail view shows only the text from the Claude turn; tool calls (including Agent) are excluded.
+	taskInput, _ := json.Marshal(map[string]string{"subagent_type": "Explore"})
+	claudeItem := ui.ChatItem{
+		Turn: model.Turn{
+			Role: "assistant",
+			Text: "delegating",
+			ToolCalls: []*model.ToolCall{
+				// No Result set (agent in progress).
+				{Name: "Agent", Input: taskInput},
+			},
+		},
+		SubagentIdx: -1,
+	}
+	subItem := ui.ChatItem{
+		Turn:        model.Turn{Role: "assistant", Text: "still searching..."},
+		ExtraTurns:  []model.Turn{{Role: "assistant", Text: "found the answer"}},
+		IsSubagent:  true,
+		AgentType:   model.AgentTypeExplore,
+		SubagentIdx: 0,
+	}
+	items := []ui.ChatItem{claudeItem, subItem}
+	got := ui.RenderChatItemDetail(items, 0, 120)
+
+	// Should show Claude's own text and tool call summary.
+	if !strings.Contains(got, "delegating") {
+		t.Errorf("expected text 'delegating' in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Agent") {
+		t.Errorf("expected 'Agent' tool summary in output, got:\n%s", got)
+	}
+	// Sub-agent turn text is not shown in the parent's detail view.
+	if strings.Contains(got, "found the answer") || strings.Contains(got, "still searching") {
+		t.Errorf("expected sub-agent text excluded from parent detail view, got:\n%s", got)
 	}
 }
 

@@ -17,6 +17,43 @@ const (
 	AgentTypeGeneral AgentType = "general-purpose"
 )
 
+// DisplayLabel returns the human-readable display label for the agent type.
+func (t AgentType) DisplayLabel() string {
+	switch t {
+	case AgentTypeExplore:
+		return "Explorer"
+	case AgentTypePlan:
+		return "Planner"
+	case AgentTypeBash:
+		return "Bash"
+	case AgentTypeGeneral:
+		return "Agent"
+	default:
+		s := string(t)
+		if i := strings.LastIndex(s, ":"); i >= 0 {
+			s = s[i+1:]
+		}
+		if s == "" {
+			return "Agent"
+		}
+		return s
+	}
+}
+
+// Icon returns the icon character for the agent type.
+func (t AgentType) Icon() string {
+	switch t {
+	case AgentTypeExplore:
+		return "🔍"
+	case AgentTypePlan:
+		return "📋"
+	case AgentTypeBash:
+		return "💻"
+	default:
+		return "⚙️"
+	}
+}
+
 // Agent represents a Claude Code agent (main or subagent).
 type Agent struct {
 	ID           string
@@ -56,19 +93,13 @@ func (a *Agent) DisplayName() string {
 	switch a.Type {
 	case AgentTypeMain:
 		return "Claude"
-	case AgentTypeExplore:
-		return "Explorer"
-	case AgentTypePlan:
-		return "Planner"
-	case AgentTypeBash:
-		return "Bash-runner"
-	case AgentTypeGeneral:
-		return "General"
+	case AgentTypeExplore, AgentTypePlan, AgentTypeBash, AgentTypeGeneral:
+		return a.Type.DisplayLabel()
 	default:
 		if a.ID != "" {
 			return a.ShortID()
 		}
-		return "Agent"
+		return a.Type.DisplayLabel()
 	}
 }
 

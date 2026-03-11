@@ -13,4 +13,5 @@ const (
 	ResourceMemoryDetail     ResourceType = "memory-detail"
 	ResourceHistory          ResourceType = "history"
 	ResourceHistoryDetail    ResourceType = "history-detail"
+	ResourceToolCallDetail   ResourceType = "tool-call-detail"
 )

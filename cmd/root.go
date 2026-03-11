@@ -119,6 +119,12 @@ type rootModel struct {
 	// Per-resource cursor state: each view remembers its own Selected/Offset.
 	cursor       map[model.ResourceType]struct{ sel, off int }
 	lastResource model.ResourceType
+
+	// Key-based cursor for history view: survives expansion (which shifts numeric indices).
+	// historyCursorKey is the ChatItemKey of the selected ChatItem (or parent when on a sub-row).
+	// historyToolCallID identifies the specific ToolCallRow sub-row; "" means cursor is on the parent.
+	historyCursorKey  string
+	historyToolCallID string
 }
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
@@ -199,6 +205,25 @@ func (rm *rootModel) syncView() {
 	// Save cursor position of the view we are leaving (or refreshing).
 	rm.cursor[rm.lastResource] = struct{ sel, off int }{rm.app.Table.Selected, rm.app.Table.Offset}
 
+	// For the history view, also maintain a key-based cursor so that expansion
+	// (which inserts sub-rows and shifts numeric indices) doesn't corrupt position.
+	if rm.lastResource == model.ResourceHistory {
+		if row := rm.app.Table.SelectedRow(); row != nil {
+			switch v := row.Data.(type) {
+			case ui.ChatItem:
+				rm.historyCursorKey = ui.ChatItemKey(v)
+				rm.historyToolCallID = ""
+			case ui.ToolCallRow:
+				rm.historyCursorKey = v.ChatItemKey
+				// Use tool call ID to identify the sub-row; fall back to name.
+				rm.historyToolCallID = v.ToolCall.ID
+				if rm.historyToolCallID == "" {
+					rm.historyToolCallID = v.ToolCall.Name
+				}
+			}
+		}
+	}
+
 	// Restore cursor for the resource now being displayed.
 	rt := rm.app.Resource
 	cur := rm.cursor[rt] // zero value {0, 0} on first visit
@@ -217,10 +242,43 @@ func (rm *rootModel) syncView() {
 		rm.app.Table = rm.memoriesView.Sync(rm.memories, w, h, cur.sel, cur.off, flt, false)
 	case model.ResourceHistory:
 		rm.chatItems = rm.app.ChatItems
-		rm.app.Table = rm.chatView.Sync(rm.chatItems, w, h, cur.sel, cur.off, flt, false)
+
+		// Resolve the base-table cursor index from the key-based anchor when
+		// expansion is active, to avoid the expanded-index being clamped to last row.
+		sel := cur.sel
+		if rm.historyCursorKey != "" && len(rm.app.ExpandedItems) > 0 {
+			for i, item := range rm.chatItems {
+				if ui.ChatItemKey(item) == rm.historyCursorKey {
+					sel = i
+					break
+				}
+			}
+		}
+
+		rm.app.Table = rm.chatView.Sync(rm.chatItems, w, h, sel, cur.off, flt, false)
+		rm.app.ApplyExpansion()
+		// If cursor was on a tool call sub-row, restore to that specific sub-row.
+		if rm.historyToolCallID != "" {
+			for i, row := range rm.app.Table.FilteredRows() {
+				tr, ok := row.Data.(ui.ToolCallRow)
+				if !ok || tr.ChatItemKey != rm.historyCursorKey {
+					continue
+				}
+				id := tr.ToolCall.ID
+				if id == "" {
+					id = tr.ToolCall.Name
+				}
+				if id == rm.historyToolCallID {
+					rm.app.Table.Selected = i
+					rm.app.Table.EnsureVisible()
+					break
+				}
+			}
+		}
 		if rm.app.ChatFollow {
 			rm.app.Table.GotoBottom()
 		}
+		rm.app.RefreshMenu()
 	}
 
 	rm.lastResource = rt
@@ -253,6 +311,10 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rm.loading = true
 			extraCmd = rm.loadDataAsync()
 		}
+
+	case ui.SyncViewMsg:
+		rm.syncView()
+		return rm, nil
 
 	case dataLoadedMsg:
 		rm.loading = false
@@ -782,7 +844,7 @@ func (l *liveDataProvider) GetTurns(filePath string) []model.Turn {
 			Text:         t.Text,
 			Thinking:     t.Thinking,
 			ModelName:    t.Model,
-			InputTokens:  t.Usage.InputTokens,
+			InputTokens:  t.Usage.TotalInputTokens(),
 			OutputTokens: t.Usage.OutputTokens,
 			Timestamp:    t.Timestamp,
 		}

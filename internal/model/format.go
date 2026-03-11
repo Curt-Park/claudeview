@@ -32,6 +32,11 @@ func FormatTokenCount(n int) string {
 	}
 }
 
+// FormatTokenInOut formats input/output token counts as "1.2k/300".
+func FormatTokenInOut(in, out int) string {
+	return FormatTokenCount(in) + "/" + FormatTokenCount(out)
+}
+
 // ShortModelName extracts a short identifier from a model name.
 func ShortModelName(model string) string {
 	lower := strings.ToLower(model)

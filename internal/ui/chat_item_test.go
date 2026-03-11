@@ -260,10 +260,13 @@ func TestCleanTextPreview(t *testing.T) {
 			"/autology:triage-knowledge"},
 		{"skill response",
 			"Base directory for this skill: /home/user/.claude/plugins/cache/autology/autology/0.10.2/skills/sync-knowledge\n\n## Overview",
-			"(skill loaded)"},
-		{"local-command-stdout", "<local-command-stdout>some output</local-command-stdout>", "(command output)"},
-		{"local-command-stderr", "<local-command-stderr>error msg</local-command-stderr>", "(command output)"},
-		{"local-command-caveat", "<local-command-caveat>warning</local-command-caveat>", "(command output)"},
+			"(skill) sync-knowledge"},
+		{"local-command-stdout", "<local-command-stdout>some output</local-command-stdout>", "some output"},
+		{"local-command-stderr", "<local-command-stderr>error msg</local-command-stderr>", "error msg"},
+		{"local-command-caveat", "<local-command-caveat>warning</local-command-caveat>", "warning"},
+		{"image single", "[Image: source: /home/curt/스크린샷 2026-03-11 오후 4.53.46.png]", "[img: 2026-03-11 4.53.46.png]"},
+		{"image multiple", "[Image: source: /a/b/foo.png][Image: source: /c/d/bar.png]", "[img: foo.png, bar.png]"},
+		{"image no colon", "[Image source: /a/b/baz.gif]", "[img: baz.gif]"},
 		{"regular text with leading whitespace", "  trimmed  ", "trimmed"},
 	}
 	for _, tt := range tests {
@@ -289,6 +292,155 @@ func TestMessagePreview_CleanedText(t *testing.T) {
 	got2 := c2.MessagePreview(120)
 	if got2 != "/autology:sync" {
 		t.Errorf("expected /autology:sync, got %q", got2)
+	}
+}
+
+func TestWhoLabel_TreeConnector(t *testing.T) {
+	mid := ChatItem{
+		IsSubagent:    true,
+		AgentType:     model.AgentTypeExplore,
+		SubagentIdx:   0,
+		TreeConnector: "├─",
+	}
+	if got := mid.WhoLabel(); got != "├─ Explorer" {
+		t.Errorf("expected '├─ Explorer', got %q", got)
+	}
+
+	last := ChatItem{
+		IsSubagent:    true,
+		AgentType:     model.AgentTypePlan,
+		SubagentIdx:   1,
+		TreeConnector: "└─",
+	}
+	if got := last.WhoLabel(); got != "└─ Planner" {
+		t.Errorf("expected '└─ Planner', got %q", got)
+	}
+
+	// Sub-agent with no connector (empty) still works.
+	bare := ChatItem{IsSubagent: true, AgentType: model.AgentTypeGeneral, SubagentIdx: 0}
+	if got := bare.WhoLabel(); got != "Agent" {
+		t.Errorf("expected 'Agent', got %q", got)
+	}
+
+	// Custom agent types: use the part after the last ":".
+	custom := ChatItem{
+		IsSubagent:    true,
+		AgentType:     model.AgentType("feature-dev:code-reviewer"),
+		SubagentIdx:   0,
+		TreeConnector: "└─",
+	}
+	if got := custom.WhoLabel(); got != "└─ code-reviewer" {
+		t.Errorf("expected '└─ code-reviewer', got %q", got)
+	}
+
+	// Different namespace, same short name — both show "code-reviewer".
+	custom2 := ChatItem{
+		IsSubagent:    true,
+		AgentType:     model.AgentType("superpowers:code-reviewer"),
+		SubagentIdx:   0,
+		TreeConnector: "└─",
+	}
+	if got := custom2.WhoLabel(); got != "└─ code-reviewer" {
+		t.Errorf("expected '└─ code-reviewer', got %q", got)
+	}
+
+	// Type with no colon uses the full string.
+	noColon := ChatItem{
+		IsSubagent:  true,
+		AgentType:   model.AgentType("claude-code-guide"),
+		SubagentIdx: 0,
+	}
+	if got := noColon.WhoLabel(); got != "claude-code-guide" {
+		t.Errorf("expected 'claude-code-guide', got %q", got)
+	}
+}
+
+func TestBuildChatItems_TreeConnectors_Single(t *testing.T) {
+	// One Agent call → sole sub-agent gets "└─".
+	mainTurns := []model.Turn{
+		{Role: "user", Text: "go"},
+		{Role: "assistant", Text: "delegating", ToolCalls: []*model.ToolCall{{Name: "Agent"}}},
+	}
+	sub := []model.Turn{{Role: "assistant", Text: "done"}}
+	items := BuildChatItems(mainTurns, [][]model.Turn{sub}, []model.AgentType{model.AgentTypeExplore})
+
+	var subItems []ChatItem
+	for _, it := range items {
+		if it.IsSubagent {
+			subItems = append(subItems, it)
+		}
+	}
+	if len(subItems) != 1 {
+		t.Fatalf("expected 1 sub-agent item, got %d", len(subItems))
+	}
+	if subItems[0].TreeConnector != "└─" {
+		t.Errorf("expected '└─', got %q", subItems[0].TreeConnector)
+	}
+}
+
+func TestBuildChatItems_TreeConnectors_Multiple(t *testing.T) {
+	// Two Agent calls in one parent turn → "├─" then "└─".
+	mainTurns := []model.Turn{
+		{Role: "user", Text: "go"},
+		{Role: "assistant", Text: "delegating", ToolCalls: []*model.ToolCall{
+			{Name: "Agent"},
+			{Name: "Agent"},
+		}},
+	}
+	sub0 := []model.Turn{{Role: "assistant", Text: "first"}}
+	sub1 := []model.Turn{{Role: "assistant", Text: "second"}}
+	items := BuildChatItems(
+		mainTurns,
+		[][]model.Turn{sub0, sub1},
+		[]model.AgentType{model.AgentTypeExplore, model.AgentTypePlan},
+	)
+
+	var subItems []ChatItem
+	for _, it := range items {
+		if it.IsSubagent {
+			subItems = append(subItems, it)
+		}
+	}
+	if len(subItems) != 2 {
+		t.Fatalf("expected 2 sub-agent items, got %d", len(subItems))
+	}
+	if subItems[0].TreeConnector != "├─" {
+		t.Errorf("expected '├─' for first, got %q", subItems[0].TreeConnector)
+	}
+	if subItems[1].TreeConnector != "└─" {
+		t.Errorf("expected '└─' for second, got %q", subItems[1].TreeConnector)
+	}
+}
+
+func TestBuildChatItems_TreeConnectors_SeparateTurns(t *testing.T) {
+	// Two parent turns, one Agent call each → each sub-agent gets "└─".
+	mainTurns := []model.Turn{
+		{Role: "user", Text: "go"},
+		{Role: "assistant", Text: "first batch", ToolCalls: []*model.ToolCall{{Name: "Agent"}}},
+		{Role: "assistant", Text: "second batch", ToolCalls: []*model.ToolCall{{Name: "Agent"}}},
+	}
+	sub0 := []model.Turn{{Role: "assistant", Text: "a"}}
+	sub1 := []model.Turn{{Role: "assistant", Text: "b"}}
+	items := BuildChatItems(
+		mainTurns,
+		[][]model.Turn{sub0, sub1},
+		[]model.AgentType{model.AgentTypeExplore, model.AgentTypePlan},
+	)
+
+	var subItems []ChatItem
+	for _, it := range items {
+		if it.IsSubagent {
+			subItems = append(subItems, it)
+		}
+	}
+	if len(subItems) != 2 {
+		t.Fatalf("expected 2 sub-agent items, got %d", len(subItems))
+	}
+	if subItems[0].TreeConnector != "└─" {
+		t.Errorf("expected '└─' for sub0, got %q", subItems[0].TreeConnector)
+	}
+	if subItems[1].TreeConnector != "└─" {
+		t.Errorf("expected '└─' for sub1, got %q", subItems[1].TreeConnector)
 	}
 }
 

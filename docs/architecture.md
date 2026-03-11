@@ -35,6 +35,7 @@ main.go
 | `internal/model`     | Data models: Project, Session, Agent, ToolCall, Plugin, Memory  |
 | `internal/ui`        | Bubble Tea AppModel + chrome components                         |
 | `internal/view`      | Generic `ResourceView[T]` + 6 resource constructors             |
+| `internal/stringutil`| Shared string utilities (XML tag extraction)                    |
 | `internal/demo`      | Synthetic demo data generator                                   |
 
 ## DataProvider Interface
@@ -80,6 +81,7 @@ memories → memory-detail  (requires project context)
 - [[model-package]] — data model types
 - [[transcript-package]] — JSONL parsing and project scanning
 - [[config-package]] — Claude settings and plugin config parsing
+- [[stringutil-package]] — shared string utilities
 - [[demo-package]] — synthetic demo data generator
 - [[test-suite]] — test coverage
 - [[ui-spec]] — UI behavior specification

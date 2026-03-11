@@ -18,7 +18,8 @@ type MenuItem struct {
 
 // MenuModel holds the menu bar state.
 type MenuModel struct {
-	NavItems     []MenuItem // col 2: navigation commands
+	NavItems     []MenuItem // col 1: movement commands
+	ActionItems  []MenuItem // col 2: action commands (enter/space/esc)
 	UtilItems    []MenuItem // col 3: utility commands (filter)
 	HighlightKey string     // currently highlighted key (e.g. "j"), cleared by HighlightClearMsg
 }
@@ -102,22 +103,18 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 		items = append(items, MenuItem{Key: "enter", Desc: "detail"})
 	case model.ResourceMemory:
 		items = append(items, MenuItem{Key: "enter", Desc: "detail"})
-	case model.ResourceHistory:
-		items = append(items, MenuItem{Key: "enter", Desc: "expand"})
 	}
-	if hasFilter {
+	if hasFilter && rt != model.ResourceHistory {
 		items = append(items, MenuItem{Key: "esc", Desc: "clear filter"})
-	} else {
+	} else if !hasFilter {
 		switch rt {
 		case model.ResourceSessions:
 			items = append(items, MenuItem{Key: "esc", Desc: "see projects"})
-		case model.ResourceHistory:
-			items = append(items, MenuItem{Key: "esc", Desc: "see sessions"})
 		case model.ResourcePlugins, model.ResourceMemory:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
 		case model.ResourcePluginDetail, model.ResourcePluginItemDetail, model.ResourceMemoryDetail:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
-		case model.ResourceHistoryDetail:
+		case model.ResourceHistoryDetail, model.ResourceToolCallDetail:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
 			// ResourceProjects: no esc (root level)
 		}
@@ -125,12 +122,33 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 	return items
 }
 
+// TableActionItems returns action menu items (enter/space/esc) for views that use
+// the three-column layout. Currently only ResourceHistory uses this column.
+func TableActionItems(rt model.ResourceType, hasFilter, canExpand bool) []MenuItem {
+	if rt != model.ResourceHistory {
+		return nil
+	}
+	escDesc := "see sessions"
+	if hasFilter {
+		escDesc = "clear filter"
+	}
+	items := []MenuItem{
+		{Key: "enter", Desc: "see detail"},
+	}
+	if canExpand {
+		items = append(items, MenuItem{Key: "space", Desc: "expand/collapse"})
+	}
+	items = append(items, MenuItem{Key: "esc", Desc: escDesc})
+	return items
+}
+
 // TableUtilItems returns utility menu items for the table view.
 // Content-only detail views (plugin-item-detail, memory-detail) have no filterable table,
 // so the filter key is omitted.
-func TableUtilItems(rt model.ResourceType) []MenuItem {
+func TableUtilItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 	switch rt {
-	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail, model.ResourceHistoryDetail:
+	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail, model.ResourceHistoryDetail,
+		model.ResourceToolCallDetail:
 		return nil
 	}
 	return []MenuItem{

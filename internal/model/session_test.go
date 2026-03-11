@@ -21,8 +21,8 @@ func TestSessionTokenString(t *testing.T) {
 		},
 	}
 	got := s.TokenString()
-	if got != "sonnet:62k" {
-		t.Errorf("TokenString() = %q, want %q", got, "sonnet:62k")
+	if got != "sonnet:50k/12k" {
+		t.Errorf("TokenString() = %q, want %q", got, "sonnet:50k/12k")
 	}
 }
 
@@ -42,8 +42,8 @@ func TestSessionTokenStringMultiModel(t *testing.T) {
 	}
 	got := s.TokenString()
 	// Alphabetically: opus before sonnet
-	if got != "opus:1.5M sonnet:62k" {
-		t.Errorf("TokenString() = %q, want %q", got, "opus:1.5M sonnet:62k")
+	if got != "opus:1.0M/500k sonnet:50k/12k" {
+		t.Errorf("TokenString() = %q, want %q", got, "opus:1.0M/500k sonnet:50k/12k")
 	}
 }
 

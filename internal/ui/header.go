@@ -21,23 +21,25 @@ type InfoModel struct {
 }
 
 // Height returns the number of terminal lines rendered by ViewWithMenu.
-// navCount and utilCount are the number of items in each menu column.
+// navCount, actionCount, and utilCount are the number of items in each menu column.
 // Minimum is 5 (1 project row + 4 data rows); expands if more items are needed.
-func (info InfoModel) Height(navCount, utilCount int) int {
-	return max(5, 1+max(navCount, utilCount))
+func (info InfoModel) Height(navCount, actionCount, utilCount int) int {
+	return max(5, 1+max(navCount, max(actionCount, utilCount)))
 }
 
-// ViewWithMenu renders the info panel with a 5-column layout:
+// ViewWithMenu renders the info panel with a 6-column layout:
 //
 //	Col 0 (leftW chars):    info labels + values
-//	Col 1 (menuColW chars): nav menu items (movement commands)
-//	Col 2 (menuColW chars): util menu items (filter/follow/detail/back)
-//	Col 3 (rightW chars):   p/m jump shortcuts
-//	Col 4:                  ctrl+c quit
+//	Col 1 (navColW chars):  nav menu items (movement commands)
+//	Col 2 (actionColW):     action menu items (enter/space/esc)
+//	Col 3 (utilColW chars): util menu items (filter)
+//	Col 4 (rightW chars):   p/m jump shortcuts
+//	Col 5:                  ctrl+c quit
 //
-// Row 0 (Project) spans the full width. Remaining rows use the 5-column layout.
+// Row 0 (Project) spans the full width. Remaining rows use the 6-column layout.
 func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 	navItems := menu.NavItems
+	actionItems := menu.ActionItems
 	utilItems := menu.UtilItems
 	const labelW = 14 // visible chars reserved for label column
 	const leftW = 32  // total visible chars for the left info column
@@ -67,39 +69,16 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 	}
 
 	// Within each column, pad keys to the column's max key width so descriptions align.
-	maxNavKeyW := 0
-	for _, item := range navItems {
-		if w := lipgloss.Width(StyleKey.Render("<" + item.Key + ">")); w > maxNavKeyW {
-			maxNavKeyW = w
-		}
-	}
-	maxUtilKeyW := 0
-	for _, item := range utilItems {
-		if w := lipgloss.Width(StyleKey.Render("<" + item.Key + ">")); w > maxUtilKeyW {
-			maxUtilKeyW = w
-		}
-	}
+	maxNavKeyW := menuMaxKeyW(navItems)
+	maxActionKeyW := menuMaxKeyW(actionItems)
+	maxUtilKeyW := menuMaxKeyW(utilItems)
 
-	// navColW / utilColW: each column gets its own natural width + trailing gap.
-	navColW := 0
-	for _, item := range navItems {
-		w := maxNavKeyW + 1 + lipgloss.Width(StyleKeyDesc.Render(item.Desc))
-		if w > navColW {
-			navColW = w
-		}
-	}
-	navColW += 2
+	// Each column gets its own natural width + trailing gap.
+	navColW := menuColW(navItems, maxNavKeyW) + 2
+	actionColW := menuColW(actionItems, maxActionKeyW) + 2
+	utilColW := menuColW(utilItems, maxUtilKeyW) + 2
 
-	utilColW := 0
-	for _, item := range utilItems {
-		w := maxUtilKeyW + 1 + lipgloss.Width(StyleKeyDesc.Render(item.Desc))
-		if w > utilColW {
-			utilColW = w
-		}
-	}
-	utilColW += 2
-
-	// Col 3: p/m jump shortcuts.
+	// Col 4: p/m jump shortcuts.
 	// Plugins and memories views cannot navigate to each other, so both hints
 	// are hidden when either view is active.
 	var jumpHints []string
@@ -119,11 +98,11 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 	}
 	rightColW += 2 // trailing gap before quit column
 
-	// Col 4: quit hint.
+	// Col 5: quit hint.
 	quitHint := renderJumpHint(menu, "ctrl+c", "quit")
 
 	// Total rows to render (at least len(otherRows)).
-	totalRows := max(len(otherRows), max(len(navItems), len(utilItems)))
+	totalRows := max(len(otherRows), max(len(navItems), max(len(actionItems), len(utilItems))))
 
 	lines := []string{projectLine}
 	for i := range totalRows {
@@ -151,41 +130,22 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 			leftPadding = strings.Repeat(" ", leftW+2)
 		}
 
-		// Nav column (col 1) — key padded to maxNavKeyW so descriptions align.
-		nav := ""
-		if i < len(navItems) {
-			item := navItems[i]
-			keyStyle := StyleKey
-			descStyle := StyleKeyDesc
-			if menu.IsHighlighted(item) {
-				keyStyle = StyleKeyHighlight
-				descStyle = StyleKeyHighlight
-			}
-			keyStr := keyStyle.Render("<" + item.Key + ">")
-			keyPad := strings.Repeat(" ", max(maxNavKeyW-lipgloss.Width(StyleKey.Render("<"+item.Key+">")), 0))
-			nav = keyStr + keyPad + " " + descStyle.Render(item.Desc)
-		}
+		// Nav column (col 1) — movement keys.
+		nav := renderMenuItem(menu, navItems, i, maxNavKeyW)
 		navVis := lipgloss.Width(nav)
 		navPad := strings.Repeat(" ", max(navColW-navVis, 2))
 
-		// Util column (col 2) — key padded to maxUtilKeyW so descriptions align.
-		util := ""
-		if i < len(utilItems) {
-			item := utilItems[i]
-			keyStyle := StyleKey
-			descStyle := StyleKeyDesc
-			if menu.IsHighlighted(item) {
-				keyStyle = StyleKeyHighlight
-				descStyle = StyleKeyHighlight
-			}
-			keyStr := keyStyle.Render("<" + item.Key + ">")
-			keyPad := strings.Repeat(" ", max(maxUtilKeyW-lipgloss.Width(StyleKey.Render("<"+item.Key+">")), 0))
-			util = keyStr + keyPad + " " + descStyle.Render(item.Desc)
-		}
+		// Action column (col 2) — enter/space/esc.
+		action := renderMenuItem(menu, actionItems, i, maxActionKeyW)
+		actionVis := lipgloss.Width(action)
+		actionPad := strings.Repeat(" ", max(actionColW-actionVis, 2))
+
+		// Util column (col 3) — filter.
+		util := renderMenuItem(menu, utilItems, i, maxUtilKeyW)
 		utilVis := lipgloss.Width(util)
 		utilPad := strings.Repeat(" ", max(utilColW-utilVis, 2))
 
-		// Col 3: jump hints (p/m), padded to rightColW.
+		// Col 4: jump hints (p/m), padded to rightColW.
 		right := ""
 		if i < len(jumpHints) {
 			right = jumpHints[i]
@@ -193,16 +153,56 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 		rightVis := lipgloss.Width(right)
 		rightPad := strings.Repeat(" ", max(rightColW-rightVis, 2))
 
-		// Col 4: quit hint on the first row only.
+		// Col 5: quit hint on the first row only.
 		quit := ""
 		if i == 0 {
 			quit = quitHint
 		}
 
-		lines = append(lines, leftPart+leftPadding+nav+navPad+util+utilPad+right+rightPad+quit)
+		lines = append(lines, leftPart+leftPadding+nav+navPad+action+actionPad+util+utilPad+right+rightPad+quit)
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// menuMaxKeyW returns the max rendered width of "<key>" across all items.
+func menuMaxKeyW(items []MenuItem) int {
+	max := 0
+	for _, item := range items {
+		if w := lipgloss.Width(StyleKey.Render("<" + item.Key + ">")); w > max {
+			max = w
+		}
+	}
+	return max
+}
+
+// menuColW returns the natural content width for a column (max of key+desc widths).
+func menuColW(items []MenuItem, maxKeyW int) int {
+	w := 0
+	for _, item := range items {
+		if cw := maxKeyW + 1 + lipgloss.Width(StyleKeyDesc.Render(item.Desc)); cw > w {
+			w = cw
+		}
+	}
+	return w
+}
+
+// renderMenuItem renders item i from items, padding the key to maxKeyW.
+// Returns empty string if i is out of range.
+func renderMenuItem(menu MenuModel, items []MenuItem, i, maxKeyW int) string {
+	if i >= len(items) {
+		return ""
+	}
+	item := items[i]
+	keyStyle := StyleKey
+	descStyle := StyleKeyDesc
+	if menu.IsHighlighted(item) {
+		keyStyle = StyleKeyHighlight
+		descStyle = StyleKeyHighlight
+	}
+	keyStr := keyStyle.Render("<" + item.Key + ">")
+	keyPad := strings.Repeat(" ", max(maxKeyW-lipgloss.Width(StyleKey.Render("<"+item.Key+">")), 0))
+	return keyStr + keyPad + " " + descStyle.Render(item.Desc)
 }
 
 // renderJumpHint renders a single jump shortcut (e.g. "<p> plugins") with

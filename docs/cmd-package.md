@@ -50,12 +50,18 @@ type rootModel struct {
     loading      bool
     cursor       map[model.ResourceType]struct{ sel, off int }
     lastResource model.ResourceType
+
+    // Key-based cursor for history view (survives expansion-induced row shifts)
+    historyCursorKey  string // ChatItemKey of selected ChatItem (or parent when on sub-row)
+    historyToolCallID string // ToolCall.ID of selected sub-row; "" = cursor on parent
 }
 ```
 
 On `Init`, it fires `loadData()` synchronously, then async reloads via `loadDataAsync()` which sends a `dataLoadedMsg` back into the update loop. This keeps the initial render fast while data refreshes in the background.
 
 `dataLoadedMsg` carries resource-specific payloads including `turns []model.Turn`, `subagentTurns [][]model.Turn`, `subagentTypes []model.AgentType`, and slug group fields (`slugGroupSessions`, `slugGroupTurns`, `slugGroupSubTurns`, `slugGroupSubTypes`) for history view refresh. `loadDataAsync()` handles `ResourceHistory`/`ResourceHistoryDetail`: it calls `refreshSlugGroup()` to re-scan sessions and detect newly created (or removed) sessions under the same slug. When the refreshed group has multiple sessions, it loads turns/subagents for each; otherwise it reads single-session data via `app.SelectedSessionFilePath` and `app.SelectedSessionSubagentDir`. On receipt, `SlugSessions` is updated if `slugGroupSessions` is non-nil, then either `app.SetSlugGroupData()` or the single-session fields are set, `RebuildChatItems()` refreshes the flattened chat item list, and `syncView` updates the table. `GetSessions` applies `model.GroupSessionsBySlug` before returning, sorting sessions into slug-grouped order with tree prefixes.
+
+`syncView()` also handles expansion state: when `ExpandedItems` is non-empty, it resolves the cursor index from `historyCursorKey` (by scanning `chatItems` for a matching `ChatItemKey`) before calling `Sync`, then calls `app.ApplyExpansion()` to insert `ToolCallRow` sub-rows. If `historyToolCallID` is set, it scans `FilteredRows()` to restore the sub-row cursor position. `SyncViewMsg` (sent by `toggleExpansion`) is intercepted in `rootModel.Update` to immediately call `syncView` without a full data reload.
 
 ## DataProvider Implementations
 

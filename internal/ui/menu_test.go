@@ -50,7 +50,7 @@ func TestTableUtilItemsHasFilter(t *testing.T) {
 	for _, rt := range []model.ResourceType{
 		model.ResourceSessions, model.ResourceProjects,
 	} {
-		util := ui.TableUtilItems(rt)
+		util := ui.TableUtilItems(rt, false)
 		hasFilter := false
 		for _, item := range util {
 			if item.Key == "/" {
@@ -82,7 +82,7 @@ func TestTableNavItemsWithFilter(t *testing.T) {
 }
 
 func TestTableUtilItemsHasFilterInPluginDetail(t *testing.T) {
-	util := ui.TableUtilItems(model.ResourcePluginDetail)
+	util := ui.TableUtilItems(model.ResourcePluginDetail, false)
 	hasFilter := false
 	for _, item := range util {
 		if item.Key == "/" {
@@ -95,7 +95,7 @@ func TestTableUtilItemsHasFilterInPluginDetail(t *testing.T) {
 }
 
 func TestTableUtilItemsNoFilterInMemoryDetail(t *testing.T) {
-	util := ui.TableUtilItems(model.ResourceMemoryDetail)
+	util := ui.TableUtilItems(model.ResourceMemoryDetail, false)
 	for _, item := range util {
 		if item.Key == "/" {
 			t.Error("TableUtilItems(memory-detail): should not expose '/' filter key")
@@ -104,7 +104,7 @@ func TestTableUtilItemsNoFilterInMemoryDetail(t *testing.T) {
 }
 
 func TestTableUtilItemsNoFilterInPluginItemDetail(t *testing.T) {
-	util := ui.TableUtilItems(model.ResourcePluginItemDetail)
+	util := ui.TableUtilItems(model.ResourcePluginItemDetail, false)
 	for _, item := range util {
 		if item.Key == "/" {
 			t.Error("TableUtilItems(plugin-item-detail): should not expose '/' filter key")
@@ -145,13 +145,19 @@ func TestTableNavItemsPluginItemDetailHasEsc(t *testing.T) {
 }
 
 func TestSessionChatMenuHints(t *testing.T) {
-	items := ui.TableNavItems(model.ResourceHistory, false)
+	items := ui.TableActionItems(model.ResourceHistory, false, true)
 	keys := make(map[string]string)
 	for _, it := range items {
 		keys[it.Key] = it.Desc
 	}
 	if _, ok := keys["esc"]; !ok {
-		t.Error("session-chat nav should include esc hint")
+		t.Error("session-chat action should include esc hint")
+	}
+	if _, ok := keys["enter"]; !ok {
+		t.Error("session-chat action should include enter hint")
+	}
+	if _, ok := keys["space"]; !ok {
+		t.Error("session-chat action should include space hint")
 	}
 }
 

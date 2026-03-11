@@ -49,3 +49,4 @@ Claude Code writes one JSON object per line. Each line is either:
 
 - [[model-package]] — Session, Agent, ToolCall types populated by this package
 - [[architecture]] — transcript package role in the data flow
+- [[stringutil-package]] — `ExtractXMLTag` used in `extractTopic`

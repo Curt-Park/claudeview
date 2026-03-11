@@ -129,12 +129,12 @@ func TestToolCallResultSummary(t *testing.T) {
 		}
 	})
 
-	t.Run("array result shows block count", func(t *testing.T) {
-		arr := []map[string]any{{"type": "text"}, {"type": "text"}}
+	t.Run("array result with text shows line count", func(t *testing.T) {
+		arr := []map[string]any{{"text": "line1\nline2"}, {"text": "line3"}}
 		call := &model.ToolCall{Result: mustJSON(arr)}
 		got := call.ResultSummary()
-		if got != "2 blocks" {
-			t.Errorf("ResultSummary() = %q, want %q", got, "2 blocks")
+		if got != "3 lines" {
+			t.Errorf("ResultSummary() = %q, want %q", got, "3 lines")
 		}
 	})
 

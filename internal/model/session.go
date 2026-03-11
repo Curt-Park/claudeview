@@ -72,8 +72,7 @@ func (s *Session) TokenString() string {
 	var parts []string
 	for _, m := range models {
 		tc := s.TokensByModel[m]
-		total := tc.InputTokens + tc.OutputTokens
-		parts = append(parts, fmt.Sprintf("%s:%s", ShortModelName(m), FormatTokenCount(total)))
+		parts = append(parts, fmt.Sprintf("%s:%s", ShortModelName(m), FormatTokenInOut(tc.InputTokens, tc.OutputTokens)))
 	}
 	return strings.Join(parts, " ")
 }

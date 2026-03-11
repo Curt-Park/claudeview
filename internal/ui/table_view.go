@@ -161,6 +161,11 @@ func (t *TableView) nudgeSkip(dir int) {
 	t.Selected = max(0, min(n-1, t.Selected))
 }
 
+// EnsureVisible scrolls Offset so Selected is within the viewport.
+func (t *TableView) EnsureVisible() {
+	t.ensureVisible()
+}
+
 func (t *TableView) ensureVisible() {
 	rows := t.filteredRows()
 	dr := t.dataRows()
@@ -206,6 +211,11 @@ func (t *TableView) Update(msg tea.Msg) (bool, tea.Cmd) {
 		}
 	}
 	return false, nil
+}
+
+// FilteredRows returns rows matching the current filter (case-insensitive).
+func (t TableView) FilteredRows() []Row {
+	return t.filteredRows()
 }
 
 // filteredRows returns rows matching the current filter (case-insensitive).

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -11,44 +10,120 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
-func subagentIcon(t model.AgentType) string {
-	switch t {
-	case model.AgentTypeExplore:
-		return "🔍"
-	case model.AgentTypePlan:
-		return "📋"
-	case model.AgentTypeBash:
-		return "💻"
-	default:
-		return "⚙️"
+// renderTurnBoundary renders a lightweight API-call boundary marker shown between
+// ExtraTurns in both Claude and sub-agent detail views:
+//
+//	── sonnet  06:14  300 tok ──
+func renderTurnBoundary(t model.Turn, width int) string {
+	var parts []string
+	if m := model.ShortModelName(t.ModelName); m != "" {
+		parts = append(parts, StyleDim.Render(m))
 	}
+	if !t.Timestamp.IsZero() {
+		parts = append(parts, StyleChatTimestamp.Render(t.Timestamp.Format("15:04")))
+	}
+	if t.InputTokens > 0 || t.OutputTokens > 0 {
+		parts = append(parts, StyleChatTokens.Render(model.FormatTokenInOut(t.InputTokens, t.OutputTokens)+" tok"))
+	}
+	inner := strings.Join(parts, "  ")
+	if inner == "" {
+		return StyleChatThinking.Render("────────────")
+	}
+	return StyleChatThinking.Render("── " + inner + " ──")
 }
 
 // RenderChatItemDetail renders the detail view for a selected ChatItem.
-// For subagent items, it renders the primary turn plus all ExtraTurns (the full transcript).
-// For regular items (user, assistant, divider), it renders a single item.
+// Shows the message text (thinking + text) and inline one-line tool call
+// summaries across all turns.
 func RenderChatItemDetail(items []ChatItem, selectedIdx, width int) string {
 	if selectedIdx < 0 || selectedIdx >= len(items) {
 		return ""
 	}
 	sel := items[selectedIdx]
+	var lines []string
 
-	// Subagent: render primary turn + all extra turns as full transcript.
-	if sel.IsSubagent {
-		var allLines []string
-		allLines = append(allLines, renderChatItem(ChatItem{
-			Turn: sel.Turn, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
-		}, width)...)
-		for _, et := range sel.ExtraTurns {
-			allLines = append(allLines, "") // blank line between turns
-			allLines = append(allLines, renderChatItem(ChatItem{
-				Turn: et, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
-			}, width)...)
+	// Header: WHO · model · time · tokens
+	lines = append(lines, renderChatItemHeader(sel))
+
+	// Render thinking, text, and tool call summaries for a single turn.
+	renderTurn := func(t model.Turn) {
+		if t.Thinking != "" {
+			lines = append(lines, "")
+			lines = append(lines, StyleChatThinking.Render("── thinking ──"))
+			lines = append(lines, ansi.Wrap(t.Thinking, width, ""))
 		}
-		return strings.Join(allLines, "\n")
+		if t.Text != "" {
+			lines = append(lines, "")
+			lines = append(lines, ansi.Wrap(t.Text, width, ""))
+		}
+		for _, tc := range t.ToolCalls {
+			lines = append(lines, renderToolCallOneliner(tc, width))
+		}
 	}
 
-	return strings.Join(renderChatItem(sel, width), "\n")
+	renderTurn(sel.Turn)
+	for _, et := range sel.ExtraTurns {
+		if et.Thinking == "" && et.Text == "" && len(et.ToolCalls) == 0 {
+			continue
+		}
+		lines = append(lines, "")
+		lines = append(lines, renderTurnBoundary(et, width))
+		renderTurn(et)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderToolCallOneliner renders a tool call as a single compact summary line:
+//
+//	▸ NAME  input-summary  ✓/✗  duration
+func renderToolCallOneliner(tc *model.ToolCall, maxWidth int) string {
+	var statusStr string
+	if tc.IsError {
+		statusStr = StyleChatToolErr.Render("✗")
+	} else {
+		statusStr = StyleChatToolOK.Render("✓")
+	}
+
+	parts := []string{StyleChatToolName.Render("▸ " + tc.Name)}
+	if s := tc.InputSummary(); s != "" {
+		parts = append(parts, StyleDim.Render(s))
+	}
+	parts = append(parts, statusStr)
+	if tc.Duration > 0 {
+		parts = append(parts, StyleChatTimestamp.Render(tc.DurationString()))
+	}
+	line := "  " + strings.Join(parts, "  ")
+	return ansi.Wrap(line, maxWidth, "")
+}
+
+// renderChatItemHeader builds the "WHO · model · time · tokens" header line.
+func renderChatItemHeader(item ChatItem) string {
+	turn := item.Turn
+	var parts []string
+	if item.IsSubagent {
+		parts = append(parts, StyleChatHeader.Render(item.AgentType.Icon()+" "+item.AgentType.DisplayLabel()))
+	} else if turn.Role == "user" {
+		parts = append(parts, StyleChatHeader.Render("You"))
+	} else {
+		parts = append(parts, StyleChatHeader.Render("Claude"))
+	}
+	if m := model.ShortModelName(turn.ModelName); m != "" {
+		parts = append(parts, StyleDim.Render(m))
+	}
+	if !turn.Timestamp.IsZero() {
+		parts = append(parts, StyleChatTimestamp.Render(turn.Timestamp.Format("15:04")))
+	}
+	totalIn := turn.InputTokens
+	totalOut := turn.OutputTokens
+	for _, et := range item.ExtraTurns {
+		totalIn += et.InputTokens
+		totalOut += et.OutputTokens
+	}
+	if totalIn > 0 || totalOut > 0 {
+		parts = append(parts, StyleChatTokens.Render(model.FormatTokenInOut(totalIn, totalOut)+" tok"))
+	}
+	return strings.Join(parts, "  ")
 }
 
 // ChatItemKey returns a unique fingerprint for a ChatItem, used to re-resolve
@@ -68,98 +143,46 @@ func ChatItemKey(item ChatItem) string {
 	return key
 }
 
-// renderChatItem renders a single ChatItem as flat text lines.
-func renderChatItem(item ChatItem, width int) []string {
-	turn := item.Turn
-
-	// Build header: WHO · model · time · tokens
-	var headerParts []string
-	if item.IsSubagent {
-		icon := subagentIcon(item.AgentType)
-		headerParts = append(headerParts, StyleChatHeader.Render(icon+" "+agentDisplayName(item.AgentType)))
-	} else if turn.Role == "user" {
-		headerParts = append(headerParts, StyleChatHeader.Render("You"))
-	} else {
-		headerParts = append(headerParts, StyleChatHeader.Render("Claude"))
-	}
+// renderExpandedToolCall renders a tool call in two-line Option-1 style:
+//
+//	▸ NAME  model  duration
+//	    input summary  ✓/✗
+//	    result...
+func renderExpandedToolCall(tc *model.ToolCall, turn model.Turn, maxWidth int) string {
+	// Line 1: name + model + duration + tokens
+	headerParts := []string{StyleChatToolName.Render("▸ " + tc.Name)}
 	if m := model.ShortModelName(turn.ModelName); m != "" {
 		headerParts = append(headerParts, StyleDim.Render(m))
 	}
-	if !turn.Timestamp.IsZero() {
-		headerParts = append(headerParts, StyleChatTimestamp.Render(turn.Timestamp.Format("15:04")))
+	if tc.Duration > 0 {
+		headerParts = append(headerParts, StyleChatTimestamp.Render(tc.DurationString()))
 	}
-	totalTok := turn.InputTokens + turn.OutputTokens
-	for _, et := range item.ExtraTurns {
-		totalTok += et.InputTokens + et.OutputTokens
+	if turn.InputTokens > 0 || turn.OutputTokens > 0 {
+		headerParts = append(headerParts, StyleChatTokens.Render(model.FormatTokenInOut(turn.InputTokens, turn.OutputTokens)+" tok"))
 	}
-	if totalTok > 0 {
-		headerParts = append(headerParts, StyleChatTokens.Render(model.FormatTokenCount(totalTok)+" tok"))
-	}
+	headerLine := "  " + strings.Join(headerParts, "  ")
 
-	var parts []string
-	parts = append(parts, strings.Join(headerParts, "  "))
-
-	// Primary turn: thinking → text → tool calls
-	if turn.Thinking != "" {
-		parts = append(parts, "")
-		parts = append(parts, StyleChatThinking.Render("── thinking ──"))
-		parts = append(parts, ansi.Wrap(turn.Thinking, width, ""))
-	}
-
-	if turn.Text != "" {
-		parts = append(parts, "")
-		parts = append(parts, ansi.Wrap(turn.Text, width, ""))
-	}
-
-	for _, tc := range turn.ToolCalls {
-		parts = append(parts, "")
-		parts = append(parts, renderExpandedToolCall(tc, width))
-	}
-
-	// ExtraTurns: separator + thinking + text + tool calls for each grouped turn
-	for _, et := range item.ExtraTurns {
-		parts = append(parts, "")
-		if et.Thinking != "" {
-			parts = append(parts, StyleChatThinking.Render("── thinking ──"))
-			parts = append(parts, ansi.Wrap(et.Thinking, width, ""))
-		}
-		if et.Text != "" {
-			parts = append(parts, ansi.Wrap(et.Text, width, ""))
-		}
-		for _, tc := range et.ToolCalls {
-			parts = append(parts, "")
-			parts = append(parts, renderExpandedToolCall(tc, width))
-		}
-	}
-
-	return parts
-}
-
-// renderExpandedToolCall renders a tool call with full input and result.
-func renderExpandedToolCall(tc *model.ToolCall, maxWidth int) string {
-	name := StyleChatToolName.Render("▸ " + tc.Name)
-	inputFull := tc.InputSummary()
-
+	// Line 2 (indented): input summary + status
 	var statusStr string
 	if tc.IsError {
 		statusStr = StyleChatToolErr.Render("✗ error")
 	} else {
 		statusStr = StyleChatToolOK.Render("✓")
 	}
-
-	durationStr := ""
-	if tc.Duration > 0 {
-		durationStr = " " + StyleChatTimestamp.Render(tc.DurationString())
+	inputFull := tc.InputSummary()
+	inputLine := "    "
+	if inputFull != "" {
+		inputLine += ansi.Wrap(StyleDim.Render(inputFull)+"  "+statusStr, maxWidth-4, "")
+	} else {
+		inputLine += statusStr
 	}
-
-	headerLine := "  " + name + "  " + StyleDim.Render(inputFull) + "  " + statusStr + durationStr
 
 	var lines []string
 	lines = append(lines, ansi.Wrap(headerLine, maxWidth, ""))
+	lines = append(lines, inputLine)
 
-	// Show full result content
-	resultStr := expandResult(tc)
-	if resultStr != "" {
+	// Result lines (indented)
+	if resultStr := expandResult(tc); resultStr != "" {
 		indent := "    "
 		contentWidth := maxWidth - len(indent)
 		if contentWidth < 20 {
@@ -175,39 +198,15 @@ func renderExpandedToolCall(tc *model.ToolCall, maxWidth int) string {
 
 // expandResult extracts the full result text from a tool call.
 func expandResult(tc *model.ToolCall) string {
-	if tc.Result == nil {
-		return ""
-	}
-	// Try string result
-	var s string
-	if err := json.Unmarshal(tc.Result, &s); err == nil {
-		lines := capLines(strings.Split(s, "\n"), 30)
-		return strings.Join(lines, "\n")
-	}
-	// Try array of content blocks
-	var arr []map[string]any
-	if err := json.Unmarshal(tc.Result, &arr); err == nil {
-		var texts []string
-		for _, block := range arr {
-			if text, ok := block["text"].(string); ok {
-				texts = append(texts, text)
-			}
-		}
-		if len(texts) > 0 {
-			result := strings.Join(texts, "\n")
-			lines := capLines(strings.Split(result, "\n"), 30)
-			return strings.Join(lines, "\n")
-		}
-	}
-	return ""
+	return tc.ResultText()
 }
 
-// capLines truncates a slice of lines, appending a summary if it exceeds max.
-func capLines(lines []string, max int) []string {
-	if len(lines) > max {
-		return append(lines[:max], fmt.Sprintf("... (%d more lines)", len(lines)-max))
+// RenderToolCallDetail renders the full detail view for a single tool call.
+func RenderToolCallDetail(tr *ToolCallRow, width int) string {
+	if tr == nil {
+		return ""
 	}
-	return lines
+	return renderExpandedToolCall(tr.ToolCall, tr.ParentTurn, width)
 }
 
 // RenderPluginItemDetail renders the content of a selected plugin item.

@@ -7,19 +7,28 @@ import (
 	"strings"
 
 	"github.com/Curt-Park/claudeview/internal/model"
+	"github.com/Curt-Park/claudeview/internal/stringutil"
 )
+
+// ToolCallRow is the Data payload for an expanded tool-call sub-row in the history table.
+type ToolCallRow struct {
+	ToolCall    *model.ToolCall
+	ParentTurn  model.Turn
+	ChatItemKey string // key of the parent ChatItem
+}
 
 // ChatItem represents a single selectable item in the chat table.
 // It wraps a Turn with metadata about whether it's from a subagent.
 // ExtraTurns holds subsequent tool-only assistant turns grouped under this item.
 type ChatItem struct {
-	Turn         model.Turn
-	ExtraTurns   []model.Turn // subsequent tool-only turns merged into this group
-	IsSubagent   bool
-	AgentType    model.AgentType
-	SubagentIdx  int // index into subagentTurns; -1 for non-subagent items
-	IsDivider    bool
-	DividerLabel string
+	Turn          model.Turn
+	ExtraTurns    []model.Turn // subsequent tool-only turns merged into this group
+	IsSubagent    bool
+	AgentType     model.AgentType
+	SubagentIdx   int // index into subagentTurns; -1 for non-subagent items
+	IsDivider     bool
+	DividerLabel  string
+	TreeConnector string // "├─", "└─", or "" for non-sub-agent items
 }
 
 // AllToolCalls collects tool calls from the primary Turn and all ExtraTurns.
@@ -32,28 +41,17 @@ func (c ChatItem) AllToolCalls() []*model.ToolCall {
 	return all
 }
 
-func agentDisplayName(t model.AgentType) string {
-	switch t {
-	case model.AgentTypeExplore:
-		return "Explorer"
-	case model.AgentTypePlan:
-		return "Planner"
-	case model.AgentTypeBash:
-		return "Bash"
-	case model.AgentTypeGeneral:
-		return "General"
-	default:
-		return "Agent"
-	}
-}
-
 // WhoLabel returns a short label for the message author.
 func (c ChatItem) WhoLabel() string {
 	if c.IsDivider {
 		return ""
 	}
 	if c.IsSubagent {
-		return agentDisplayName(c.AgentType)
+		name := c.AgentType.DisplayLabel()
+		if c.TreeConnector != "" {
+			return c.TreeConnector + " " + name
+		}
+		return name
 	}
 	switch c.Turn.Role {
 	case "user":
@@ -93,9 +91,18 @@ func (c ChatItem) MessagePreview(max int) string {
 		}
 	}
 
-	// Add first tool call with its input summary
-	if allTC := c.AllToolCalls(); len(allTC) > 0 {
-		tc := allTC[0]
+	// Add first non-agent tool call with its input summary.
+	// Agent/Task calls are omitted: their details live in the sub-agent rows.
+	allTC := c.AllToolCalls()
+	var firstNonAgent *model.ToolCall
+	for _, tc := range allTC {
+		if tc.Name != "Agent" && tc.Name != "Task" {
+			firstNonAgent = tc
+			break
+		}
+	}
+	if firstNonAgent != nil {
+		tc := firstNonAgent
 		toolStr := "▸ " + tc.Name
 		if summary := tc.InputSummary(); summary != "" {
 			toolStr += " " + summary
@@ -121,22 +128,45 @@ func cleanTextPreview(text string) string {
 	// Prefer <command-name> (includes / prefix) when present.
 	switch {
 	case strings.HasPrefix(text, "<command-message>"):
-		if name := extractXMLContent(text, "command-name"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-name"); name != "" {
 			return name
 		}
-		if name := extractXMLContent(text, "command-message"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-message"); name != "" {
 			return "/" + name
 		}
 	case strings.HasPrefix(text, "<command-name>"):
-		if name := extractXMLContent(text, "command-name"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-name"); name != "" {
 			return name
 		}
 	case strings.HasPrefix(text, "Base directory for this skill:"):
+		// Show the skill name (last path component from the first line).
+		firstLine := text
+		if idx := strings.IndexByte(text, '\n'); idx >= 0 {
+			firstLine = text[:idx]
+		}
+		firstLine = strings.TrimPrefix(firstLine, "Base directory for this skill:")
+		firstLine = strings.TrimSpace(firstLine)
+		if lastSlash := strings.LastIndexByte(firstLine, '/'); lastSlash >= 0 {
+			firstLine = firstLine[lastSlash+1:]
+		}
+		if firstLine != "" {
+			return "(skill) " + firstLine
+		}
 		return "(skill loaded)"
 	case strings.HasPrefix(text, "<local-command-caveat>"),
 		strings.HasPrefix(text, "<local-command-stdout>"),
 		strings.HasPrefix(text, "<local-command-stderr>"):
+		// Extract and show the actual command output content.
+		for _, tag := range []string{"local-command-stdout", "local-command-stderr", "local-command-caveat"} {
+			if content := stringutil.ExtractXMLTag(text, tag); content != "" {
+				return strings.Join(strings.Fields(content), " ")
+			}
+		}
 		return "(command output)"
+	case strings.HasPrefix(text, "[Image"):
+		// Extract filenames from one or more "[Image: source: /path]" entries.
+		// Uses only the last path component to keep the preview short.
+		return extractImagePreviews(text)
 	}
 
 	// Collapse newlines into spaces so the preview shows as much context as
@@ -145,16 +175,55 @@ func cleanTextPreview(text string) string {
 	return line
 }
 
-// extractXMLContent returns the trimmed text inside the first <tag>…</tag> in s.
-func extractXMLContent(s, tag string) string {
-	open := "<" + tag + ">"
-	close := "</" + tag + ">"
-	start := strings.Index(s, open)
-	end := strings.Index(s, close)
-	if start >= 0 && end > start+len(open) {
-		return strings.TrimSpace(s[start+len(open) : end])
+// extractImagePreviews collects the filename from every "[Image: source: /path]"
+// pattern in text and joins them as "[img: name1, name2]".
+func extractImagePreviews(text string) string {
+	var names []string
+	rest := text
+	for {
+		start := strings.Index(rest, "[Image")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(rest[start:], "]")
+		if end < 0 {
+			break
+		}
+		chunk := rest[start : start+end+1] // e.g. "[Image: source: /path/file.png]"
+		// Extract the path after the last colon+space.
+		if colonIdx := strings.LastIndex(chunk, ": "); colonIdx >= 0 {
+			pathStr := strings.TrimSpace(chunk[colonIdx+2 : len(chunk)-1])
+			if slash := strings.LastIndexByte(pathStr, '/'); slash >= 0 {
+				pathStr = pathStr[slash+1:]
+			}
+			// Strip non-ASCII characters (e.g. Korean chars in screenshot
+			// filenames) to avoid terminal width/alignment issues.
+			pathStr = asciiOnly(pathStr)
+			if pathStr != "" {
+				names = append(names, pathStr)
+			}
+		}
+		rest = rest[start+end+1:]
 	}
-	return ""
+	if len(names) == 0 {
+		return "[img]"
+	}
+	return "[img: " + strings.Join(names, ", ") + "]"
+}
+
+// asciiOnly returns s with every non-printable-ASCII rune replaced by a space,
+// then collapses runs of spaces so width calculations stay reliable across
+// terminals and font configurations.
+func asciiOnly(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 0x20 && r <= 0x7e {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte(' ')
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 // ActionLabel returns the first tool name + "+N" count, or "-".
@@ -206,12 +275,16 @@ func (c ChatItem) ModelTokenLabel() string {
 	if c.IsDivider {
 		return ""
 	}
-	byModel := make(map[string]int)
+	type tokenPair struct{ in, out int }
+	byModel := make(map[string]tokenPair)
 	addTurn := func(t model.Turn) {
 		if t.ModelName == "" {
 			return
 		}
-		byModel[t.ModelName] += t.InputTokens + t.OutputTokens
+		p := byModel[t.ModelName]
+		p.in += t.InputTokens
+		p.out += t.OutputTokens
+		byModel[t.ModelName] = p
 	}
 	addTurn(c.Turn)
 	for _, et := range c.ExtraTurns {
@@ -227,7 +300,8 @@ func (c ChatItem) ModelTokenLabel() string {
 	sort.Strings(models)
 	var parts []string
 	for _, m := range models {
-		parts = append(parts, model.ShortModelName(m)+":"+model.FormatTokenCount(byModel[m]))
+		p := byModel[m]
+		parts = append(parts, model.ShortModelName(m)+":"+model.FormatTokenInOut(p.in, p.out))
 	}
 	return strings.Join(parts, " ")
 }
@@ -261,12 +335,26 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 	// interleaveSubagents appends one collapsed ChatItem per subagent for each Agent/Task tool call.
 	// The first assistant turn becomes the primary Turn; remaining assistant turns go into ExtraTurns.
 	interleaveSubagents := func(toolCalls []*model.ToolCall) {
+		// Pre-count eligible agent calls in this batch.
+		batchSize := 0
+		for _, tc := range toolCalls {
+			if (tc.Name == "Task" || tc.Name == "Agent") && subIdx+batchSize < len(subagentTurns) {
+				batchSize++
+			}
+		}
+		batchPos := 0
 		for _, tc := range toolCalls {
 			if (tc.Name == "Task" || tc.Name == "Agent") && subIdx < len(subagentTurns) {
 				agentType := model.AgentTypeGeneral
 				if subIdx < len(subagentTypes) {
 					agentType = subagentTypes[subIdx]
 				}
+				connector := "├─"
+				if batchPos == batchSize-1 {
+					connector = "└─"
+				}
+				batchPos++
+
 				// Collect assistant turns, preferring one with text or tool calls as primary.
 				var allAssistant []model.Turn
 				for _, st := range subagentTurns[subIdx] {
@@ -282,24 +370,24 @@ func BuildChatItems(turns []model.Turn, subagentTurns [][]model.Turn, subagentTy
 						if allAssistant[i].Text != "" || len(allAssistant[i].ToolCalls) > 0 {
 							first = &allAssistant[i]
 						} else {
-							extra = append(extra, allAssistant[i]) // content-less leading turns → ExtraTurns
+							extra = append(extra, allAssistant[i])
 						}
 					} else {
 						extra = append(extra, allAssistant[i])
 					}
 				}
-				// Fallback: use the first assistant turn even if content-less.
 				if first == nil && len(allAssistant) > 0 {
 					first = &allAssistant[0]
 					extra = allAssistant[1:]
 				}
 				if first != nil {
 					items = append(items, ChatItem{
-						Turn:        *first,
-						ExtraTurns:  extra,
-						IsSubagent:  true,
-						AgentType:   agentType,
-						SubagentIdx: subIdx,
+						Turn:          *first,
+						ExtraTurns:    extra,
+						IsSubagent:    true,
+						AgentType:     agentType,
+						SubagentIdx:   subIdx,
+						TreeConnector: connector,
 					})
 				}
 				subIdx++
