@@ -8,7 +8,7 @@ var chatColumns = []ui.Column{
 	{Title: "NAME", Width: 18},
 	{Title: "MESSAGE", Width: 30, Flex: true, MaxPercent: 0.50},
 	{Title: "ACTION", Width: 16},
-	{Title: "MODEL:TOKEN", Width: 20, Flex: true, MaxPercent: 0.20},
+	{Title: "MODEL:TOKEN_IN/OUT", Width: 20, Flex: true, MaxPercent: 0.20},
 	{Title: "DURATION", Width: 14},
 }
 
