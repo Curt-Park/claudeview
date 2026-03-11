@@ -15,7 +15,8 @@ Implements the Bubble Tea application model and all reusable chrome components.
 | `app.go`              | `AppModel` — root Bubble Tea model; key events, layout, mode   |
 | `table_view.go`       | `TableView` — scrollable table with filter, selection          |
 | `detail_render.go`    | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail`, `RenderToolCallDetail`, `ChatItemKey` — string renderers and helpers; `renderExpandedToolCall` (two-line tool call layout: name/model/duration/tokens + input + result), `renderTurnBoundary` (lightweight `── model  time  tok ──` separator between ExtraTurns) |
-| `header.go`           | Info panel (5-column layout: info, nav, util, shortcuts, quit) |
+| `header.go`           | Info panel; optional usage bar prepended above (via `UsageLine`); 5-column info layout |
+| `header_test.go`      | 3 tests: `Height()` with multi-line usage, `ViewWithMenu()` usage-first output, no leading newline when empty |
 | `menu.go`             | `MenuModel` — nav/util item lists and key highlight state      |
 | `crumbs.go`           | `CrumbsModel` — breadcrumb trail                               |
 | `flash.go`            | `FlashModel` — ephemeral status/error message                  |
@@ -31,6 +32,7 @@ Implements the Bubble Tea application model and all reusable chrome components.
 - `Resource` — current `model.ResourceType`
 - `Table` — active `TableView`
 - `Info`, `Menu`, `Crumbs`, `Flash`, `Filter` — chrome components
+- `Info.UsageLine string` — pre-rendered usage bar string (empty = hidden); `Height()` adds `strings.Count(UsageLine, "\n") + 1` when non-empty
 - `Width`, `Height` — terminal dimensions
 - `SelectedProjectHash`, `SelectedSessionID`, `SelectedSessionSlug` — drill-down context
 - `SelectedPlugin`, `SelectedPluginItem`, `SelectedMemory` — detail view context
@@ -124,3 +126,5 @@ In addition to base, status, and layout styles, `styles.go` defines:
 - [[model-package]] — `ResourceType` constants and data types
 - [[test-suite]] — AppModel integration tests
 - [[stringutil-package]] — `ExtractXMLTag` used in `cleanTextPreview`
+- [[usage-package]] — provides `UsageLine` string rendered above the info panel
+- [[lipgloss-bg-convention]] — background layering rule for multi-segment rows

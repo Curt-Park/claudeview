@@ -21,6 +21,7 @@ Generates synthetic data for `--demo` mode. Allows claudeview to be run and demo
 - `GenerateProjects() []*model.Project` — returns a fixed set of synthetic projects with sessions and agents
 - `GeneratePlugins() []*model.Plugin` — returns synthetic plugin entries
 - `GenerateMemories() []*model.Memory` — returns synthetic memory entries
+- `GenerateUsage() *usage.Data` — returns synthetic usage data for `--demo` mode (5h: 8%, resets in ~4h9m; 7d: 68%, resets in ~1d2h). Called by `cmd/root.go` to set initial `usageData`, bypassing the HTTP fetch.
 
 ## Usage
 
@@ -35,3 +36,4 @@ This package has no test files. Its correctness is validated visually via `make 
 - [[cmd-package]] — calls `demo.NewProvider()` to wire the demo `DataProvider`
 - [[model-package]] — returns types from `internal/model`
 - [[architecture]] — demo package role in the data flow
+- [[usage-package]] — `GenerateUsage()` provides synthetic `*usage.Data` for demo mode

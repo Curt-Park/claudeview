@@ -16,6 +16,10 @@ claudeview is a k9s-style terminal dashboard for Claude Code sessions. The UI co
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
+│ USAGE BAR (0–3 rows, hidden when no credentials)                            │
+│  5h [████░░░░░░░░] 31%   reset in 2h 12m                                   │
+│  7d [████████░░░░] 38%   reset in 1d 17h                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
 │ INFO PANEL (5 rows min)                                                      │
 │  col0: info   │  col1: nav cmds   │  col2: util cmds  │  col3: shortcuts    │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -32,7 +36,7 @@ claudeview is a k9s-style terminal dashboard for Claude Code sessions. The UI co
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Chrome rows**: 5+ (info) + 1 (title) + 1 (crumbs) + 1 (status) = **8+ rows**
+**Chrome rows**: 0–3 (usage) + 5+ (info) + 1 (title) + 1 (crumbs) + 1 (status) = **8+ rows**
 **Content height**: `terminal_height - chrome` (min 5), computed dynamically
 
 ---
@@ -56,7 +60,7 @@ claudeview:   <value>   <enter> (context)
 - **Col 3**: p/m jump shortcuts (context-sensitive)
 - **Col 4**: `ctrl+c quit` (first row only)
 
-Panel height: `max(5, 1 + max(navCount, utilCount))`
+Panel height: `base = max(5, 1+max(navCount, actionCount, utilCount))`; when `UsageLine != ""`: `base + strings.Count(UsageLine, "\n") + 1`
 
 ### Context-Dependent Values
 

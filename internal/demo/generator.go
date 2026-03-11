@@ -6,7 +6,18 @@ import (
 	"time"
 
 	"github.com/Curt-Park/claudeview/internal/model"
+	"github.com/Curt-Park/claudeview/internal/usage"
 )
+
+// GenerateUsage returns synthetic usage data for demo mode.
+func GenerateUsage() *usage.Data {
+	resetsAt5h := time.Now().Add(4*time.Hour + 9*time.Minute)
+	resetsAt7d := time.Now().Add(24*time.Hour + 2*time.Hour)
+	return &usage.Data{
+		FiveHour: &usage.Window{Utilization: 8.0, ResetsAt: &resetsAt5h},
+		SevenDay: &usage.Window{Utilization: 68.0, ResetsAt: &resetsAt7d},
+	}
+}
 
 // GenerateMemories creates synthetic demo memory files.
 func GenerateMemories() []*model.Memory {

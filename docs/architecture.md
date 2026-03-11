@@ -39,6 +39,7 @@ main.go
 | `internal/demo`      | Synthetic demo data generator + `DataProvider` implementation   |
 | `internal/provider`  | Live `DataProvider` implementation (reads `~/.claude/`)         |
 | `internal/parallel`  | Generic `Map[T,R]` concurrent helper (errgroup-backed)          |
+| `internal/usage`     | OAuth token reader, HTTP usage client (60s TTL cache + stale fallback), progress bar renderer |
 
 ## DataProvider Interface
 
@@ -87,6 +88,7 @@ memories → memory-detail  (requires project context)
 - [[demo-package]] — synthetic demo data generator and DataProvider
 - [[provider-package]] — live DataProvider implementation
 - [[parallel-package]] — generic concurrent map helper
+- [[usage-package]] — OAuth usage monitoring and progress bar renderer
 - [[streaming-dedup-convention]] — JSONL streaming dedup convention for the transcript parser
 - [[test-suite]] — test coverage
 - [[ui-spec]] — UI behavior specification

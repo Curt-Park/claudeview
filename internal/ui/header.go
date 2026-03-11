@@ -18,13 +18,18 @@ type InfoModel struct {
 	Width          int
 	MemoriesActive bool               // whether <m> memories jump is available
 	Resource       model.ResourceType // current active resource (hides its own jump hint)
+	UsageLine      string             // rendered usage bar (empty = hidden)
 }
 
 // Height returns the number of terminal lines rendered by ViewWithMenu.
 // navCount, actionCount, and utilCount are the number of items in each menu column.
 // Minimum is 5 (1 project row + 4 data rows); expands if more items are needed.
 func (info InfoModel) Height(navCount, actionCount, utilCount int) int {
-	return max(5, 1+max(navCount, max(actionCount, utilCount)))
+	base := max(5, 1+max(navCount, max(actionCount, utilCount)))
+	if info.UsageLine != "" {
+		return base + strings.Count(info.UsageLine, "\n") + 1 // +1 for the joining newline
+	}
+	return base
 }
 
 // ViewWithMenu renders the info panel with a 6-column layout:
@@ -162,7 +167,11 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 		lines = append(lines, leftPart+leftPadding+nav+navPad+action+actionPad+util+utilPad+right+rightPad+quit)
 	}
 
-	return strings.Join(lines, "\n")
+	result := strings.Join(lines, "\n")
+	if info.UsageLine != "" {
+		return info.UsageLine + "\n" + result
+	}
+	return result
 }
 
 // menuMaxKeyW returns the max rendered width of "<key>" across all items.
