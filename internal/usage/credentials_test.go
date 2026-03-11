@@ -16,9 +16,14 @@ func TestReadToken(t *testing.T) {
 			"accessToken": "test-token-abc",
 		},
 	}
-	data, _ := json.Marshal(creds)
+	data, err := json.Marshal(creds)
+	if err != nil {
+		t.Fatalf("failed to marshal creds: %v", err)
+	}
 	path := filepath.Join(dir, ".credentials.json")
-	os.WriteFile(path, data, 0600)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("failed to write credentials file: %v", err)
+	}
 
 	token, err := usage.ReadToken(path)
 	if err != nil {
@@ -39,11 +44,30 @@ func TestReadTokenMissingFile(t *testing.T) {
 func TestReadTokenEmptyToken(t *testing.T) {
 	dir := t.TempDir()
 	creds := map[string]any{"claudeAiOauth": map[string]any{"accessToken": ""}}
-	data, _ := json.Marshal(creds)
-	os.WriteFile(filepath.Join(dir, ".credentials.json"), data, 0600)
+	data, err := json.Marshal(creds)
+	if err != nil {
+		t.Fatalf("failed to marshal creds: %v", err)
+	}
+	path := filepath.Join(dir, ".credentials.json")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("failed to write credentials file: %v", err)
+	}
 
-	_, err := usage.ReadToken(filepath.Join(dir, ".credentials.json"))
+	_, err = usage.ReadToken(path)
 	if err == nil {
 		t.Fatal("expected error for empty token")
+	}
+}
+
+func TestReadTokenMalformedJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".credentials.json")
+	if err := os.WriteFile(path, []byte("{bad json"), 0600); err != nil {
+		t.Fatalf("failed to write credentials file: %v", err)
+	}
+
+	_, err := usage.ReadToken(path)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
 	}
 }
