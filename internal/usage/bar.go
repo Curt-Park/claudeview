@@ -90,7 +90,7 @@ func renderProgressRow(label string, w *Window, stale bool, labelW, barW, width 
 	labelPad := strings.Repeat(" ", labelW-lipgloss.Width(label))
 	dimStyle := lipgloss.NewStyle().Foreground(colorDim).Background(colorBg)
 	bgStyle := lipgloss.NewStyle().Background(colorBg)
-	content := barStyle.Render(label) + labelPad + " [" + bar + "] " + barStyle.Render(pctStr) + dimStyle.Render(resetStr)
+	content := barStyle.Render(label) + bgStyle.Render(labelPad+" [") + bar + bgStyle.Render("] ") + barStyle.Render(pctStr) + dimStyle.Render(resetStr)
 	return bgStyle.Width(width).Render(content)
 }
 
