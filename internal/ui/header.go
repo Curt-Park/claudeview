@@ -169,7 +169,7 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 
 	result := strings.Join(lines, "\n")
 	if info.UsageLine != "" {
-		sep := lipgloss.NewStyle().Foreground(colorGray).Render(strings.Repeat("─", info.Width))
+		sep := lipgloss.NewStyle().Foreground(colorGray).Background(colorDimGray).Width(info.Width).Render("")
 		return info.UsageLine + "\n" + sep + "\n" + result
 	}
 	return result

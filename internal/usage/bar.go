@@ -12,8 +12,9 @@ var (
 	colorNormal   = lipgloss.Color("82")
 	colorWarning  = lipgloss.Color("214")
 	colorCritical = lipgloss.Color("196")
-	colorEmpty    = lipgloss.Color("238")
+	colorEmpty    = lipgloss.Color("240") // slightly lighter than bg so ░ cells are visible
 	colorDim      = lipgloss.Color("243")
+	colorBg       = lipgloss.Color("238") // matches StyleCrumbs background
 )
 
 // RenderBar renders a 2-line (or 3-line if SevenDayOpus is set) progress bar panel.
@@ -35,13 +36,13 @@ func RenderBar(data *Data, stale bool, width int) string {
 
 	var rows []string
 	if w := data.FiveHour; w != nil {
-		rows = append(rows, renderProgressRow("5h", w, stale, labelW, barW))
+		rows = append(rows, renderProgressRow("5h", w, stale, labelW, barW, width))
 	}
 	if w := data.SevenDay; w != nil {
-		rows = append(rows, renderProgressRow("7d", w, stale, labelW, barW))
+		rows = append(rows, renderProgressRow("7d", w, stale, labelW, barW, width))
 	}
 	if w := data.SevenDayOpus; w != nil {
-		rows = append(rows, renderProgressRow("opus", w, stale, labelW, barW))
+		rows = append(rows, renderProgressRow("opus", w, stale, labelW, barW, width))
 	}
 
 	if len(rows) == 0 {
@@ -50,7 +51,7 @@ func RenderBar(data *Data, stale bool, width int) string {
 	return strings.Join(rows, "\n")
 }
 
-func renderProgressRow(label string, w *Window, stale bool, labelW, barW int) string {
+func renderProgressRow(label string, w *Window, stale bool, labelW, barW, width int) string {
 	pct := w.Utilization
 	if pct < 0 {
 		pct = 0
@@ -87,8 +88,10 @@ func renderProgressRow(label string, w *Window, stale bool, labelW, barW int) st
 	}
 
 	labelPad := strings.Repeat(" ", labelW-lipgloss.Width(label))
-	dimStyle := lipgloss.NewStyle().Foreground(colorDim)
-	return barStyle.Render(label) + labelPad + " [" + bar + "] " + barStyle.Render(pctStr) + dimStyle.Render(resetStr)
+	dimStyle := lipgloss.NewStyle().Foreground(colorDim).Background(colorBg)
+	bgStyle := lipgloss.NewStyle().Background(colorBg)
+	content := barStyle.Render(label) + labelPad + " [" + bar + "] " + barStyle.Render(pctStr) + dimStyle.Render(resetStr)
+	return bgStyle.Width(width).Render(content)
 }
 
 func formatCountdown(t time.Time) string {

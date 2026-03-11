@@ -30,9 +30,9 @@ func TestInfoModelViewWithUsageLine(t *testing.T) {
 	if lines[0] != "USAGE_BAR_LINE" {
 		t.Errorf("expected usage line as first line, got %q", lines[0])
 	}
-	// Line 1 (index 1) should be the separator: contains only '─' chars (after stripping ANSI).
-	if !strings.Contains(lines[1], "─") {
-		t.Errorf("expected separator line after usage bar, got %q", lines[1])
+	// Line 1 (index 1) should be the separator: a background-colored blank line.
+	if len(lines) < 3 {
+		t.Errorf("expected at least 3 lines (usage + separator + info), got %d", len(lines))
 	}
 }
 
