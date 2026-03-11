@@ -1,17 +1,20 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/Curt-Park/claudeview/internal/config"
 	"github.com/Curt-Park/claudeview/internal/demo"
@@ -396,18 +399,45 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			freshSlug := refreshSlugGroup(dp, projectHash, sessionID, slugSessions)
 			if len(freshSlug) > 1 {
 				msg.slugGroupSessions = freshSlug
-				for _, s := range freshSlug {
-					turns := dp.GetTurns(s.FilePath)
-					msg.slugGroupTurns = append(msg.slugGroupTurns, turns)
-					var subTurns [][]model.Turn
-					if s.SubagentDir != "" {
-						subInfos, _ := transcript.ScanSubagents(s.SubagentDir)
-						for _, si := range subInfos {
-							subTurns = append(subTurns, dp.GetTurns(si.FilePath))
+				type slugResult struct {
+					turns    []model.Turn
+					subTurns [][]model.Turn
+					subTypes []model.AgentType
+				}
+				slugResults := make([]slugResult, len(freshSlug))
+				g, _ := errgroup.WithContext(context.Background())
+				g.SetLimit(runtime.NumCPU())
+				for i, s := range freshSlug {
+					g.Go(func() error {
+						turns := dp.GetTurns(s.FilePath)
+						var subTurns [][]model.Turn
+						if s.SubagentDir != "" {
+							subInfos, _ := transcript.ScanSubagents(s.SubagentDir)
+							subTurnsLocal := make([][]model.Turn, len(subInfos))
+							sg, _ := errgroup.WithContext(context.Background())
+							sg.SetLimit(runtime.NumCPU())
+							for j, si := range subInfos {
+								sg.Go(func() error {
+									subTurnsLocal[j] = dp.GetTurns(si.FilePath)
+									return nil
+								})
+							}
+							sg.Wait() //nolint:errcheck
+							subTurns = subTurnsLocal
 						}
-					}
-					msg.slugGroupSubTurns = append(msg.slugGroupSubTurns, subTurns)
-					msg.slugGroupSubTypes = append(msg.slugGroupSubTypes, extractSubagentTypes(turns))
+						slugResults[i] = slugResult{
+							turns:    turns,
+							subTurns: subTurns,
+							subTypes: extractSubagentTypes(turns),
+						}
+						return nil
+					})
+				}
+				g.Wait() //nolint:errcheck
+				for _, r := range slugResults {
+					msg.slugGroupTurns = append(msg.slugGroupTurns, r.turns)
+					msg.slugGroupSubTurns = append(msg.slugGroupSubTurns, r.subTurns)
+					msg.slugGroupSubTypes = append(msg.slugGroupSubTypes, r.subTypes)
 				}
 			} else {
 				if sessionFilePath != "" {
@@ -415,9 +445,17 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 				}
 				if subagentDir != "" {
 					subInfos, _ := transcript.ScanSubagents(subagentDir)
-					for _, si := range subInfos {
-						msg.subagentTurns = append(msg.subagentTurns, dp.GetTurns(si.FilePath))
+					subTurns := make([][]model.Turn, len(subInfos))
+					g, _ := errgroup.WithContext(context.Background())
+					g.SetLimit(runtime.NumCPU())
+					for i, si := range subInfos {
+						g.Go(func() error {
+							subTurns[i] = dp.GetTurns(si.FilePath)
+							return nil
+						})
 					}
+					g.Wait() //nolint:errcheck
+					msg.subagentTurns = subTurns
 				}
 				msg.subagentTypes = extractSubagentTypes(msg.turns)
 			}
@@ -544,8 +582,17 @@ func (l *liveDataProvider) GetProjects() []*model.Project {
 			Path:     info.Path,
 			LastSeen: info.LastSeen,
 		}
-		for _, si := range info.Sessions {
-			s := l.sessionFromInfo(si)
+		results := make([]*model.Session, len(info.Sessions))
+		g, _ := errgroup.WithContext(context.Background())
+		g.SetLimit(runtime.NumCPU())
+		for i, si := range info.Sessions {
+			g.Go(func() error {
+				results[i] = l.sessionFromInfo(si)
+				return nil
+			})
+		}
+		g.Wait() //nolint:errcheck
+		for _, s := range results {
 			if s.Topic == "" {
 				continue // skip empty sessions (no user messages yet)
 			}
@@ -566,19 +613,39 @@ func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
 		return []*model.Session{}
 	}
 
-	var sessions []*model.Session
+	type sessionWork struct {
+		si          transcript.SessionInfo
+		projectHash string
+	}
+	var work []sessionWork
 	for _, info := range infos {
 		if l.currentProject != "" && info.Hash != l.currentProject {
 			continue
 		}
 		for _, si := range info.Sessions {
-			s := l.sessionFromInfo(si)
-			if s.Topic == "" {
-				continue // skip empty sessions (no user messages yet)
-			}
-			s.ProjectHash = info.Hash
-			sessions = append(sessions, s)
+			work = append(work, sessionWork{si: si, projectHash: info.Hash})
 		}
+	}
+
+	results := make([]*model.Session, len(work))
+	g, _ := errgroup.WithContext(context.Background())
+	g.SetLimit(runtime.NumCPU())
+	for i, w := range work {
+		g.Go(func() error {
+			s := l.sessionFromInfo(w.si)
+			s.ProjectHash = w.projectHash
+			results[i] = s
+			return nil
+		})
+	}
+	g.Wait() //nolint:errcheck
+
+	var sessions []*model.Session
+	for _, s := range results {
+		if s.Topic == "" {
+			continue // skip empty sessions (no user messages yet)
+		}
+		sessions = append(sessions, s)
 	}
 	return model.GroupSessionsBySlug(sessions)
 }
@@ -715,25 +782,40 @@ func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Ses
 	// Merge subagent token data into session totals
 	if si.SubagentDir != "" {
 		subInfos, _ := transcript.ScanSubagents(si.SubagentDir)
-		for _, sub := range subInfos {
-			l.mu.Lock()
-			subCached := l.aggCache[sub.FilePath]
-			l.mu.Unlock()
+		if len(subInfos) > 0 {
+			subAggs := make([]*transcript.SessionAggregates, len(subInfos))
+			sg, _ := errgroup.WithContext(context.Background())
+			sg.SetLimit(runtime.NumCPU())
+			for i, sub := range subInfos {
+				sg.Go(func() error {
+					l.mu.Lock()
+					subCached := l.aggCache[sub.FilePath]
+					l.mu.Unlock()
 
-			subAgg, err := transcript.ParseAggregatesIncremental(sub.FilePath, subCached)
-			if err != nil {
-				continue
+					subAgg, err := transcript.ParseAggregatesIncremental(sub.FilePath, subCached)
+					if err != nil {
+						return nil
+					}
+
+					l.mu.Lock()
+					l.aggCache[sub.FilePath] = subAgg
+					l.mu.Unlock()
+
+					subAggs[i] = subAgg
+					return nil
+				})
 			}
-
-			l.mu.Lock()
-			l.aggCache[sub.FilePath] = subAgg
-			l.mu.Unlock()
-
-			for m, u := range subAgg.TokensByModel {
-				cur := s.TokensByModel[m]
-				cur.InputTokens += u.InputTokens
-				cur.OutputTokens += u.OutputTokens
-				s.TokensByModel[m] = cur
+			sg.Wait() //nolint:errcheck
+			for _, subAgg := range subAggs {
+				if subAgg == nil {
+					continue
+				}
+				for m, u := range subAgg.TokensByModel {
+					cur := s.TokensByModel[m]
+					cur.InputTokens += u.InputTokens
+					cur.OutputTokens += u.OutputTokens
+					s.TokensByModel[m] = cur
+				}
 			}
 		}
 	}
@@ -796,26 +878,34 @@ func parseAgentsFromSession(s *model.Session) []*model.Agent {
 	if s.SubagentDir != "" {
 		subInfos, err := transcript.ScanSubagents(s.SubagentDir)
 		if err == nil {
+			subAgents := make([]*model.Agent, len(subInfos))
+			g, _ := errgroup.WithContext(context.Background())
+			g.SetLimit(runtime.NumCPU())
 			for i, si := range subInfos {
 				agentType := model.AgentTypeGeneral
 				if i < len(subTypes) {
 					agentType = subTypes[i]
 				}
-				sub := &model.Agent{
-					ID:         si.ID,
-					SessionID:  s.ID,
-					Type:       agentType,
-					Status:     model.StatusDone,
-					FilePath:   si.FilePath,
-					IsSubagent: true,
-					StartTime:  si.ModTime,
-				}
-				// Parse subagent transcript
-				if subParsed, err := transcript.ParseFile(si.FilePath); err == nil {
-					populateToolCalls(sub, s.ID, subParsed)
-				}
-				agents = append(agents, sub)
+				g.Go(func() error {
+					sub := &model.Agent{
+						ID:         si.ID,
+						SessionID:  s.ID,
+						Type:       agentType,
+						Status:     model.StatusDone,
+						FilePath:   si.FilePath,
+						IsSubagent: true,
+						StartTime:  si.ModTime,
+					}
+					// Parse subagent transcript
+					if subParsed, err := transcript.ParseFile(si.FilePath); err == nil {
+						populateToolCalls(sub, s.ID, subParsed)
+					}
+					subAgents[i] = sub
+					return nil
+				})
 			}
+			g.Wait() //nolint:errcheck
+			agents = append(agents, subAgents...)
 		}
 	}
 

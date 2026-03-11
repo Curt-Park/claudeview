@@ -1,11 +1,15 @@
 package transcript
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // ProjectInfo holds metadata about a discovered project directory.
@@ -35,36 +39,58 @@ func ScanProjects(claudeDir string) ([]ProjectInfo, error) {
 		return nil, err
 	}
 
-	var projects []ProjectInfo
+	type dirEntry struct {
+		hash        string
+		projectPath string
+		modTime     time.Time
+	}
+	var dirs []dirEntry
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		hash := e.Name()
-		projectPath := filepath.Join(projectsDir, hash)
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
-
-		sessions, err := scanSessions(projectPath)
-		if err != nil {
-			continue
-		}
-
-		lastSeen := info.ModTime()
-		for _, s := range sessions {
-			if s.ModTime.After(lastSeen) {
-				lastSeen = s.ModTime
-			}
-		}
-
-		projects = append(projects, ProjectInfo{
-			Hash:     hash,
-			Path:     projectPath,
-			Sessions: sessions,
-			LastSeen: lastSeen,
+		dirs = append(dirs, dirEntry{
+			hash:        e.Name(),
+			projectPath: filepath.Join(projectsDir, e.Name()),
+			modTime:     info.ModTime(),
 		})
+	}
+
+	results := make([]ProjectInfo, len(dirs))
+	g, _ := errgroup.WithContext(context.Background())
+	g.SetLimit(runtime.NumCPU())
+	for i, d := range dirs {
+		g.Go(func() error {
+			sessions, err := scanSessions(d.projectPath)
+			if err != nil {
+				return nil
+			}
+			lastSeen := d.modTime
+			for _, s := range sessions {
+				if s.ModTime.After(lastSeen) {
+					lastSeen = s.ModTime
+				}
+			}
+			results[i] = ProjectInfo{
+				Hash:     d.hash,
+				Path:     d.projectPath,
+				Sessions: sessions,
+				LastSeen: lastSeen,
+			}
+			return nil
+		})
+	}
+	g.Wait() //nolint:errcheck
+
+	var projects []ProjectInfo
+	for _, p := range results {
+		if p.Hash != "" {
+			projects = append(projects, p)
+		}
 	}
 
 	// Sort by last activity descending
