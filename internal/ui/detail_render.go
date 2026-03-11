@@ -61,6 +61,12 @@ func RenderChatItemDetail(items []ChatItem, selectedIdx, width int) string {
 		}
 	}
 
+	// When there are multiple API-call turns, show a per-turn boundary marker
+	// before each one (including the primary turn) so tokens are broken down.
+	if len(sel.ExtraTurns) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, renderTurnBoundary(sel.Turn, width))
+	}
 	renderTurn(sel.Turn)
 	for _, et := range sel.ExtraTurns {
 		if et.Thinking == "" && et.Text == "" && len(et.ToolCalls) == 0 {
