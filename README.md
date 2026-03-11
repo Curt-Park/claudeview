@@ -22,21 +22,7 @@ The dashboard follows the k9s model: hierarchical drill-down with vim-style navi
 4. **Live follow mode** — history view streams new turns as they arrive; scroll up to lock position, `G` to re-enable
 5. **Plugin and memory inspection** — jump to plugins (`p`) or memories (`m`) from any view, with state preserved for `esc`-to-restore
 6. **Detail views** — expanded content with thinking blocks, tool call inputs/outputs, and per-model token counts
-
-**Data Model**
-
-claudeview reads directly from Claude Code's local storage:
-
-```
-~/.claude/projects/<hash>/
-├── <session-id>.jsonl              main agent transcript
-└── <session-id>/subagents/
-    └── agent-<id>.jsonl            subagent transcripts
-~/.claude/plugins/                  plugin metadata
-~/.claude/settings.json             MCP server config
-```
-
-Transcript parsing is incremental and offset-based — only new bytes are read on each tick, keeping the dashboard responsive even with large session files.
+7. **Usage monitor** — `█░` progress bars for 5-hour and 7-day Claude Max token windows with reset countdowns, shown above the info panel; hidden automatically when no credentials are found
 
 **Getting Started**
 
@@ -59,6 +45,21 @@ Then run `claudeview` to start on the projects view, or `claudeview --demo` with
 ```bash
 claudeview --update
 ```
+
+**Data Model**
+
+claudeview reads directly from Claude Code's local storage:
+
+```
+~/.claude/projects/<hash>/
+├── <session-id>.jsonl              main agent transcript
+└── <session-id>/subagents/
+    └── agent-<id>.jsonl            subagent transcripts
+~/.claude/plugins/                  plugin metadata
+~/.claude/settings.json             MCP server config
+```
+
+Transcript parsing is incremental and offset-based — only new bytes are read on each tick, keeping the dashboard responsive even with large session files.
 
 **Development**
 
