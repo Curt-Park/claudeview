@@ -325,6 +325,14 @@ func expandResult(tc *model.ToolCall) string {
 	return ""
 }
 
+// RenderToolCallDetail renders the full detail view for a single tool call.
+func RenderToolCallDetail(tr *ToolCallRow, width int) string {
+	if tr == nil {
+		return ""
+	}
+	return renderExpandedToolCall(tr.ToolCall, tr.ParentTurn, width)
+}
+
 // RenderPluginItemDetail renders the content of a selected plugin item.
 func RenderPluginItemDetail(item *model.PluginItem, width int) string {
 	if item == nil {

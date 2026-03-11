@@ -103,7 +103,7 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 	case model.ResourceMemory:
 		items = append(items, MenuItem{Key: "enter", Desc: "detail"})
 	case model.ResourceHistory:
-		items = append(items, MenuItem{Key: "enter", Desc: "expand"})
+		items = append(items, MenuItem{Key: "enter", Desc: "expand/collapse"})
 	}
 	if hasFilter {
 		items = append(items, MenuItem{Key: "esc", Desc: "clear filter"})
@@ -117,7 +117,7 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
 		case model.ResourcePluginDetail, model.ResourcePluginItemDetail, model.ResourceMemoryDetail:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
-		case model.ResourceHistoryDetail:
+		case model.ResourceHistoryDetail, model.ResourceToolCallDetail:
 			items = append(items, MenuItem{Key: "esc", Desc: "back"})
 			// ResourceProjects: no esc (root level)
 		}
@@ -130,8 +130,15 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 // so the filter key is omitted.
 func TableUtilItems(rt model.ResourceType) []MenuItem {
 	switch rt {
-	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail, model.ResourceHistoryDetail:
+	case model.ResourceMemoryDetail, model.ResourcePluginItemDetail, model.ResourceHistoryDetail,
+		model.ResourceToolCallDetail:
 		return nil
+	}
+	if rt == model.ResourceHistory {
+		return []MenuItem{
+			{Key: "/", Desc: "filter"},
+			{Key: "d", Desc: "detail"},
+		}
 	}
 	return []MenuItem{
 		{Key: "/", Desc: "filter"},

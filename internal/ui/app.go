@@ -17,6 +17,10 @@ type TickMsg time.Time
 // RefreshMsg signals data has been refreshed.
 type RefreshMsg struct{}
 
+// SyncViewMsg signals that the chat table needs to be re-synced immediately
+// (e.g. after expand/collapse of a ChatItem's tool call sub-rows).
+type SyncViewMsg struct{}
+
 // HighlightClearMsg clears the menu key highlight after HighlightDuration.
 type HighlightClearMsg struct{}
 
@@ -61,8 +65,10 @@ type AppModel struct {
 	slugGroupSubTypes [][]model.AgentType // per-session subagent types
 
 	// Chat table state
-	ChatItems        []ChatItem // flattened selectable items
-	SelectedChatItem int        // index of expanded item in detail view
+	ChatItems        []ChatItem      // flattened selectable items
+	SelectedChatItem int             // index of expanded item in detail view
+	ExpandedItems    map[string]bool // ChatItemKey → expanded (tool call sub-rows visible)
+	SelectedToolCall *ToolCallRow    // for tool-call-detail view
 
 	// Data providers (injected from outside)
 	DataProvider DataProvider
@@ -97,7 +103,8 @@ func isSubView(rt model.ResourceType) bool {
 	return rt == model.ResourcePluginDetail ||
 		rt == model.ResourcePluginItemDetail ||
 		rt == model.ResourceMemoryDetail ||
-		rt == model.ResourceHistoryDetail
+		rt == model.ResourceHistoryDetail ||
+		rt == model.ResourceToolCallDetail
 }
 
 // isContentView returns true for views that render flat text (not a table).
@@ -105,7 +112,8 @@ func isSubView(rt model.ResourceType) bool {
 func isContentView(rt model.ResourceType) bool {
 	return rt == model.ResourcePluginItemDetail ||
 		rt == model.ResourceMemoryDetail ||
-		rt == model.ResourceHistoryDetail
+		rt == model.ResourceHistoryDetail ||
+		rt == model.ResourceToolCallDetail
 }
 
 // DataProvider is the interface for fetching resource data.
@@ -191,7 +199,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "/":
 			if m.Resource != model.ResourceMemoryDetail && m.Resource != model.ResourcePluginItemDetail &&
-				m.Resource != model.ResourceHistoryDetail {
+				m.Resource != model.ResourceHistoryDetail && m.Resource != model.ResourceToolCallDetail {
 				m.inFilter = true
 				m.Filter.Activate()
 				m.refreshMenu()
@@ -259,7 +267,12 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// View transition: clear highlight so next view doesn't show stale flash.
 		m.Menu.ClearHighlight()
-		m.drillDown()
+		return m, m.drillDown()
+	case "d":
+		if m.Resource == model.ResourceHistory {
+			m.Menu.ClearHighlight()
+			m.drillDetailFromRow()
+		}
 	default:
 		if isContentView(m.Resource) {
 			m.updateContentScroll(msg)
@@ -281,6 +294,8 @@ func (m AppModel) contentMaxOffset() int {
 		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
 	case model.ResourceHistoryDetail:
 		contentStr = RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
+	case model.ResourceToolCallDetail:
+		contentStr = RenderToolCallDetail(m.SelectedToolCall, m.contentWidth())
 	default:
 		return 0
 	}
@@ -481,9 +496,12 @@ func (m *AppModel) navigateBack() {
 	// Navigate up the resource hierarchy
 	m.ContentOffset = 0
 	switch m.Resource {
+	case model.ResourceToolCallDetail:
+		m.switchResource(model.ResourceHistory)
 	case model.ResourceHistoryDetail:
 		m.switchResource(model.ResourceHistory)
 	case model.ResourceHistory:
+		m.ExpandedItems = nil
 		m.SelectedSessionID = ""
 		m.SelectedSessionSlug = ""
 		m.SelectedSessionFilePath = ""
@@ -515,27 +533,42 @@ func (m *AppModel) navigateBack() {
 	}
 }
 
-func (m *AppModel) drillDown() {
+func (m *AppModel) drillDown() tea.Cmd {
 	row := m.Table.SelectedRow()
 	if row == nil {
-		return
+		return nil
 	}
 	switch m.Resource {
 	case model.ResourceHistory:
+		// Tool call sub-row → tool call detail view
+		if tr, ok := row.Data.(ToolCallRow); ok {
+			m.SelectedToolCall = &tr
+			m.drillInto(model.ResourceToolCallDetail)
+			return nil
+		}
 		if ci, ok := row.Data.(ChatItem); ok {
 			if ci.IsDivider {
-				return // skip divider rows
+				return nil
 			}
-			ciKey := ChatItemKey(ci)
-			for i, item := range m.ChatItems {
-				if ChatItemKey(item) == ciKey {
-					m.SelectedChatItem = i
-					break
-				}
+			// No tool calls → full detail directly
+			if len(ci.AllToolCalls()) == 0 {
+				m.drillDetail(ci)
+				return nil
 			}
-			m.drillInto(model.ResourceHistoryDetail)
+			// Has tool calls → expand/collapse
+			key := ChatItemKey(ci)
+			if m.ExpandedItems == nil {
+				m.ExpandedItems = make(map[string]bool)
+			}
+			if m.ExpandedItems[key] {
+				delete(m.ExpandedItems, key)
+			} else {
+				m.ExpandedItems[key] = true
+			}
+			m.ChatFollow = false
+			return func() tea.Msg { return SyncViewMsg{} }
 		}
-		return
+		return nil
 	case model.ResourceProjects:
 		if p, ok := row.Data.(*model.Project); ok {
 			m.SelectedProjectHash = p.Hash
@@ -582,6 +615,158 @@ func (m *AppModel) drillDown() {
 			m.SelectedMemory = mem
 		}
 		m.drillInto(model.ResourceMemoryDetail)
+	}
+	return nil
+}
+
+// drillDetail navigates to the full history detail view for the given ChatItem.
+func (m *AppModel) drillDetail(ci ChatItem) {
+	ciKey := ChatItemKey(ci)
+	for i, item := range m.ChatItems {
+		if ChatItemKey(item) == ciKey {
+			m.SelectedChatItem = i
+			break
+		}
+	}
+	m.drillInto(model.ResourceHistoryDetail)
+}
+
+// drillDetailFromRow navigates to ResourceHistoryDetail for the currently selected
+// history row, whether it is a ChatItem or a ToolCallRow sub-row.
+func (m *AppModel) drillDetailFromRow() {
+	row := m.Table.SelectedRow()
+	if row == nil {
+		return
+	}
+	switch v := row.Data.(type) {
+	case ChatItem:
+		if !v.IsDivider {
+			m.drillDetail(v)
+		}
+	case ToolCallRow:
+		// Find the parent ChatItem
+		for _, item := range m.ChatItems {
+			if ChatItemKey(item) == v.ChatItemKey {
+				m.drillDetail(item)
+				return
+			}
+		}
+	}
+}
+
+// ApplyExpansion inserts ToolCallRow sub-rows after each expanded ChatItem row
+// in the current Table. It preserves the cursor position by key.
+func (m *AppModel) ApplyExpansion() {
+	if len(m.ExpandedItems) == 0 {
+		return
+	}
+
+	// Record the currently selected row's identity for cursor restoration.
+	var anchorCIKey string
+	var anchorTCName string
+	var anchorIsTCRow bool
+	if row := m.Table.SelectedRow(); row != nil {
+		switch v := row.Data.(type) {
+		case ChatItem:
+			anchorCIKey = ChatItemKey(v)
+		case ToolCallRow:
+			anchorCIKey = v.ChatItemKey
+			anchorTCName = v.ToolCall.Name
+			anchorIsTCRow = true
+		}
+	}
+
+	// Build expanded row slice.
+	var expanded []Row
+	for _, row := range m.Table.Rows {
+		expanded = append(expanded, row)
+		ci, ok := row.Data.(ChatItem)
+		if !ok {
+			continue
+		}
+		key := ChatItemKey(ci)
+		if !m.ExpandedItems[key] {
+			continue
+		}
+		// Insert sub-rows for tool calls in the primary turn.
+		for _, tc := range ci.Turn.ToolCalls {
+			expanded = append(expanded, buildToolCallSubRow(ToolCallRow{
+				ToolCall: tc, ParentTurn: ci.Turn, ChatItemKey: key,
+			}))
+		}
+		// Insert sub-rows for tool calls in each ExtraTurn.
+		for _, et := range ci.ExtraTurns {
+			for _, tc := range et.ToolCalls {
+				expanded = append(expanded, buildToolCallSubRow(ToolCallRow{
+					ToolCall: tc, ParentTurn: et, ChatItemKey: key,
+				}))
+			}
+		}
+	}
+
+	m.Table.SetRows(expanded)
+
+	// Restore cursor to the anchor row by key.
+	if anchorCIKey == "" {
+		return
+	}
+	rows := m.Table.FilteredRows()
+	for i, row := range rows {
+		switch v := row.Data.(type) {
+		case ChatItem:
+			if !anchorIsTCRow && ChatItemKey(v) == anchorCIKey {
+				m.Table.Selected = i
+				m.Table.EnsureVisible()
+				return
+			}
+		case ToolCallRow:
+			if anchorIsTCRow && v.ChatItemKey == anchorCIKey && v.ToolCall.Name == anchorTCName {
+				m.Table.Selected = i
+				m.Table.EnsureVisible()
+				return
+			}
+		}
+	}
+}
+
+// buildToolCallSubRow constructs a table Row for a ToolCallRow sub-entry.
+func buildToolCallSubRow(tr ToolCallRow) Row {
+	tc := tr.ToolCall
+	displayName := tc.Name
+	if tc.Name == "Agent" || tc.Name == "Task" {
+		if agentType := extractStringField(tc, "subagent_type"); agentType != "" {
+			displayName = agentDisplayName(model.AgentType(agentType))
+		}
+	}
+	name := "  ▸ " + displayName
+
+	msg := tc.InputSummary()
+
+	var action string
+	if tc.IsError {
+		action = "✗"
+	} else {
+		action = "✓"
+	}
+
+	var modelTok string
+	if m := model.ShortModelName(tr.ParentTurn.ModelName); m != "" {
+		tok := tr.ParentTurn.InputTokens + tr.ParentTurn.OutputTokens
+		if tok > 0 {
+			modelTok = m + ":" + model.FormatTokenCount(tok)
+		} else {
+			modelTok = m
+		}
+	}
+
+	var dur string
+	if tc.Duration > 0 {
+		dur = tc.DurationString()
+	}
+
+	return Row{
+		Cells: []string{name, msg, action, modelTok, dur},
+		Data:  tr,
 	}
 }
 
@@ -659,6 +844,8 @@ func (m AppModel) View() string {
 		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
 	case model.ResourceHistoryDetail:
 		contentStr = RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
+	case model.ResourceToolCallDetail:
+		contentStr = RenderToolCallDetail(m.SelectedToolCall, m.contentWidth())
 	default:
 		contentStr = m.Table.View()
 	}

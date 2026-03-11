@@ -9,6 +9,13 @@ import (
 	"github.com/Curt-Park/claudeview/internal/model"
 )
 
+// ToolCallRow is the Data payload for an expanded tool-call sub-row in the history table.
+type ToolCallRow struct {
+	ToolCall    *model.ToolCall
+	ParentTurn  model.Turn
+	ChatItemKey string // key of the parent ChatItem
+}
+
 // ChatItem represents a single selectable item in the chat table.
 // It wraps a Turn with metadata about whether it's from a subagent.
 // ExtraTurns holds subsequent tool-only assistant turns grouped under this item.
