@@ -772,9 +772,9 @@ func buildToolCallSubRow(tr ToolCallRow) Row {
 
 	var modelTok string
 	if m := model.ShortModelName(tr.ParentTurn.ModelName); m != "" {
-		in, out := tr.ParentTurn.InputTokens, tr.ParentTurn.OutputTokens
-		if in > 0 || out > 0 {
-			modelTok = m + ":" + model.FormatTokenInOut(in, out)
+		in, cache, out := tr.ParentTurn.InputTokens, tr.ParentTurn.CacheReadTokens, tr.ParentTurn.OutputTokens
+		if in > 0 || cache > 0 || out > 0 {
+			modelTok = m + ":" + model.FormatTokenInOutCache(in, cache, out)
 		} else {
 			modelTok = m
 		}

@@ -37,6 +37,16 @@ func FormatTokenInOut(in, out int) string {
 	return FormatTokenCount(in) + "/" + FormatTokenCount(out)
 }
 
+// FormatTokenInOutCache formats input/cache-read/output token counts.
+// When cache is zero, omits the +cache section (e.g. "50k/26k").
+// When cache is non-zero, returns "50k+7.4M/26k".
+func FormatTokenInOutCache(in, cache, out int) string {
+	if cache == 0 {
+		return FormatTokenCount(in) + "/" + FormatTokenCount(out)
+	}
+	return FormatTokenCount(in) + "+" + FormatTokenCount(cache) + "/" + FormatTokenCount(out)
+}
+
 // ShortModelName extracts a short identifier from a model name.
 func ShortModelName(model string) string {
 	lower := strings.ToLower(model)

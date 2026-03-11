@@ -47,6 +47,18 @@ func TestSessionTokenStringMultiModel(t *testing.T) {
 	}
 }
 
+func TestSessionTokenStringWithCache(t *testing.T) {
+	s := &model.Session{
+		TokensByModel: map[string]model.TokenCount{
+			"claude-haiku-4-5": {InputTokens: 243000, CacheReadTokens: 7400000, OutputTokens: 26000},
+		},
+	}
+	got := s.TokenString()
+	if got != "haiku:243k+7.4M/26k" {
+		t.Errorf("TokenString() = %q, want %q", got, "haiku:243k+7.4M/26k")
+	}
+}
+
 func TestSessionLastActive(t *testing.T) {
 	s := &model.Session{ModTime: time.Now().Add(-5 * time.Minute)}
 	got := s.LastActive()
