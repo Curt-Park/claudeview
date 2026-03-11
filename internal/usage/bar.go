@@ -86,7 +86,7 @@ func renderProgressRow(label string, w *Window, stale bool, labelW, barW int) st
 		resetStr = "   reset in " + formatCountdown(*w.ResetsAt)
 	}
 
-	labelPad := strings.Repeat(" ", labelW-len([]rune(label)))
+	labelPad := strings.Repeat(" ", labelW-lipgloss.Width(label))
 	dimStyle := lipgloss.NewStyle().Foreground(colorDim)
 	return barStyle.Render(label) + labelPad + " [" + bar + "] " + barStyle.Render(pctStr) + dimStyle.Render(resetStr)
 }

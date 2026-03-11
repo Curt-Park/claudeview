@@ -74,6 +74,14 @@ func TestRenderBar_ProgressFilled(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("expected 2 lines, got %d", len(lines))
 	}
+	// 100% bar: no empty cells
+	if strings.Contains(lines[0], "░") {
+		t.Error("100% bar should have no empty cells")
+	}
+	// 0% bar: no filled cells
+	if strings.Contains(lines[1], "█") {
+		t.Error("0% bar should have no filled cells")
+	}
 }
 
 func TestRenderBar_WithOpus(t *testing.T) {
