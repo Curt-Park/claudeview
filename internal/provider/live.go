@@ -208,13 +208,14 @@ func (l *Live) GetTurns(filePath string) []model.Turn {
 	turns := make([]model.Turn, 0, len(parsed))
 	for _, t := range parsed {
 		turn := model.Turn{
-			Role:         t.Role,
-			Text:         t.Text,
-			Thinking:     t.Thinking,
-			ModelName:    t.Model,
-			InputTokens:  t.Usage.TotalInputTokens(),
-			OutputTokens: t.Usage.OutputTokens,
-			Timestamp:    t.Timestamp,
+			Role:            t.Role,
+			Text:            t.Text,
+			Thinking:        t.Thinking,
+			ModelName:       t.Model,
+			InputTokens:     t.Usage.NewInputTokens(),
+			CacheReadTokens: t.Usage.CacheReadInputTokens,
+			OutputTokens:    t.Usage.OutputTokens,
+			Timestamp:       t.Timestamp,
 		}
 		for _, tc := range t.ToolCalls {
 			turn.ToolCalls = append(turn.ToolCalls, &model.ToolCall{
@@ -266,7 +267,11 @@ func (l *Live) sessionFromInfo(si transcript.SessionInfo) *model.Session {
 
 	s.TokensByModel = make(map[string]model.TokenCount, len(agg.TokensByModel))
 	for m, u := range agg.TokensByModel {
-		s.TokensByModel[m] = model.TokenCount{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}
+		s.TokensByModel[m] = model.TokenCount{
+			InputTokens:     u.InputTokens,
+			CacheReadTokens: u.CacheReadInputTokens,
+			OutputTokens:    u.OutputTokens,
+		}
 	}
 
 	// Merge subagent token data into session totals
@@ -296,6 +301,7 @@ func (l *Live) sessionFromInfo(si transcript.SessionInfo) *model.Session {
 				for m, u := range subAgg.TokensByModel {
 					cur := s.TokensByModel[m]
 					cur.InputTokens += u.InputTokens
+					cur.CacheReadTokens += u.CacheReadInputTokens
 					cur.OutputTokens += u.OutputTokens
 					s.TokensByModel[m] = cur
 				}
