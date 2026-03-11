@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Curt-Park/claudeview/internal/model"
+	"github.com/Curt-Park/claudeview/internal/stringutil"
 )
 
 // ToolCallRow is the Data payload for an expanded tool-call sub-row in the history table.
@@ -40,37 +41,13 @@ func (c ChatItem) AllToolCalls() []*model.ToolCall {
 	return all
 }
 
-func agentDisplayName(t model.AgentType) string {
-	switch t {
-	case model.AgentTypeExplore:
-		return "Explorer"
-	case model.AgentTypePlan:
-		return "Planner"
-	case model.AgentTypeBash:
-		return "Bash"
-	case model.AgentTypeGeneral:
-		return "Agent"
-	default:
-		// For custom types like "feature-dev:code-reviewer", use the part
-		// after the last ":" (e.g. "code-reviewer").
-		s := string(t)
-		if i := strings.LastIndex(s, ":"); i >= 0 {
-			s = s[i+1:]
-		}
-		if s == "" {
-			return "Agent"
-		}
-		return s
-	}
-}
-
 // WhoLabel returns a short label for the message author.
 func (c ChatItem) WhoLabel() string {
 	if c.IsDivider {
 		return ""
 	}
 	if c.IsSubagent {
-		name := agentDisplayName(c.AgentType)
+		name := c.AgentType.DisplayLabel()
 		if c.TreeConnector != "" {
 			return c.TreeConnector + " " + name
 		}
@@ -151,14 +128,14 @@ func cleanTextPreview(text string) string {
 	// Prefer <command-name> (includes / prefix) when present.
 	switch {
 	case strings.HasPrefix(text, "<command-message>"):
-		if name := extractXMLContent(text, "command-name"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-name"); name != "" {
 			return name
 		}
-		if name := extractXMLContent(text, "command-message"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-message"); name != "" {
 			return "/" + name
 		}
 	case strings.HasPrefix(text, "<command-name>"):
-		if name := extractXMLContent(text, "command-name"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-name"); name != "" {
 			return name
 		}
 	case strings.HasPrefix(text, "Base directory for this skill:"):
@@ -181,7 +158,7 @@ func cleanTextPreview(text string) string {
 		strings.HasPrefix(text, "<local-command-stderr>"):
 		// Extract and show the actual command output content.
 		for _, tag := range []string{"local-command-stdout", "local-command-stderr", "local-command-caveat"} {
-			if content := extractXMLContent(text, tag); content != "" {
+			if content := stringutil.ExtractXMLTag(text, tag); content != "" {
 				return strings.Join(strings.Fields(content), " ")
 			}
 		}
@@ -247,18 +224,6 @@ func asciiOnly(s string) string {
 		}
 	}
 	return strings.Join(strings.Fields(b.String()), " ")
-}
-
-// extractXMLContent returns the trimmed text inside the first <tag>…</tag> in s.
-func extractXMLContent(s, tag string) string {
-	open := "<" + tag + ">"
-	close := "</" + tag + ">"
-	start := strings.Index(s, open)
-	end := strings.Index(s, close)
-	if start >= 0 && end > start+len(open) {
-		return strings.TrimSpace(s[start+len(open) : end])
-	}
-	return ""
 }
 
 // ActionLabel returns the first tool name + "+N" count, or "-".

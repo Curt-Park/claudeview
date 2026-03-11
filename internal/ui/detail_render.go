@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -10,19 +9,6 @@ import (
 
 	"github.com/Curt-Park/claudeview/internal/model"
 )
-
-func subagentIcon(t model.AgentType) string {
-	switch t {
-	case model.AgentTypeExplore:
-		return "🔍"
-	case model.AgentTypePlan:
-		return "📋"
-	case model.AgentTypeBash:
-		return "💻"
-	default:
-		return "⚙️"
-	}
-}
 
 // renderTurnBoundary renders a lightweight API-call boundary marker shown between
 // ExtraTurns in both Claude and sub-agent detail views:
@@ -116,8 +102,7 @@ func renderChatItemHeader(item ChatItem) string {
 	turn := item.Turn
 	var parts []string
 	if item.IsSubagent {
-		icon := subagentIcon(item.AgentType)
-		parts = append(parts, StyleChatHeader.Render(icon+" "+agentDisplayName(item.AgentType)))
+		parts = append(parts, StyleChatHeader.Render(item.AgentType.Icon()+" "+item.AgentType.DisplayLabel()))
 	} else if turn.Role == "user" {
 		parts = append(parts, StyleChatHeader.Render("You"))
 	} else {
@@ -213,28 +198,7 @@ func renderExpandedToolCall(tc *model.ToolCall, turn model.Turn, maxWidth int) s
 
 // expandResult extracts the full result text from a tool call.
 func expandResult(tc *model.ToolCall) string {
-	if tc.Result == nil {
-		return ""
-	}
-	// Try string result
-	var s string
-	if err := json.Unmarshal(tc.Result, &s); err == nil {
-		return s
-	}
-	// Try array of content blocks
-	var arr []map[string]any
-	if err := json.Unmarshal(tc.Result, &arr); err == nil {
-		var texts []string
-		for _, block := range arr {
-			if text, ok := block["text"].(string); ok {
-				texts = append(texts, text)
-			}
-		}
-		if len(texts) > 0 {
-			return strings.Join(texts, "\n")
-		}
-	}
-	return ""
+	return tc.ResultText()
 }
 
 // RenderToolCallDetail renders the full detail view for a single tool call.

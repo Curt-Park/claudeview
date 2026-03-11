@@ -35,10 +35,10 @@ func TestAgentDisplayName(t *testing.T) {
 		{"main", &model.Agent{Type: model.AgentTypeMain}, "Claude"},
 		{"Explore", &model.Agent{Type: model.AgentTypeExplore}, "Explorer"},
 		{"Plan", &model.Agent{Type: model.AgentTypePlan}, "Planner"},
-		{"Bash", &model.Agent{Type: model.AgentTypeBash}, "Bash-runner"},
-		{"general-purpose", &model.Agent{Type: model.AgentTypeGeneral}, "General"},
+		{"Bash", &model.Agent{Type: model.AgentTypeBash}, "Bash"},
+		{"general-purpose", &model.Agent{Type: model.AgentTypeGeneral}, "Agent"},
 		{"unknown with ID", &model.Agent{Type: "unknown", ID: "agent-abc1234"}, "abc1234"},
-		{"unknown empty ID", &model.Agent{Type: "unknown", ID: ""}, "Agent"},
+		{"unknown empty ID", &model.Agent{Type: "unknown", ID: ""}, "unknown"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

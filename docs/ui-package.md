@@ -20,7 +20,7 @@ Implements the Bubble Tea application model and all reusable chrome components.
 | `crumbs.go`           | `CrumbsModel` — breadcrumb trail                               |
 | `flash.go`            | `FlashModel` — ephemeral status/error message                  |
 | `filter.go`           | `FilterModel` — `/`-triggered filter input bar                 |
-| `chat_item.go`        | `ChatItem` — wraps Turn with subagent metadata (`IsSubagent`, `AgentType`, `SubagentIdx`), divider support (`IsDivider`, `DividerLabel`); `agentDisplayName` (unexported helper for display labels); `BuildChatItems`, `BuildMergedChatItems` (multi-session with divider rows), `MessagePreview` (delegates to `cleanTextPreview` for system-content handling), `cleanTextPreview`, `extractXMLContent`, `ActionLabel`, `ModelTokenLabel`, `TimeLabel` |
+| `chat_item.go`        | `ChatItem` — wraps Turn with subagent metadata (`IsSubagent`, `AgentType`, `SubagentIdx`), divider support (`IsDivider`, `DividerLabel`); `BuildChatItems`, `BuildMergedChatItems` (multi-session with divider rows), `MessagePreview` (delegates to `cleanTextPreview` for system-content handling), `cleanTextPreview`, `ActionLabel`, `ModelTokenLabel`, `TimeLabel`; uses `AgentType.DisplayLabel()` for display labels and `stringutil.ExtractXMLTag` for XML extraction |
 | `chat_item_test.go`   | Tests for `BuildMergedChatItems`, `SubagentIdx` assignment, divider labels, `cleanTextPreview`, and `MessagePreview` cleaned text |
 | `styles.go`           | Lip Gloss style definitions shared across components           |
 
@@ -119,3 +119,4 @@ In addition to base, status, and layout styles, `styles.go` defines:
 - [[view-package]] — provides `ResourceView[T]` consumed by AppModel
 - [[model-package]] — `ResourceType` constants and data types
 - [[test-suite]] — AppModel integration tests
+- [[stringutil-package]] — `ExtractXMLTag` used in `cleanTextPreview`

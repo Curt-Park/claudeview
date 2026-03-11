@@ -292,19 +292,26 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// contentMaxOffset returns the maximum scroll offset for the current content view.
-func (m AppModel) contentMaxOffset() int {
-	var contentStr string
+// renderContentForResource renders the content string for the current content-only view.
+// Returns "" for non-content views (table views).
+func (m AppModel) renderContentForResource() string {
 	switch m.Resource {
 	case model.ResourcePluginItemDetail:
-		contentStr = RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
+		return RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
 	case model.ResourceMemoryDetail:
-		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
+		return RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
 	case model.ResourceHistoryDetail:
-		contentStr = RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
+		return RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
 	case model.ResourceToolCallDetail:
-		contentStr = RenderToolCallDetail(m.SelectedToolCall, m.contentWidth())
-	default:
+		return RenderToolCallDetail(m.SelectedToolCall, m.contentWidth())
+	}
+	return ""
+}
+
+// contentMaxOffset returns the maximum scroll offset for the current content view.
+func (m AppModel) contentMaxOffset() int {
+	contentStr := m.renderContentForResource()
+	if contentStr == "" {
 		return 0
 	}
 	lines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")
@@ -583,36 +590,6 @@ func (m *AppModel) drillDown() tea.Cmd {
 		return nil
 	}
 	switch m.Resource {
-	case model.ResourceHistory:
-		// Tool call sub-row → tool call detail view
-		if tr, ok := row.Data.(ToolCallRow); ok {
-			m.SelectedToolCall = &tr
-			m.drillInto(model.ResourceToolCallDetail)
-			return nil
-		}
-		if ci, ok := row.Data.(ChatItem); ok {
-			if ci.IsDivider {
-				return nil
-			}
-			// No tool calls → full detail directly
-			if len(ci.AllToolCalls()) == 0 {
-				m.drillDetail(ci)
-				return nil
-			}
-			// Has tool calls → expand/collapse
-			key := ChatItemKey(ci)
-			if m.ExpandedItems == nil {
-				m.ExpandedItems = make(map[string]bool)
-			}
-			if m.ExpandedItems[key] {
-				delete(m.ExpandedItems, key)
-			} else {
-				m.ExpandedItems[key] = true
-			}
-			m.ChatFollow = false
-			return func() tea.Msg { return SyncViewMsg{} }
-		}
-		return nil
 	case model.ResourceProjects:
 		if p, ok := row.Data.(*model.Project); ok {
 			m.SelectedProjectHash = p.Hash
@@ -779,7 +756,7 @@ func buildToolCallSubRow(tr ToolCallRow) Row {
 	displayName := tc.Name
 	if tc.Name == "Agent" || tc.Name == "Task" {
 		if agentType := extractStringField(tc, "subagent_type"); agentType != "" {
-			displayName = agentDisplayName(model.AgentType(agentType))
+			displayName = model.AgentType(agentType).DisplayLabel()
 		}
 	}
 	name := "  ▸ " + displayName
@@ -881,16 +858,9 @@ func (m AppModel) View() string {
 	// --- 3. Content ---
 	var contentStr string
 	limit := m.contentHeight()
-	switch m.Resource {
-	case model.ResourcePluginItemDetail:
-		contentStr = RenderPluginItemDetail(m.SelectedPluginItem, m.contentWidth())
-	case model.ResourceMemoryDetail:
-		contentStr = RenderMemoryDetail(m.SelectedMemory, m.contentWidth())
-	case model.ResourceHistoryDetail:
-		contentStr = RenderChatItemDetail(m.ChatItems, m.SelectedChatItem, m.contentWidth())
-	case model.ResourceToolCallDetail:
-		contentStr = RenderToolCallDetail(m.SelectedToolCall, m.contentWidth())
-	default:
+	if isContentView(m.Resource) {
+		contentStr = m.renderContentForResource()
+	} else {
 		contentStr = m.Table.View()
 	}
 	rawLines := strings.Split(strings.TrimRight(contentStr, "\n"), "\n")

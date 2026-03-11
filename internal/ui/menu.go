@@ -122,7 +122,6 @@ func TableNavItems(rt model.ResourceType, hasFilter bool) []MenuItem {
 	return items
 }
 
-// TableUtilItems returns utility menu items for the table view.
 // TableActionItems returns action menu items (enter/space/esc) for views that use
 // the three-column layout. Currently only ResourceHistory uses this column.
 func TableActionItems(rt model.ResourceType, hasFilter, canExpand bool) []MenuItem {

@@ -82,6 +82,28 @@ func singleLine(s string) string {
 	return strings.ReplaceAll(s, "\n", " ")
 }
 
+// ResultText returns the full text content of the tool result.
+func (tc *ToolCall) ResultText() string {
+	if tc.Result == nil {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(tc.Result, &s); err == nil {
+		return s
+	}
+	var arr []map[string]any
+	if err := json.Unmarshal(tc.Result, &arr); err == nil {
+		var texts []string
+		for _, block := range arr {
+			if text, ok := block["text"].(string); ok {
+				texts = append(texts, text)
+			}
+		}
+		return strings.Join(texts, "\n")
+	}
+	return ""
+}
+
 // ResultSummary returns a one-line summary of the tool result.
 func (tc *ToolCall) ResultSummary() string {
 	if tc.IsError {
@@ -90,18 +112,11 @@ func (tc *ToolCall) ResultSummary() string {
 	if tc.Result == nil {
 		return "-"
 	}
-	// Try string result
-	var s string
-	if err := json.Unmarshal(tc.Result, &s); err == nil {
-		lines := strings.Split(s, "\n")
-		return truncate(fmt.Sprintf("%d lines", len(lines)), 20)
+	text := tc.ResultText()
+	if text == "" {
+		return truncate(string(tc.Result), 20)
 	}
-	// Try array of content blocks
-	var arr []map[string]any
-	if err := json.Unmarshal(tc.Result, &arr); err == nil {
-		return fmt.Sprintf("%d blocks", len(arr))
-	}
-	return truncate(string(tc.Result), 20)
+	return truncate(fmt.Sprintf("%d lines", len(strings.Split(text, "\n"))), 20)
 }
 
 // DurationString returns formatted duration.

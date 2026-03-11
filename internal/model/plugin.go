@@ -46,22 +46,33 @@ func CountCommands(cacheDir string) int {
 	return countFiles(filepath.Join(contentDir(cacheDir), "commands"), ".md")
 }
 
+// loadHooksMap reads and parses hooks.json from cacheDir, returning the hooks map.
+// Returns nil if the file is missing or cannot be parsed.
+func loadHooksMap(cacheDir string) map[string]json.RawMessage {
+	hooksDir := filepath.Join(contentDir(cacheDir), "hooks")
+	jsonPath := filepath.Join(hooksDir, "hooks.json")
+	data, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return nil
+	}
+	var wrapper struct {
+		Hooks map[string]json.RawMessage `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil
+	}
+	return wrapper.Hooks
+}
+
 // CountHooks counts hook event entries for a plugin.
 // If a hooks.json file is present it is parsed and the number of event types
 // (top-level keys inside "hooks") is returned. Otherwise all files in the
 // hooks/ directory are counted.
 func CountHooks(cacheDir string) int {
-	hooksDir := filepath.Join(contentDir(cacheDir), "hooks")
-	jsonPath := filepath.Join(hooksDir, "hooks.json")
-	if data, err := os.ReadFile(jsonPath); err == nil {
-		var wrapper struct {
-			Hooks map[string]json.RawMessage `json:"hooks"`
-		}
-		if err := json.Unmarshal(data, &wrapper); err == nil {
-			return len(wrapper.Hooks)
-		}
+	if hooks := loadHooksMap(cacheDir); hooks != nil {
+		return len(hooks)
 	}
-	return countFiles(hooksDir, "")
+	return countFiles(filepath.Join(contentDir(cacheDir), "hooks"), "")
 }
 
 // CountAgents counts .md files in the plugin's agents/ directory.
@@ -111,22 +122,15 @@ func ListCommands(cacheDir string) []string {
 
 // ListHooks returns hook event names from hooks.json or filenames.
 func ListHooks(cacheDir string) []string {
-	hooksDir := filepath.Join(contentDir(cacheDir), "hooks")
-	jsonPath := filepath.Join(hooksDir, "hooks.json")
-	if data, err := os.ReadFile(jsonPath); err == nil {
-		var wrapper struct {
-			Hooks map[string]json.RawMessage `json:"hooks"`
+	if hooks := loadHooksMap(cacheDir); hooks != nil {
+		names := make([]string, 0, len(hooks))
+		for k := range hooks {
+			names = append(names, k)
 		}
-		if err := json.Unmarshal(data, &wrapper); err == nil {
-			names := make([]string, 0, len(wrapper.Hooks))
-			for k := range wrapper.Hooks {
-				names = append(names, k)
-			}
-			sort.Strings(names)
-			return names
-		}
+		sort.Strings(names)
+		return names
 	}
-	return listFileStems(hooksDir, "")
+	return listFileStems(filepath.Join(contentDir(cacheDir), "hooks"), "")
 }
 
 // ListAgents returns agent names (filenames without .md extension).
@@ -213,19 +217,13 @@ func ReadPluginItemContent(item *PluginItem) string {
 		return string(data)
 	case "hook":
 		// Try hooks.json first
-		hooksDir := filepath.Join(cd, "hooks")
-		jsonPath := filepath.Join(hooksDir, "hooks.json")
-		if data, err := os.ReadFile(jsonPath); err == nil {
-			var wrapper struct {
-				Hooks map[string]json.RawMessage `json:"hooks"`
-			}
-			if err := json.Unmarshal(data, &wrapper); err == nil {
-				if raw, ok := wrapper.Hooks[item.Name]; ok {
-					return normalizeJSON(raw)
-				}
+		if hooks := loadHooksMap(item.CacheDir); hooks != nil {
+			if raw, ok := hooks[item.Name]; ok {
+				return normalizeJSON(raw)
 			}
 		}
 		// Fall back to file in hooks/
+		hooksDir := filepath.Join(cd, "hooks")
 		entries, err := os.ReadDir(hooksDir)
 		if err != nil {
 			return fmt.Sprintf("error reading hooks directory: %v", err)
@@ -343,22 +341,15 @@ func ReadHookCommandScripts(item *PluginItem) []HookScript {
 	if item.Category != "hook" {
 		return nil
 	}
-	cd := contentDir(item.CacheDir)
-	jsonPath := filepath.Join(cd, "hooks", "hooks.json")
-	data, err := os.ReadFile(jsonPath)
-	if err != nil {
+	hooks := loadHooksMap(item.CacheDir)
+	if hooks == nil {
 		return nil
 	}
-	var wrapper struct {
-		Hooks map[string]json.RawMessage `json:"hooks"`
-	}
-	if err := json.Unmarshal(data, &wrapper); err != nil {
-		return nil
-	}
-	raw, ok := wrapper.Hooks[item.Name]
+	raw, ok := hooks[item.Name]
 	if !ok {
 		return nil
 	}
+	cd := contentDir(item.CacheDir)
 	var entries []struct {
 		Hooks []struct {
 			Type    string `json:"type"`

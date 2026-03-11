@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Curt-Park/claudeview/internal/stringutil"
 )
 
 // ToolCall represents a matched tool_use + tool_result pair.
@@ -53,20 +55,26 @@ func ParseFile(path string) (*ParsedTranscript, error) {
 	return Parse(f)
 }
 
-// flushPendingTurn matches tool results into the pending turn, accumulates metrics, and appends it.
-// toolTimestamps maps tool_use_id -> timestamp of the user turn that delivered the result;
-// used to compute per-tool-call Duration.
-func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[string]json.RawMessage, toolErrors map[string]bool, toolTimestamps map[string]time.Time) {
-	for i := range turn.ToolCalls {
-		tc := &turn.ToolCalls[i]
-		if res, ok := toolResults[tc.ID]; ok {
+// matchToolResults fills Result, IsError, and Duration for each ToolCall
+// whose ID appears in the provided maps.
+func matchToolResults(calls []ToolCall, results map[string]json.RawMessage, errors map[string]bool, timestamps map[string]time.Time) {
+	for i := range calls {
+		tc := &calls[i]
+		if res, ok := results[tc.ID]; ok {
 			tc.Result = res
-			tc.IsError = toolErrors[tc.ID]
-			if resultTS, ok := toolTimestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
+			tc.IsError = errors[tc.ID]
+			if resultTS, ok := timestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
 				tc.Duration = resultTS.Sub(tc.Timestamp)
 			}
 		}
 	}
+}
+
+// flushPendingTurn matches tool results into the pending turn, accumulates metrics, and appends it.
+// toolTimestamps maps tool_use_id -> timestamp of the user turn that delivered the result;
+// used to compute per-tool-call Duration.
+func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[string]json.RawMessage, toolErrors map[string]bool, toolTimestamps map[string]time.Time) {
+	matchToolResults(turn.ToolCalls, toolResults, toolErrors, toolTimestamps)
 	// Accumulate per-model token usage
 	u := result.TokensByModel[turn.Model]
 	u.InputTokens += turn.Usage.TotalInputTokens()
@@ -118,6 +126,60 @@ func formatCompactText(e entry) string {
 	return text
 }
 
+// collectToolResults populates the result/error/timestamp maps from a user message's tool results.
+func collectToolResults(msg userMessage, ts time.Time, results map[string]json.RawMessage, errors map[string]bool, timestamps map[string]time.Time) {
+	for _, c := range msg.toolResults() {
+		results[c.ToolUseID] = c.Content
+		errors[c.ToolUseID] = c.IsError
+		timestamps[c.ToolUseID] = ts
+	}
+}
+
+// buildAssistantTurn constructs an assistant Turn from a parsed message.
+func buildAssistantTurn(msg assistantMessage, ts time.Time) Turn {
+	turn := Turn{
+		Role:      "assistant",
+		Model:     msg.Model,
+		Usage:     msg.Usage,
+		Timestamp: ts,
+	}
+	for _, c := range msg.Content {
+		switch c.Type {
+		case "text":
+			turn.Text += c.Text
+		case "thinking":
+			turn.Thinking += c.Thinking
+		case "tool_use":
+			turn.ToolCalls = append(turn.ToolCalls, ToolCall{
+				ID:        c.ID,
+				Name:      c.Name,
+				Input:     c.Input,
+				Timestamp: ts,
+			})
+		}
+	}
+	return turn
+}
+
+// mergeAssistantTurn merges next into pending (consecutive assistant entries).
+func mergeAssistantTurn(pending *Turn, next Turn) {
+	if next.Text != "" {
+		if pending.Text != "" {
+			pending.Text += "\n"
+		}
+		pending.Text += next.Text
+	}
+	if next.Thinking != "" {
+		if pending.Thinking != "" {
+			pending.Thinking += "\n"
+		}
+		pending.Thinking += next.Thinking
+	}
+	pending.ToolCalls = append(pending.ToolCalls, next.ToolCalls...)
+	pending.Usage.InputTokens += next.Usage.TotalInputTokens()
+	pending.Usage.OutputTokens += next.Usage.OutputTokens
+}
+
 // Parse reads from an io.Reader and parses JSONL transcript entries.
 func Parse(r io.Reader) (*ParsedTranscript, error) {
 	scanner := newJSONLScanner(r)
@@ -152,11 +214,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 				continue
 			}
 			// Collect tool results to match with pending tool calls
-			for _, c := range msg.toolResults() {
-				toolResults[c.ToolUseID] = c.Content
-				toolErrors[c.ToolUseID] = c.IsError
-				toolTimestamps[c.ToolUseID] = ts
-			}
+			collectToolResults(msg, ts, toolResults, toolErrors, toolTimestamps)
 			// Flush pending assistant turn with matched results
 			if pendingAssistantTurn != nil {
 				flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors, toolTimestamps)
@@ -178,44 +236,10 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			if err := json.Unmarshal(entry.Message, &msg); err != nil {
 				continue
 			}
-			turn := Turn{
-				Role:      "assistant",
-				Model:     msg.Model,
-				Usage:     msg.Usage,
-				Timestamp: ts,
-			}
-			for _, c := range msg.Content {
-				switch c.Type {
-				case "text":
-					turn.Text += c.Text
-				case "thinking":
-					turn.Thinking += c.Thinking
-				case "tool_use":
-					turn.ToolCalls = append(turn.ToolCalls, ToolCall{
-						ID:        c.ID,
-						Name:      c.Name,
-						Input:     c.Input,
-						Timestamp: ts,
-					})
-				}
-			}
+			turn := buildAssistantTurn(msg, ts)
 			if pendingAssistantTurn != nil {
 				// Merge consecutive assistant entries (e.g. text-only followed by tool-only)
-				if turn.Text != "" {
-					if pendingAssistantTurn.Text != "" {
-						pendingAssistantTurn.Text += "\n"
-					}
-					pendingAssistantTurn.Text += turn.Text
-				}
-				if turn.Thinking != "" {
-					if pendingAssistantTurn.Thinking != "" {
-						pendingAssistantTurn.Thinking += "\n"
-					}
-					pendingAssistantTurn.Thinking += turn.Thinking
-				}
-				pendingAssistantTurn.ToolCalls = append(pendingAssistantTurn.ToolCalls, turn.ToolCalls...)
-				pendingAssistantTurn.Usage.InputTokens += turn.Usage.TotalInputTokens()
-				pendingAssistantTurn.Usage.OutputTokens += turn.Usage.OutputTokens
+				mergeAssistantTurn(pendingAssistantTurn, turn)
 			} else {
 				pendingAssistantTurn = &turn
 			}
@@ -272,16 +296,7 @@ func (c *TranscriptCache) Turns() []Turn {
 	snapshot := *c.pending
 	snapshot.ToolCalls = make([]ToolCall, len(c.pending.ToolCalls))
 	copy(snapshot.ToolCalls, c.pending.ToolCalls)
-	for i := range snapshot.ToolCalls {
-		tc := &snapshot.ToolCalls[i]
-		if res, ok := c.toolResults[tc.ID]; ok {
-			tc.Result = res
-			tc.IsError = c.toolErrors[tc.ID]
-			if resultTS, ok := c.toolTimestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
-				tc.Duration = resultTS.Sub(tc.Timestamp)
-			}
-		}
-	}
+	matchToolResults(snapshot.ToolCalls, c.toolResults, c.toolErrors, c.toolTimestamps)
 	return append(c.committed, snapshot)
 }
 
@@ -331,23 +346,10 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 				continue
 			}
 			// Collect tool results to match with pending tool calls
-			for _, c := range msg.toolResults() {
-				cache.toolResults[c.ToolUseID] = c.Content
-				cache.toolErrors[c.ToolUseID] = c.IsError
-				cache.toolTimestamps[c.ToolUseID] = ts
-			}
+			collectToolResults(msg, ts, cache.toolResults, cache.toolErrors, cache.toolTimestamps)
 			// Flush pending assistant turn with matched results
 			if cache.pending != nil {
-				for i := range cache.pending.ToolCalls {
-					tc := &cache.pending.ToolCalls[i]
-					if res, ok := cache.toolResults[tc.ID]; ok {
-						tc.Result = res
-						tc.IsError = cache.toolErrors[tc.ID]
-						if resultTS, ok := cache.toolTimestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
-							tc.Duration = resultTS.Sub(tc.Timestamp)
-						}
-					}
-				}
+				matchToolResults(cache.pending.ToolCalls, cache.toolResults, cache.toolErrors, cache.toolTimestamps)
 				cache.committed = append(cache.committed, *cache.pending)
 				cache.pending = nil
 			}
@@ -366,44 +368,10 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 			if err := json.Unmarshal(e.Message, &msg); err != nil {
 				continue
 			}
-			turn := Turn{
-				Role:      "assistant",
-				Model:     msg.Model,
-				Usage:     msg.Usage,
-				Timestamp: ts,
-			}
-			for _, c := range msg.Content {
-				switch c.Type {
-				case "text":
-					turn.Text += c.Text
-				case "thinking":
-					turn.Thinking += c.Thinking
-				case "tool_use":
-					turn.ToolCalls = append(turn.ToolCalls, ToolCall{
-						ID:        c.ID,
-						Name:      c.Name,
-						Input:     c.Input,
-						Timestamp: ts,
-					})
-				}
-			}
+			turn := buildAssistantTurn(msg, ts)
 			if cache.pending != nil {
 				// Merge consecutive assistant entries
-				if turn.Text != "" {
-					if cache.pending.Text != "" {
-						cache.pending.Text += "\n"
-					}
-					cache.pending.Text += turn.Text
-				}
-				if turn.Thinking != "" {
-					if cache.pending.Thinking != "" {
-						cache.pending.Thinking += "\n"
-					}
-					cache.pending.Thinking += turn.Thinking
-				}
-				cache.pending.ToolCalls = append(cache.pending.ToolCalls, turn.ToolCalls...)
-				cache.pending.Usage.InputTokens += turn.Usage.TotalInputTokens()
-				cache.pending.Usage.OutputTokens += turn.Usage.OutputTokens
+				mergeAssistantTurn(cache.pending, turn)
 			} else {
 				cache.pending = &turn
 			}
@@ -411,16 +379,7 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 		case "system":
 			if e.Subtype == "compact_boundary" {
 				if cache.pending != nil {
-					for i := range cache.pending.ToolCalls {
-						tc := &cache.pending.ToolCalls[i]
-						if res, ok := cache.toolResults[tc.ID]; ok {
-							tc.Result = res
-							tc.IsError = cache.toolErrors[tc.ID]
-							if resultTS, ok := cache.toolTimestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
-								tc.Duration = resultTS.Sub(tc.Timestamp)
-							}
-						}
-					}
+					matchToolResults(cache.pending.ToolCalls, cache.toolResults, cache.toolErrors, cache.toolTimestamps)
 					cache.committed = append(cache.committed, *cache.pending)
 					cache.pending = nil
 				}
@@ -574,31 +533,18 @@ func extractTopic(text string) string {
 
 	case strings.HasPrefix(text, "<command-name>"):
 		// e.g. <command-name>/plugin</command-name>…
-		if name := extractXMLTag(text, "command-name"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-name"); name != "" {
 			return name
 		}
 
 	case strings.HasPrefix(text, "<command-message>"):
 		// Prefer <command-name> (includes / prefix) when also present in the same message.
-		if name := extractXMLTag(text, "command-name"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-name"); name != "" {
 			return name
 		}
-		if name := extractXMLTag(text, "command-message"); name != "" {
+		if name := stringutil.ExtractXMLTag(text, "command-message"); name != "" {
 			return name
 		}
 	}
 	return text
-}
-
-// extractXMLTag returns the trimmed content of the first occurrence of
-// <tag>…</tag> in s, or "" if not found.
-func extractXMLTag(s, tag string) string {
-	open := "<" + tag + ">"
-	close := "</" + tag + ">"
-	start := strings.Index(s, open)
-	end := strings.Index(s, close)
-	if start >= 0 && end > start+len(open) {
-		return strings.TrimSpace(s[start+len(open) : end])
-	}
-	return ""
 }
