@@ -36,9 +36,8 @@ func renderTurnBoundary(t model.Turn, width int) string {
 	if !t.Timestamp.IsZero() {
 		parts = append(parts, StyleChatTimestamp.Render(t.Timestamp.Format("15:04")))
 	}
-	totalTok := t.InputTokens + t.OutputTokens
-	if totalTok > 0 {
-		parts = append(parts, StyleChatTokens.Render(model.FormatTokenCount(totalTok)+" tok"))
+	if t.InputTokens > 0 || t.OutputTokens > 0 {
+		parts = append(parts, StyleChatTokens.Render(model.FormatTokenInOut(t.InputTokens, t.OutputTokens)+" tok"))
 	}
 	inner := strings.Join(parts, "  ")
 	if inner == "" {
@@ -130,12 +129,14 @@ func renderChatItemHeader(item ChatItem) string {
 	if !turn.Timestamp.IsZero() {
 		parts = append(parts, StyleChatTimestamp.Render(turn.Timestamp.Format("15:04")))
 	}
-	totalTok := turn.InputTokens + turn.OutputTokens
+	totalIn := turn.InputTokens
+	totalOut := turn.OutputTokens
 	for _, et := range item.ExtraTurns {
-		totalTok += et.InputTokens + et.OutputTokens
+		totalIn += et.InputTokens
+		totalOut += et.OutputTokens
 	}
-	if totalTok > 0 {
-		parts = append(parts, StyleChatTokens.Render(model.FormatTokenCount(totalTok)+" tok"))
+	if totalIn > 0 || totalOut > 0 {
+		parts = append(parts, StyleChatTokens.Render(model.FormatTokenInOut(totalIn, totalOut)+" tok"))
 	}
 	return strings.Join(parts, "  ")
 }
@@ -171,9 +172,8 @@ func renderExpandedToolCall(tc *model.ToolCall, turn model.Turn, maxWidth int) s
 	if tc.Duration > 0 {
 		headerParts = append(headerParts, StyleChatTimestamp.Render(tc.DurationString()))
 	}
-	totalTok := turn.InputTokens + turn.OutputTokens
-	if totalTok > 0 {
-		headerParts = append(headerParts, StyleChatTokens.Render(model.FormatTokenCount(totalTok)+" tok"))
+	if turn.InputTokens > 0 || turn.OutputTokens > 0 {
+		headerParts = append(headerParts, StyleChatTokens.Render(model.FormatTokenInOut(turn.InputTokens, turn.OutputTokens)+" tok"))
 	}
 	headerLine := "  " + strings.Join(headerParts, "  ")
 

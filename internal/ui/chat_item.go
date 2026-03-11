@@ -310,12 +310,16 @@ func (c ChatItem) ModelTokenLabel() string {
 	if c.IsDivider {
 		return ""
 	}
-	byModel := make(map[string]int)
+	type tokenPair struct{ in, out int }
+	byModel := make(map[string]tokenPair)
 	addTurn := func(t model.Turn) {
 		if t.ModelName == "" {
 			return
 		}
-		byModel[t.ModelName] += t.InputTokens + t.OutputTokens
+		p := byModel[t.ModelName]
+		p.in += t.InputTokens
+		p.out += t.OutputTokens
+		byModel[t.ModelName] = p
 	}
 	addTurn(c.Turn)
 	for _, et := range c.ExtraTurns {
@@ -331,7 +335,8 @@ func (c ChatItem) ModelTokenLabel() string {
 	sort.Strings(models)
 	var parts []string
 	for _, m := range models {
-		parts = append(parts, model.ShortModelName(m)+":"+model.FormatTokenCount(byModel[m]))
+		p := byModel[m]
+		parts = append(parts, model.ShortModelName(m)+":"+model.FormatTokenInOut(p.in, p.out))
 	}
 	return strings.Join(parts, " ")
 }

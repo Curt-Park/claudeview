@@ -157,8 +157,9 @@ func TestRenderChatItemDetail_ClaudeBubble(t *testing.T) {
 	if !strings.Contains(got, "09:14") {
 		t.Errorf("expected timestamp, got:\n%s", got)
 	}
-	if !strings.Contains(got, "600") || !strings.Contains(got, "tok") {
-		t.Errorf("expected token count (600 total), got:\n%s", got)
+	// InputTokens=500, OutputTokens=100 → "500/100 tok"
+	if !strings.Contains(got, "500/100") || !strings.Contains(got, "tok") {
+		t.Errorf("expected token count (500/100 tok), got:\n%s", got)
 	}
 }
 
@@ -260,9 +261,9 @@ func TestRenderChatItemDetail_GroupedWithExtraTurns(t *testing.T) {
 	if !strings.Contains(got, "Edit") {
 		t.Errorf("expected extra turn tool call 'Edit', got:\n%s", got)
 	}
-	// Aggregated tokens: 500+100+300+50 = 950
-	if !strings.Contains(got, "950") {
-		t.Errorf("expected aggregated token count 950, got:\n%s", got)
+	// Aggregated tokens: in=500+300=800, out=100+50=150 → "800/150"
+	if !strings.Contains(got, "800/150") {
+		t.Errorf("expected aggregated token count 800/150, got:\n%s", got)
 	}
 }
 
