@@ -10,9 +10,10 @@ Shared string utility functions used across packages to avoid duplication.
 
 ## Files & Functions
 
-| File      | Purpose                                                                                  |
-|-----------|------------------------------------------------------------------------------------------|
-| `xml.go`  | `ExtractXMLTag(s, tag string) string` — returns trimmed content of the first `<tag>…</tag>` in s, or `""` if not found |
+| File          | Purpose                                                                                  |
+|---------------|------------------------------------------------------------------------------------------|
+| `xml.go`      | `ExtractXMLTag(s, tag string) string` — returns trimmed content of the first `<tag>…</tag>` in s, or `""` if not found |
+| `markdown.go` | `MdTitle(path string) string` — reads a Markdown file and returns the first `# Heading` text, or `""` if none found |
 
 ## Why This Exists
 
@@ -22,4 +23,5 @@ Extracted during a DRY pass to eliminate identical `extractXMLTag` / `extractXML
 
 - [[transcript-package]] — uses `ExtractXMLTag` in `extractTopic` for slash-command XML parsing
 - [[ui-package]] — uses `ExtractXMLTag` in `cleanTextPreview` for command message extraction
+- [[provider-package]] — uses `MdTitle` for memory file heading extraction
 - [[architecture]] — listed in the internal packages table
