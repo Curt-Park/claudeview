@@ -27,7 +27,7 @@ type InfoModel struct {
 func (info InfoModel) Height(navCount, actionCount, utilCount int) int {
 	base := max(5, 1+max(navCount, max(actionCount, utilCount)))
 	if info.UsageLine != "" {
-		return base + strings.Count(info.UsageLine, "\n") + 1
+		return base + strings.Count(info.UsageLine, "\n") + 2 // +1 for usage lines, +1 for separator
 	}
 	return base
 }
@@ -169,7 +169,8 @@ func (info InfoModel) ViewWithMenu(menu MenuModel) string {
 
 	result := strings.Join(lines, "\n")
 	if info.UsageLine != "" {
-		return info.UsageLine + "\n" + result
+		sep := lipgloss.NewStyle().Foreground(colorGray).Render(strings.Repeat("─", info.Width))
+		return info.UsageLine + "\n" + sep + "\n" + result
 	}
 	return result
 }
