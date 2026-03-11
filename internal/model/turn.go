@@ -9,7 +9,8 @@ type Turn struct {
 	Thinking     string
 	ToolCalls    []*ToolCall
 	ModelName    string
-	InputTokens  int
-	OutputTokens int
+	InputTokens      int
+	CacheReadTokens  int
+	OutputTokens     int
 	Timestamp    time.Time
 }

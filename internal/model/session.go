@@ -9,8 +9,9 @@ import (
 
 // TokenCount holds per-model token usage.
 type TokenCount struct {
-	InputTokens  int
-	OutputTokens int
+	InputTokens     int
+	CacheReadTokens int
+	OutputTokens    int
 }
 
 // Session represents a Claude Code session.
