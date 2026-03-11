@@ -51,8 +51,9 @@ func TestParseFile(t *testing.T) {
 	if !ok {
 		t.Error("expected token entry for claude-opus-4-6")
 	} else {
-		// InputTokens should be sum of input_tokens + cache_creation only (not cache_read)
-		// turn1: 100, turn2: 200, turn3: 300+500=800 → total 1100
+		// After Task 3 refactor, TokensByModel accumulates NewInputTokens() per turn
+		// (InputTokens + CacheCreationInputTokens, excluding CacheReadInputTokens).
+		// turn1: 100+0=100, turn2: 200+0=200, turn3: 300+500=800 → total 1100
 		if usage.InputTokens != 1100 {
 			t.Errorf("expected InputTokens=1100, got %d", usage.InputTokens)
 		}

@@ -49,8 +49,9 @@ func (u Usage) TotalInputTokens() int {
 	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
 }
 
-// NewInputTokens returns input_tokens + cache_creation_input_tokens,
-// excluding cache_read_input_tokens (which represent re-used context, not new input).
+// NewInputTokens returns the count of tokens newly processed this turn —
+// InputTokens plus CacheCreationInputTokens — excluding CacheReadInputTokens,
+// which represent context served from cache rather than freshly processed.
 func (u Usage) NewInputTokens() int {
 	return u.InputTokens + u.CacheCreationInputTokens
 }
