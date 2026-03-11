@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Curt-Park/claudeview/compare/v0.4.0...v0.5.0) (2026-03-11)
+
+
+### Features
+
+* Claude Max usage limit monitor ([#30](https://github.com/Curt-Park/claudeview/issues/30)) ([15623b6](https://github.com/Curt-Park/claudeview/commit/15623b6cc5ac031b198b64f3e06ca263e1db6cc2))
+
 ## [0.4.0](https://github.com/Curt-Park/claudeview/compare/v0.3.0...v0.4.0) (2026-03-11)
 
 
