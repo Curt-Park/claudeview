@@ -1,15 +1,13 @@
 package transcript
 
 import (
-	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
 
-	"golang.org/x/sync/errgroup"
+	"github.com/Curt-Park/claudeview/internal/parallel"
 )
 
 // ProjectInfo holds metadata about a discovered project directory.
@@ -60,31 +58,24 @@ func ScanProjects(claudeDir string) ([]ProjectInfo, error) {
 		})
 	}
 
-	results := make([]ProjectInfo, len(dirs))
-	g, _ := errgroup.WithContext(context.Background())
-	g.SetLimit(runtime.NumCPU())
-	for i, d := range dirs {
-		g.Go(func() error {
-			sessions, err := scanSessions(d.projectPath)
-			if err != nil {
-				return nil
+	results := parallel.Map(dirs, func(d dirEntry) ProjectInfo {
+		sessions, err := scanSessions(d.projectPath)
+		if err != nil {
+			return ProjectInfo{} // zero value, filtered below by p.Hash check
+		}
+		lastSeen := d.modTime
+		for _, s := range sessions {
+			if s.ModTime.After(lastSeen) {
+				lastSeen = s.ModTime
 			}
-			lastSeen := d.modTime
-			for _, s := range sessions {
-				if s.ModTime.After(lastSeen) {
-					lastSeen = s.ModTime
-				}
-			}
-			results[i] = ProjectInfo{
-				Hash:     d.hash,
-				Path:     d.projectPath,
-				Sessions: sessions,
-				LastSeen: lastSeen,
-			}
-			return nil
-		})
-	}
-	g.Wait() //nolint:errcheck
+		}
+		return ProjectInfo{
+			Hash:     d.hash,
+			Path:     d.projectPath,
+			Sessions: sessions,
+			LastSeen: lastSeen,
+		}
+	})
 
 	var projects []ProjectInfo
 	for _, p := range results {

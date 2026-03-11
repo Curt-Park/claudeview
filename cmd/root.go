@@ -1,24 +1,20 @@
 package cmd
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
-	"runtime"
 	"strings"
-	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/Curt-Park/claudeview/internal/config"
 	"github.com/Curt-Park/claudeview/internal/demo"
 	"github.com/Curt-Park/claudeview/internal/model"
+	"github.com/Curt-Park/claudeview/internal/parallel"
+	"github.com/Curt-Park/claudeview/internal/provider"
 	"github.com/Curt-Park/claudeview/internal/transcript"
 	"github.com/Curt-Park/claudeview/internal/ui"
 	"github.com/Curt-Park/claudeview/internal/view"
@@ -54,9 +50,9 @@ func init() {
 func run(cmd *cobra.Command, args []string) error {
 	var dp ui.DataProvider
 	if demoMode {
-		dp = newDemoProvider()
+		dp = demo.NewProvider()
 	} else {
-		dp = newLiveProvider(config.ClaudeDir())
+		dp = provider.NewLive(config.ClaudeDir())
 	}
 
 	appModel := ui.NewAppModel(dp, model.ResourceProjects)
@@ -404,37 +400,22 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 					subTurns [][]model.Turn
 					subTypes []model.AgentType
 				}
-				slugResults := make([]slugResult, len(freshSlug))
-				g, _ := errgroup.WithContext(context.Background())
-				g.SetLimit(runtime.NumCPU())
-				for i, s := range freshSlug {
-					g.Go(func() error {
-						turns := dp.GetTurns(s.FilePath)
-						var subTurns [][]model.Turn
-						if s.SubagentDir != "" {
-							subInfos, _ := transcript.ScanSubagents(s.SubagentDir)
-							subTurnsLocal := make([][]model.Turn, len(subInfos))
-							sg, _ := errgroup.WithContext(context.Background())
-							sg.SetLimit(runtime.NumCPU())
-							for j, si := range subInfos {
-								sg.Go(func() error {
-									subTurnsLocal[j] = dp.GetTurns(si.FilePath)
-									return nil
-								})
-							}
-							sg.Wait() //nolint:errcheck
-							subTurns = subTurnsLocal
-						}
-						slugResults[i] = slugResult{
-							turns:    turns,
-							subTurns: subTurns,
-							subTypes: extractSubagentTypes(turns),
-						}
-						return nil
-					})
-				}
-				g.Wait() //nolint:errcheck
-				for _, r := range slugResults {
+				results := parallel.Map(freshSlug, func(s *model.Session) slugResult {
+					turns := dp.GetTurns(s.FilePath)
+					var subTurns [][]model.Turn
+					if s.SubagentDir != "" {
+						subInfos, _ := transcript.ScanSubagents(s.SubagentDir)
+						subTurns = parallel.Map(subInfos, func(si transcript.SessionInfo) []model.Turn {
+							return dp.GetTurns(si.FilePath)
+						})
+					}
+					return slugResult{
+						turns:    turns,
+						subTurns: subTurns,
+						subTypes: model.ExtractSubagentTypes(turns),
+					}
+				})
+				for _, r := range results {
 					msg.slugGroupTurns = append(msg.slugGroupTurns, r.turns)
 					msg.slugGroupSubTurns = append(msg.slugGroupSubTurns, r.subTurns)
 					msg.slugGroupSubTypes = append(msg.slugGroupSubTypes, r.subTypes)
@@ -445,19 +426,11 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 				}
 				if subagentDir != "" {
 					subInfos, _ := transcript.ScanSubagents(subagentDir)
-					subTurns := make([][]model.Turn, len(subInfos))
-					g, _ := errgroup.WithContext(context.Background())
-					g.SetLimit(runtime.NumCPU())
-					for i, si := range subInfos {
-						g.Go(func() error {
-							subTurns[i] = dp.GetTurns(si.FilePath)
-							return nil
-						})
-					}
-					g.Wait() //nolint:errcheck
-					msg.subagentTurns = subTurns
+					msg.subagentTurns = parallel.Map(subInfos, func(si transcript.SessionInfo) []model.Turn {
+						return dp.GetTurns(si.FilePath)
+					})
 				}
-				msg.subagentTypes = extractSubagentTypes(msg.turns)
+				msg.subagentTypes = model.ExtractSubagentTypes(msg.turns)
 			}
 		}
 		return msg
@@ -495,514 +468,4 @@ func refreshSlugGroup(dp ui.DataProvider, projectHash, sessionID string, current
 
 func (rm *rootModel) View() string {
 	return rm.app.View()
-}
-
-// --- Demo Data Provider ---
-
-type demoDataProvider struct {
-	projects []*model.Project
-	plugins  []*model.Plugin
-}
-
-func newDemoProvider() ui.DataProvider {
-	return &demoDataProvider{
-		projects: demo.GenerateProjects(),
-		plugins:  demo.GeneratePlugins(),
-	}
-}
-
-func (d *demoDataProvider) GetProjects() []*model.Project { return d.projects }
-func (d *demoDataProvider) GetSessions(projectHash string) []*model.Session {
-	for _, p := range d.projects {
-		if projectHash == "" || p.Hash == projectHash {
-			return p.Sessions
-		}
-	}
-	if len(d.projects) > 0 {
-		return d.projects[0].Sessions
-	}
-	return []*model.Session{}
-}
-func (d *demoDataProvider) GetAgents(sessionID string) []*model.Agent {
-	if sessionID == "" {
-		var all []*model.Agent
-		for _, p := range d.projects {
-			for _, s := range p.Sessions {
-				all = append(all, s.Agents...)
-			}
-		}
-		return all
-	}
-	for _, p := range d.projects {
-		for _, s := range p.Sessions {
-			if s.ID == sessionID {
-				return s.Agents
-			}
-		}
-	}
-	return []*model.Agent{}
-}
-func (d *demoDataProvider) GetPlugins(_ string) []*model.Plugin { return d.plugins }
-func (d *demoDataProvider) GetPluginItems(plugin *model.Plugin) []*model.PluginItem {
-	return demo.GeneratePluginItems(plugin.Name)
-}
-func (d *demoDataProvider) GetMemories(_ string) []*model.Memory {
-	return demo.GenerateMemories()
-}
-func (d *demoDataProvider) GetTurns(_ string) []model.Turn { return demo.GenerateTurns() }
-
-// --- Live Data Provider ---
-
-type liveDataProvider struct {
-	claudeDir      string
-	currentProject string
-	currentSession string
-	aggCache       map[string]*transcript.SessionAggregates
-	turnsCache     map[string]*transcript.TranscriptCache
-	mu             sync.Mutex
-}
-
-func newLiveProvider(claudeDir string) ui.DataProvider {
-	return &liveDataProvider{
-		claudeDir:  claudeDir,
-		aggCache:   make(map[string]*transcript.SessionAggregates),
-		turnsCache: make(map[string]*transcript.TranscriptCache),
-	}
-}
-
-func (l *liveDataProvider) GetProjects() []*model.Project {
-	infos, err := transcript.ScanProjects(l.claudeDir)
-	if err != nil {
-		return []*model.Project{}
-	}
-	var projects []*model.Project
-	for _, info := range infos {
-		p := &model.Project{
-			Hash:     info.Hash,
-			Path:     info.Path,
-			LastSeen: info.LastSeen,
-		}
-		results := make([]*model.Session, len(info.Sessions))
-		g, _ := errgroup.WithContext(context.Background())
-		g.SetLimit(runtime.NumCPU())
-		for i, si := range info.Sessions {
-			g.Go(func() error {
-				results[i] = l.sessionFromInfo(si)
-				return nil
-			})
-		}
-		g.Wait() //nolint:errcheck
-		for _, s := range results {
-			if s.Topic == "" {
-				continue // skip empty sessions (no user messages yet)
-			}
-			p.Sessions = append(p.Sessions, s)
-		}
-		projects = append(projects, p)
-	}
-	return projects
-}
-
-func (l *liveDataProvider) GetSessions(projectHash string) []*model.Session {
-	if projectHash != "" {
-		l.currentProject = projectHash
-	}
-
-	infos, err := transcript.ScanProjects(l.claudeDir)
-	if err != nil {
-		return []*model.Session{}
-	}
-
-	type sessionWork struct {
-		si          transcript.SessionInfo
-		projectHash string
-	}
-	var work []sessionWork
-	for _, info := range infos {
-		if l.currentProject != "" && info.Hash != l.currentProject {
-			continue
-		}
-		for _, si := range info.Sessions {
-			work = append(work, sessionWork{si: si, projectHash: info.Hash})
-		}
-	}
-
-	results := make([]*model.Session, len(work))
-	g, _ := errgroup.WithContext(context.Background())
-	g.SetLimit(runtime.NumCPU())
-	for i, w := range work {
-		g.Go(func() error {
-			s := l.sessionFromInfo(w.si)
-			s.ProjectHash = w.projectHash
-			results[i] = s
-			return nil
-		})
-	}
-	g.Wait() //nolint:errcheck
-
-	var sessions []*model.Session
-	for _, s := range results {
-		if s.Topic == "" {
-			continue // skip empty sessions (no user messages yet)
-		}
-		sessions = append(sessions, s)
-	}
-	return model.GroupSessionsBySlug(sessions)
-}
-
-func (l *liveDataProvider) GetAgents(sessionID string) []*model.Agent {
-	if sessionID != "" {
-		l.currentSession = sessionID
-	}
-	sessions := l.GetSessions(l.currentProject)
-	if sessionID == "" {
-		var all []*model.Agent
-		for _, s := range sessions {
-			all = append(all, parseAgentsFromSession(s)...)
-		}
-		return all
-	}
-	for _, s := range sessions {
-		if s.ID == sessionID {
-			return parseAgentsFromSession(s)
-		}
-	}
-	return []*model.Agent{}
-}
-
-func (l *liveDataProvider) GetPlugins(projectHash string) []*model.Plugin {
-	installed, err := config.LoadInstalledPlugins(l.claudeDir)
-	if err != nil {
-		return []*model.Plugin{}
-	}
-	globalEnabled, _ := config.EnabledPlugins(l.claudeDir)
-
-	var plugins []*model.Plugin
-	for _, p := range installed {
-		if projectHash == "" && p.Scope != "user" {
-			continue
-		}
-		key := p.Name + "@" + p.Marketplace
-		var isEnabled bool
-		if p.ProjectPath != "" {
-			pluginEnabled := config.ProjectEnabledPlugins(p.ProjectPath)
-			isEnabled = pluginEnabled[key]
-		} else {
-			isEnabled = globalEnabled[key]
-		}
-		plugins = append(plugins, &model.Plugin{
-			Name:         p.Name,
-			Version:      p.Version,
-			Marketplace:  p.Marketplace,
-			Scope:        p.Scope,
-			Enabled:      isEnabled,
-			InstalledAt:  p.InstalledAt,
-			CacheDir:     p.CacheDir,
-			SkillCount:   model.CountSkills(p.CacheDir),
-			CommandCount: model.CountCommands(p.CacheDir),
-			HookCount:    model.CountHooks(p.CacheDir),
-			AgentCount:   model.CountAgents(p.CacheDir),
-			MCPCount:     model.CountMCPs(p.CacheDir),
-		})
-	}
-	return plugins
-}
-
-func (l *liveDataProvider) GetPluginItems(plugin *model.Plugin) []*model.PluginItem {
-	return model.ListPluginItems(plugin.CacheDir)
-}
-
-func (l *liveDataProvider) GetMemories(projectHash string) []*model.Memory {
-	if projectHash == "" {
-		return []*model.Memory{}
-	}
-	memDir := filepath.Join(l.claudeDir, "projects", projectHash, "memory")
-	entries, err := os.ReadDir(memDir)
-	if err != nil {
-		return []*model.Memory{}
-	}
-	var memories []*model.Memory
-	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".md" {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		path := filepath.Join(memDir, e.Name())
-		memories = append(memories, &model.Memory{
-			Name:    e.Name(),
-			Path:    path,
-			Title:   mdTitle(path),
-			Size:    info.Size(),
-			ModTime: info.ModTime(),
-		})
-	}
-	return memories
-}
-
-// sessionFromInfo creates a Session model from a transcript SessionInfo using incremental parsing.
-func (l *liveDataProvider) sessionFromInfo(si transcript.SessionInfo) *model.Session {
-	s := &model.Session{
-		ID:          si.ID,
-		FilePath:    si.FilePath,
-		SubagentDir: si.SubagentDir,
-		ModTime:     si.ModTime,
-	}
-
-	l.mu.Lock()
-	cached := l.aggCache[si.FilePath]
-	l.mu.Unlock()
-
-	agg, err := transcript.ParseAggregatesIncremental(si.FilePath, cached)
-	if err != nil {
-		return s
-	}
-
-	l.mu.Lock()
-	l.aggCache[si.FilePath] = agg
-	l.mu.Unlock()
-
-	s.NumTurns = agg.NumTurns
-	s.Topic = agg.Topic
-	s.Branch = agg.Branch
-	s.Slug = agg.Slug
-	s.ToolCallCount = agg.TotalToolCalls
-	s.AgentCount = 1 + transcript.CountSubagents(si.SubagentDir)
-	if info, err := os.Stat(si.FilePath); err == nil {
-		s.FileSize = info.Size()
-	}
-
-	s.TokensByModel = make(map[string]model.TokenCount, len(agg.TokensByModel))
-	for m, u := range agg.TokensByModel {
-		s.TokensByModel[m] = model.TokenCount{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}
-	}
-
-	// Merge subagent token data into session totals
-	if si.SubagentDir != "" {
-		subInfos, _ := transcript.ScanSubagents(si.SubagentDir)
-		if len(subInfos) > 0 {
-			subAggs := make([]*transcript.SessionAggregates, len(subInfos))
-			sg, _ := errgroup.WithContext(context.Background())
-			sg.SetLimit(runtime.NumCPU())
-			for i, sub := range subInfos {
-				sg.Go(func() error {
-					l.mu.Lock()
-					subCached := l.aggCache[sub.FilePath]
-					l.mu.Unlock()
-
-					subAgg, err := transcript.ParseAggregatesIncremental(sub.FilePath, subCached)
-					if err != nil {
-						return nil
-					}
-
-					l.mu.Lock()
-					l.aggCache[sub.FilePath] = subAgg
-					l.mu.Unlock()
-
-					subAggs[i] = subAgg
-					return nil
-				})
-			}
-			sg.Wait() //nolint:errcheck
-			for _, subAgg := range subAggs {
-				if subAgg == nil {
-					continue
-				}
-				for m, u := range subAgg.TokensByModel {
-					cur := s.TokensByModel[m]
-					cur.InputTokens += u.InputTokens
-					cur.OutputTokens += u.OutputTokens
-					s.TokensByModel[m] = cur
-				}
-			}
-		}
-	}
-
-	return s
-}
-
-// populateToolCalls fills agent.ToolCalls from a parsed transcript.
-func populateToolCalls(agent *model.Agent, sessionID string, parsed *transcript.ParsedTranscript) {
-	for _, turn := range parsed.Turns {
-		for _, tc := range turn.ToolCalls {
-			agent.ToolCalls = append(agent.ToolCalls, &model.ToolCall{
-				ID:        tc.ID,
-				SessionID: sessionID,
-				AgentID:   agent.ID,
-				Name:      tc.Name,
-				Input:     tc.Input,
-				Result:    tc.Result,
-				IsError:   tc.IsError,
-				Timestamp: turn.Timestamp,
-			})
-		}
-	}
-	if len(agent.ToolCalls) > 0 {
-		last := agent.ToolCalls[len(agent.ToolCalls)-1]
-		agent.LastActivity = last.Name + " " + last.InputSummary()
-	}
-}
-
-// parseAgentsFromSession loads transcript and extracts agents.
-func parseAgentsFromSession(s *model.Session) []*model.Agent {
-	mainAgent := &model.Agent{
-		ID:         "",
-		SessionID:  s.ID,
-		Type:       model.AgentTypeMain,
-		Status:     model.StatusEnded,
-		FilePath:   s.FilePath,
-		IsSubagent: false,
-	}
-
-	// Parse main transcript for tool calls and subagent type extraction
-	var subTypes []model.AgentType
-	if parsed, err := transcript.ParseFile(s.FilePath); err == nil {
-		populateToolCalls(mainAgent, s.ID, parsed)
-		var calls []toolCallInfo
-		for _, t := range parsed.Turns {
-			if t.Role != "assistant" {
-				continue
-			}
-			for _, tc := range t.ToolCalls {
-				calls = append(calls, toolCallInfo{Name: tc.Name, Input: tc.Input})
-			}
-		}
-		subTypes = extractAgentTypesFromCalls(calls)
-	}
-
-	agents := []*model.Agent{mainAgent}
-
-	// Load subagents
-	if s.SubagentDir != "" {
-		subInfos, err := transcript.ScanSubagents(s.SubagentDir)
-		if err == nil {
-			subAgents := make([]*model.Agent, len(subInfos))
-			g, _ := errgroup.WithContext(context.Background())
-			g.SetLimit(runtime.NumCPU())
-			for i, si := range subInfos {
-				agentType := model.AgentTypeGeneral
-				if i < len(subTypes) {
-					agentType = subTypes[i]
-				}
-				g.Go(func() error {
-					sub := &model.Agent{
-						ID:         si.ID,
-						SessionID:  s.ID,
-						Type:       agentType,
-						Status:     model.StatusDone,
-						FilePath:   si.FilePath,
-						IsSubagent: true,
-						StartTime:  si.ModTime,
-					}
-					// Parse subagent transcript
-					if subParsed, err := transcript.ParseFile(si.FilePath); err == nil {
-						populateToolCalls(sub, s.ID, subParsed)
-					}
-					subAgents[i] = sub
-					return nil
-				})
-			}
-			g.Wait() //nolint:errcheck
-			agents = append(agents, subAgents...)
-		}
-	}
-
-	return agents
-}
-
-func (l *liveDataProvider) GetTurns(filePath string) []model.Turn {
-	l.mu.Lock()
-	cached := l.turnsCache[filePath]
-	l.mu.Unlock()
-
-	cache, err := transcript.ParseFileIncremental(filePath, cached)
-	if err != nil {
-		return nil
-	}
-
-	l.mu.Lock()
-	l.turnsCache[filePath] = cache
-	l.mu.Unlock()
-
-	parsed := cache.Turns()
-	turns := make([]model.Turn, 0, len(parsed))
-	for _, t := range parsed {
-		turn := model.Turn{
-			Role:         t.Role,
-			Text:         t.Text,
-			Thinking:     t.Thinking,
-			ModelName:    t.Model,
-			InputTokens:  t.Usage.TotalInputTokens(),
-			OutputTokens: t.Usage.OutputTokens,
-			Timestamp:    t.Timestamp,
-		}
-		for _, tc := range t.ToolCalls {
-			turn.ToolCalls = append(turn.ToolCalls, &model.ToolCall{
-				ID:        tc.ID,
-				Name:      tc.Name,
-				Input:     tc.Input,
-				Result:    tc.Result,
-				IsError:   tc.IsError,
-				Timestamp: tc.Timestamp,
-				Duration:  tc.Duration,
-			})
-		}
-		turns = append(turns, turn)
-	}
-	return turns
-}
-
-// mdTitle reads the first `# Heading` line from a markdown file and returns
-// the heading text. Returns an empty string if the file cannot be read or
-// contains no top-level heading.
-func mdTitle(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.SplitAfter(string(data), "\n") {
-		line = strings.TrimRight(line, "\r\n")
-		if strings.HasPrefix(line, "# ") {
-			return strings.TrimPrefix(line, "# ")
-		}
-	}
-	return ""
-}
-
-// toolCallInfo holds the minimal fields needed to extract subagent types,
-// allowing a single implementation to work with both model.Turn and transcript.Turn.
-type toolCallInfo struct {
-	Name  string
-	Input json.RawMessage
-}
-
-// extractAgentTypesFromCalls reads Agent/Task tool calls and returns the subagent_type
-// value for each, in call order. This matches the positional order used by
-// BuildChatItems to interleave subagent turns.
-func extractAgentTypesFromCalls(calls []toolCallInfo) []model.AgentType {
-	var types []model.AgentType
-	for _, c := range calls {
-		if c.Name != "Agent" && c.Name != "Task" {
-			continue
-		}
-		types = append(types, model.AgentTypeFromInput(c.Input))
-	}
-	return types
-}
-
-// extractSubagentTypes collects Agent/Task tool calls from model.Turn slices
-// and delegates to extractAgentTypesFromCalls.
-func extractSubagentTypes(turns []model.Turn) []model.AgentType {
-	var calls []toolCallInfo
-	for _, t := range turns {
-		if t.Role != "assistant" {
-			continue
-		}
-		for _, tc := range t.ToolCalls {
-			calls = append(calls, toolCallInfo{Name: tc.Name, Input: tc.Input})
-		}
-	}
-	return extractAgentTypesFromCalls(calls)
 }
