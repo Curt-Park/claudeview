@@ -22,7 +22,7 @@ Core data models used across transcript parsing, config loading, UI rendering, a
 | `memory.go`   | `Memory` — Name, Title, Path, Size, ModTime; `SizeStr()`, `LastModified()` |
 | `resource.go` | `ResourceType` constants                                                |
 | `status.go`   | `Status` string type and constants                                      |
-| `format.go`   | `FormatAge(d)` — human-friendly duration; `FormatTokenCount(n)` — "1.5k", "1.5M"; `ShortModelName(model)` — short model identifier ("opus", "sonnet", "haiku", or last dash-segment); `FormatSize(b)` — human-friendly byte size |
+| `format.go`   | `FormatAge(d)` — human-friendly duration; `FormatTokenCount(n)` — "1.5k", "1.5M"; `FormatTokenInOut(in, out)` — "1.2k/300" combined in/out string; `ShortModelName(model)` — short model identifier ("opus", "sonnet", "haiku", or last dash-segment); `FormatSize(b)` — human-friendly byte size |
 
 ## ResourceType Constants
 
@@ -36,6 +36,7 @@ ResourcePluginItemDetail = "plugin-item-detail"
 ResourceMemoryDetail     = "memory-detail"
 ResourceHistory          = "history"
 ResourceHistoryDetail    = "history-detail"
+ResourceToolCallDetail   = "tool-call-detail"
 ```
 
 ## Status Constants

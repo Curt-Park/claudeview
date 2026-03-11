@@ -99,7 +99,7 @@ Both hints hidden when active resource is `plugins`, `memories`, `plugin-detail`
 | TOPIC       | flex (max 35%) | first line of session topic / summary        |
 | TURNS       | 6              | conversation turn count (aggregated for groups) |
 | AGENTS      | 6              | agent count (aggregated for groups)          |
-| MODEL:TOKEN | flex (max 25%) | per-model token string (e.g. `opus:125k sonnet:50k`) |
+| MODEL:TOKEN_IN/OUT | flex (max 25%) | per-model token string (e.g. `opus:125k/50k sonnet:30k/8k`) |
 | LAST ACTIVE | 11             | time since last modification                 |
 
 Each row optionally shows a **subtitle line** (dimmed) with branch and file size metadata, indented under TOPIC.
@@ -165,15 +165,24 @@ Each row optionally shows a **subtitle line** (dimmed) with branch and file size
 
 ### 3. Session History (table view)
 - Activated by `enter` on a Sessions row (resource → `history`)
-- Renders a navigable table of chat items (NAME, MESSAGE, ACTION, MODEL:TOKEN, DURATION)
+- Renders a navigable table of chat items (NAME, MESSAGE, ACTION, MODEL:TOKEN_IN/OUT, DURATION)
 - Each row is a grouped turn: user messages, Claude responses with tool calls, or subagent responses
-- `enter` on a row → history-detail (content view showing expanded turn detail)
+- Sub-agent rows are indented with tree connectors (`├─` / `└─`) in the NAME column
+- **Expand/collapse tool call sub-rows**: `space` toggles; each tool call becomes a separate `ToolCallRow` sub-row below the parent ChatItem
+- `enter` on a ChatItem without tool calls → `history-detail` (full turn content view)
+- `enter` on a `ToolCallRow` sub-row → `tool-call-detail` (expanded tool call view: name/model/duration/tokens + input + full result)
 - **Follow mode** (default on entry): auto-scrolls to the latest row — like `tail -f`
   - `k` / `ctrl+u` / `g`: scroll up, disables follow mode (position locked)
   - `G`: jumps to bottom, re-enables follow mode
   - `j` / `ctrl+d`: scrolls down; re-enables follow mode when bottom is reached
 - Content refreshes on every tick (async) so live sessions update automatically
 - `esc`: return to Sessions table
+
+### 3a. Tool Call Detail (content view)
+- Activated by `enter` on a `ToolCallRow` sub-row (resource → `tool-call-detail`)
+- Shows: `▸ NAME  model  duration  tokens` header line, input summary + status, full result text
+- `j/k` / `ctrl+d/u`: scroll content
+- `esc`: return to history table
 
 ### 4. Memory Detail
 - Activated by `enter` on a Memories row (resource → `memory-detail`)
@@ -201,7 +210,8 @@ Each row optionally shows a **subtitle line** (dimmed) with branch and file size
 | `G`               | go to bottom                                                      |
 | `ctrl+d` / `pgdn` | page down (half page)                                             |
 | `ctrl+u` / `pgup` | page up (half page)                                               |
-| `enter`           | drill down (projects→sessions; sessions→history; plugins/memories→detail) |
+| `enter`           | drill down; in history: detail view or sub-row detail             |
+| `space`           | history only: expand/collapse tool call sub-rows                  |
 | `esc`             | clear filter (if active); otherwise navigate back                 |
 
 ### Filter Mode (`/`)
@@ -220,7 +230,8 @@ Each row optionally shows a **subtitle line** (dimmed) with branch and file size
 projects
   └─→ sessions (filtered by project)
         └─→ history  [table view, follow mode]
-              └─→ history-detail  [leaf, content view]
+              ├─→ history-detail      [leaf, content view]
+              └─→ tool-call-detail    [leaf, content view — via ToolCallRow sub-row]
 
 [p] plugins  ──→  plugin-detail  ──→  plugin-item-detail  [leaf]
 [m] memories ──→  memory-detail  (project context required)

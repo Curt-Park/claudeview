@@ -14,13 +14,13 @@ Implements the Bubble Tea application model and all reusable chrome components.
 |-----------------------|----------------------------------------------------------------|
 | `app.go`              | `AppModel` — root Bubble Tea model; key events, layout, mode   |
 | `table_view.go`       | `TableView` — scrollable table with filter, selection          |
-| `detail_render.go`    | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail`, `ChatItemKey`, `capLines` — string renderers and helpers |
+| `detail_render.go`    | `RenderPluginItemDetail`, `RenderMemoryDetail`, `RenderChatItemDetail`, `RenderToolCallDetail`, `ChatItemKey` — string renderers and helpers; `renderExpandedToolCall` (two-line tool call layout: name/model/duration/tokens + input + result), `renderTurnBoundary` (lightweight `── model  time  tok ──` separator between ExtraTurns) |
 | `header.go`           | Info panel (5-column layout: info, nav, util, shortcuts, quit) |
 | `menu.go`             | `MenuModel` — nav/util item lists and key highlight state      |
 | `crumbs.go`           | `CrumbsModel` — breadcrumb trail                               |
 | `flash.go`            | `FlashModel` — ephemeral status/error message                  |
 | `filter.go`           | `FilterModel` — `/`-triggered filter input bar                 |
-| `chat_item.go`        | `ChatItem` — wraps Turn with subagent metadata (`IsSubagent`, `AgentType`, `SubagentIdx`), divider support (`IsDivider`, `DividerLabel`); `BuildChatItems`, `BuildMergedChatItems` (multi-session with divider rows), `MessagePreview` (delegates to `cleanTextPreview` for system-content handling), `cleanTextPreview`, `ActionLabel`, `ModelTokenLabel`, `TimeLabel`; uses `AgentType.DisplayLabel()` for display labels and `stringutil.ExtractXMLTag` for XML extraction |
+| `chat_item.go`        | `ChatItem` — wraps Turn with subagent metadata (`IsSubagent`, `AgentType`, `SubagentIdx`, `TreeConnector` "├─"/"└─"), divider support (`IsDivider`, `DividerLabel`); `ToolCallRow` — expanded sub-row payload (`ToolCall`, `ParentTurn`, `ChatItemKey`); `BuildChatItems`, `BuildMergedChatItems` (multi-session with divider rows), `MessagePreview` (delegates to `cleanTextPreview` for system-content handling), `cleanTextPreview` (handles skill names, `[img: …]` previews from `[Image: …]` entries, local command content), `ActionLabel`, `ModelTokenLabel` (shows `model:IN/OUT` per-model), `TimeLabel`; uses `AgentType.DisplayLabel()` and `stringutil.ExtractXMLTag` |
 | `chat_item_test.go`   | Tests for `BuildMergedChatItems`, `SubagentIdx` assignment, divider labels, `cleanTextPreview`, and `MessagePreview` cleaned text |
 | `styles.go`           | Lip Gloss style definitions shared across components           |
 
@@ -38,6 +38,8 @@ Implements the Bubble Tea application model and all reusable chrome components.
 - `SubagentTurns [][]model.Turn` — per-subagent turn slices (parallel to Task tool calls)
 - `SubagentTypes []model.AgentType` — agent type for each subagent turn slice
 - `ChatFollow bool` — follow mode flag; when true, history view auto-scrolls to bottom (tail -f)
+- `ExpandedItems map[string]bool` — `ChatItemKey → expanded`; controls which ChatItems show tool call sub-rows
+- `SelectedToolCall *ToolCallRow` — the sub-row selected for `tool-call-detail` view
 - `SelectedSessionFilePath string` — JSONL file path of selected session (for async refresh)
 - `SelectedSessionSubagentDir string` — subagent directory for selected session (for async refresh)
 - `SlugSessions []*model.Session` — all sessions in the selected slug group (len > 1 when merged view)
@@ -66,7 +68,8 @@ type DataProvider interface {
 | `j/k`    | move up/down in table; in history: scroll down/up (k disables follow mode) |
 | `g/G`    | top/bottom; in history: G re-enables follow mode |
 | `ctrl+d/u` | page down/up; in history: ctrl+u disables follow mode |
-| `enter`  | drill down                                  |
+| `enter`  | drill down; in history: navigate to detail or expand/collapse via `drillDetailFromRow()` |
+| `space`  | in history: expand/collapse tool call sub-rows for selected ChatItem |
 | `p`      | jump to plugins                             |
 | `m`      | jump to memories (requires project context) |
 | `/`      | filter mode                                 |
@@ -85,6 +88,7 @@ type DataProvider interface {
 |--------------------|-----------------------------|
 | `TickMsg`          | 1-second timer tick         |
 | `RefreshMsg`       | data reload signal          |
+| `SyncViewMsg`      | re-sync table after expand/collapse (handled by `rootModel`) |
 | `HighlightClearMsg`| key highlight expiry (150ms)|
 
 ## detail_render.go
