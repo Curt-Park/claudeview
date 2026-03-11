@@ -52,7 +52,11 @@ func NewClient(token, baseURL string) *Client {
 }
 
 // SetTTL overrides the cache TTL. Primarily used in tests to bypass caching.
-func (c *Client) SetTTL(d time.Duration) { c.ttl = d }
+func (c *Client) SetTTL(d time.Duration) {
+	c.mu.Lock()
+	c.ttl = d
+	c.mu.Unlock()
+}
 
 // Fetch returns the current usage data, whether the result is stale, and any
 // error. Results are cached for the configured TTL (default 60s). On HTTP or

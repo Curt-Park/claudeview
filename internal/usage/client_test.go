@@ -24,7 +24,9 @@ func makeServer(t *testing.T, fiveHourPct, sevenDayPct float64) *httptest.Server
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(payload)
+		if err := json.NewEncoder(w).Encode(payload); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 }
 
@@ -56,12 +58,16 @@ func TestClientFetchCaches(t *testing.T) {
 			"five_hour": map[string]any{"utilization": 10.0, "resets_at": time.Now().Add(time.Hour).Format(time.RFC3339Nano)},
 			"seven_day": map[string]any{"utilization": 5.0, "resets_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339Nano)},
 		}
-		json.NewEncoder(w).Encode(payload)
+		if err := json.NewEncoder(w).Encode(payload); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	defer srv.Close()
 
 	c := usage.NewClient("tok", srv.URL)
-	c.Fetch(t.Context())
+	if _, _, err := c.Fetch(t.Context()); err != nil {
+		t.Fatalf("setup fetch failed: %v", err)
+	}
 	c.Fetch(t.Context()) // should hit cache, not server
 
 	if calls != 1 {
@@ -91,7 +97,9 @@ func TestClientFetchStaleOnError(t *testing.T) {
 				"five_hour": map[string]any{"utilization": 50.0, "resets_at": time.Now().Add(time.Hour).Format(time.RFC3339Nano)},
 				"seven_day": map[string]any{"utilization": 25.0, "resets_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339Nano)},
 			}
-			json.NewEncoder(w).Encode(payload)
+			if err := json.NewEncoder(w).Encode(payload); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 		} else {
 			http.Error(w, "error", http.StatusInternalServerError)
 		}
@@ -100,7 +108,9 @@ func TestClientFetchStaleOnError(t *testing.T) {
 
 	c := usage.NewClient("tok", srv.URL)
 	c.SetTTL(0) // bypass cache so second call hits server
-	c.Fetch(t.Context())
+	if _, _, err := c.Fetch(t.Context()); err != nil {
+		t.Fatalf("setup fetch failed: %v", err)
+	}
 	data, stale, err := c.Fetch(t.Context())
 	if err != nil {
 		t.Fatalf("expected stale fallback, got error: %v", err)
