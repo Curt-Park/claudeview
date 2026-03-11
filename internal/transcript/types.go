@@ -49,6 +49,12 @@ func (u Usage) TotalInputTokens() int {
 	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
 }
 
+// NewInputTokens returns input_tokens + cache_creation_input_tokens,
+// excluding cache_read_input_tokens (which represent re-used context, not new input).
+func (u Usage) NewInputTokens() int {
+	return u.InputTokens + u.CacheCreationInputTokens
+}
+
 // assistantMessage is the message field when type=="assistant".
 type assistantMessage struct {
 	Role    string           `json:"role"`

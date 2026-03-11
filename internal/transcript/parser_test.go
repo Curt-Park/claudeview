@@ -51,8 +51,13 @@ func TestParseFile(t *testing.T) {
 	if !ok {
 		t.Error("expected token entry for claude-opus-4-6")
 	} else {
-		if usage.InputTokens != 600 {
-			t.Errorf("expected InputTokens=600, got %d", usage.InputTokens)
+		// InputTokens should be sum of input_tokens + cache_creation only (not cache_read)
+		// turn1: 100, turn2: 200, turn3: 300+500=800 → total 1100
+		if usage.InputTokens != 1100 {
+			t.Errorf("expected InputTokens=1100, got %d", usage.InputTokens)
+		}
+		if usage.CacheReadInputTokens != 1000 {
+			t.Errorf("expected CacheReadInputTokens=1000, got %d", usage.CacheReadInputTokens)
 		}
 		if usage.OutputTokens != 170 {
 			t.Errorf("expected OutputTokens=170, got %d", usage.OutputTokens)
