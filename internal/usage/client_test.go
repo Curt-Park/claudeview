@@ -68,7 +68,7 @@ func TestClientFetchCaches(t *testing.T) {
 	if _, _, err := c.Fetch(t.Context()); err != nil {
 		t.Fatalf("setup fetch failed: %v", err)
 	}
-	c.Fetch(t.Context()) // should hit cache, not server
+	_, _, _ = c.Fetch(t.Context()) // should hit cache, not server
 
 	if calls != 1 {
 		t.Errorf("expected 1 HTTP call, got %d (caching not working)", calls)

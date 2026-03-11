@@ -85,7 +85,7 @@ func (c *Client) Fetch(ctx context.Context) (*Data, bool, error) {
 	if err != nil {
 		return c.stale(fmt.Errorf("fetching usage: %w", err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return c.stale(fmt.Errorf("usage API returned HTTP %d", resp.StatusCode))
