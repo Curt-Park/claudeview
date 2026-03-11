@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Curt-Park/claudeview/compare/v0.2.0...v0.3.0) (2026-03-11)
+
+
+### Features
+
+* history view overhaul — expandable tool calls, token details, UX improvements ([#26](https://github.com/Curt-Park/claudeview/issues/26)) ([e3b49d2](https://github.com/Curt-Park/claudeview/commit/e3b49d2464f3dd7a7b31bc13a9732e1d1d489731))
+
 ## [0.2.0](https://github.com/Curt-Park/claudeview/compare/v0.1.0...v0.2.0) (2026-03-04)
 
 
