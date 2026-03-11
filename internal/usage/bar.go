@@ -73,11 +73,11 @@ func renderProgressRow(label string, w *Window, stale bool, labelW, barW, width 
 	} else {
 		fg = colorNormal
 	}
-	barStyle := lipgloss.NewStyle().Foreground(fg)
+	barStyle := lipgloss.NewStyle().Foreground(fg).Background(colorBg)
 	if !stale && pct > 80 {
 		barStyle = barStyle.Bold(true)
 	}
-	emptyStyle := lipgloss.NewStyle().Foreground(colorEmpty)
+	emptyStyle := lipgloss.NewStyle().Foreground(colorEmpty).Background(colorBg)
 
 	bar := barStyle.Render(strings.Repeat("█", filled)) + emptyStyle.Render(strings.Repeat("░", empty))
 	pctStr := fmt.Sprintf("%3.0f%%", pct)
