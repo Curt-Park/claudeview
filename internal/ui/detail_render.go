@@ -65,6 +65,29 @@ func renderAgentCallLine(tc *model.ToolCall, subItem *ChatItem, maxWidth int) st
 	return strings.Join(lines, "\n")
 }
 
+// renderTurnBoundary renders a lightweight API-call boundary marker shown between
+// ExtraTurns in both Claude and sub-agent detail views:
+//
+//	── sonnet  06:14  300 tok ──
+func renderTurnBoundary(t model.Turn, width int) string {
+	var parts []string
+	if m := model.ShortModelName(t.ModelName); m != "" {
+		parts = append(parts, StyleDim.Render(m))
+	}
+	if !t.Timestamp.IsZero() {
+		parts = append(parts, StyleChatTimestamp.Render(t.Timestamp.Format("15:04")))
+	}
+	totalTok := t.InputTokens + t.OutputTokens
+	if totalTok > 0 {
+		parts = append(parts, StyleChatTokens.Render(model.FormatTokenCount(totalTok)+" tok"))
+	}
+	inner := strings.Join(parts, "  ")
+	if inner == "" {
+		return StyleChatThinking.Render("────────────")
+	}
+	return StyleChatThinking.Render("── " + inner + " ──")
+}
+
 // lastAssistantText returns the last non-empty text from a sub-agent ChatItem,
 // checking ExtraTurns in reverse order before falling back to the primary Turn.
 func lastAssistantText(item ChatItem) string {
@@ -85,17 +108,26 @@ func RenderChatItemDetail(items []ChatItem, selectedIdx, width int) string {
 	}
 	sel := items[selectedIdx]
 
-	// Subagent: render primary turn + all extra turns as full transcript.
+	// Subagent: render primary turn header + all turns' content with API-call boundaries.
 	if sel.IsSubagent {
 		var allLines []string
 		allLines = append(allLines, renderChatItem(ChatItem{
 			Turn: sel.Turn, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
 		}, nil, width)...)
 		for _, et := range sel.ExtraTurns {
-			allLines = append(allLines, "") // blank line between turns
-			allLines = append(allLines, renderChatItem(ChatItem{
-				Turn: et, IsSubagent: sel.IsSubagent, AgentType: sel.AgentType, SubagentIdx: sel.SubagentIdx,
-			}, nil, width)...)
+			allLines = append(allLines, "")
+			allLines = append(allLines, renderTurnBoundary(et, width))
+			if et.Thinking != "" {
+				allLines = append(allLines, StyleChatThinking.Render("── thinking ──"))
+				allLines = append(allLines, ansi.Wrap(et.Thinking, width, ""))
+			}
+			if et.Text != "" {
+				allLines = append(allLines, ansi.Wrap(et.Text, width, ""))
+			}
+			for _, tc := range et.ToolCalls {
+				allLines = append(allLines, "")
+				allLines = append(allLines, renderExpandedToolCall(tc, et, width))
+			}
 		}
 		return strings.Join(allLines, "\n")
 	}
@@ -193,9 +225,10 @@ func renderChatItem(item ChatItem, subItems []ChatItem, width int) []string {
 		parts = append(parts, renderTC(tc, turn))
 	}
 
-	// ExtraTurns: separator + thinking + text + tool calls for each grouped turn
+	// ExtraTurns: API-call boundary + thinking + text + tool calls for each grouped turn
 	for _, et := range item.ExtraTurns {
 		parts = append(parts, "")
+		parts = append(parts, renderTurnBoundary(et, width))
 		if et.Thinking != "" {
 			parts = append(parts, StyleChatThinking.Render("── thinking ──"))
 			parts = append(parts, ansi.Wrap(et.Thinking, width, ""))
