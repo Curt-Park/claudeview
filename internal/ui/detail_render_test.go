@@ -188,8 +188,11 @@ func TestRenderChatItemDetail_ToolCallLines(t *testing.T) {
 		SubagentIdx: -1,
 	}
 	got := ui.RenderChatItemDetail([]ui.ChatItem{item}, 0, 120)
+	if !strings.Contains(got, "done") {
+		t.Errorf("expected text 'done' in output, got:\n%s", got)
+	}
 	if !strings.Contains(got, "Read") {
-		t.Errorf("expected 'Read' tool name, got:\n%s", got)
+		t.Errorf("expected 'Read' tool summary in output, got:\n%s", got)
 	}
 	if !strings.Contains(got, "✓") {
 		t.Errorf("expected ✓ for successful tool, got:\n%s", got)
@@ -247,18 +250,16 @@ func TestRenderChatItemDetail_GroupedWithExtraTurns(t *testing.T) {
 	if !strings.Contains(got, "Let me check the code.") {
 		t.Errorf("expected primary text in output, got:\n%s", got)
 	}
-	// Primary tool call
+	// Tool call summaries should appear as one-liners.
 	if !strings.Contains(got, "Grep") {
 		t.Errorf("expected primary tool call 'Grep', got:\n%s", got)
 	}
-	// ExtraTurn tool calls
 	if !strings.Contains(got, "Read") {
 		t.Errorf("expected extra turn tool call 'Read', got:\n%s", got)
 	}
 	if !strings.Contains(got, "Edit") {
 		t.Errorf("expected extra turn tool call 'Edit', got:\n%s", got)
 	}
-	// No separator — ExtraTurns flow naturally after primary turn
 	// Aggregated tokens: 500+100+300+50 = 950
 	if !strings.Contains(got, "950") {
 		t.Errorf("expected aggregated token count 950, got:\n%s", got)
@@ -339,7 +340,7 @@ func TestRenderChatItemDetail_RegularAssistantSingleTurn(t *testing.T) {
 }
 
 func TestRenderChatItemDetail_AgentCallCompact(t *testing.T) {
-	// Agent/Task tool calls in a Claude turn should render as icon+name + full result.
+	// Detail view shows only the text from the Claude turn, not tool calls.
 	taskInput, _ := json.Marshal(map[string]string{"subagent_type": "Explore"})
 	result, _ := json.Marshal("Found 42 files matching the pattern.")
 	claudeItem := ui.ChatItem{
@@ -356,24 +357,21 @@ func TestRenderChatItemDetail_AgentCallCompact(t *testing.T) {
 	items := []ui.ChatItem{claudeItem}
 	got := ui.RenderChatItemDetail(items, 0, 120)
 
-	if !strings.Contains(got, "Explorer") {
-		t.Errorf("expected agent name 'Explorer' in output, got:\n%s", got)
+	// Text should be shown.
+	if !strings.Contains(got, "delegating") {
+		t.Errorf("expected text 'delegating' in output, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Found 42 files matching the pattern.") {
-		t.Errorf("expected full result in output, got:\n%s", got)
+	// Tool call summaries should appear as one-liners.
+	if !strings.Contains(got, "Agent") {
+		t.Errorf("expected 'Agent' tool summary in output, got:\n%s", got)
 	}
 	if !strings.Contains(got, "Read") {
-		t.Errorf("expected 'Read' tool in output, got:\n%s", got)
-	}
-	for _, line := range strings.Split(got, "\n") {
-		if strings.Contains(line, "Explorer") && (strings.Contains(line, "✓") || strings.Contains(line, "✗")) {
-			t.Errorf("Agent call line should not contain ✓/✗, got: %q", line)
-		}
+		t.Errorf("expected 'Read' tool summary in output, got:\n%s", got)
 	}
 }
 
 func TestRenderChatItemDetail_AgentCallFallbackToSubItem(t *testing.T) {
-	// When tc.Result is nil, the sub-agent ChatItem's last turn text is shown.
+	// Detail view shows only the text from the Claude turn; tool calls (including Agent) are excluded.
 	taskInput, _ := json.Marshal(map[string]string{"subagent_type": "Explore"})
 	claudeItem := ui.ChatItem{
 		Turn: model.Turn{
@@ -396,9 +394,16 @@ func TestRenderChatItemDetail_AgentCallFallbackToSubItem(t *testing.T) {
 	items := []ui.ChatItem{claudeItem, subItem}
 	got := ui.RenderChatItemDetail(items, 0, 120)
 
-	// Should show the last ExtraTurn text as fallback.
-	if !strings.Contains(got, "found the answer") {
-		t.Errorf("expected fallback sub-agent text in output, got:\n%s", got)
+	// Should show Claude's own text and tool call summary.
+	if !strings.Contains(got, "delegating") {
+		t.Errorf("expected text 'delegating' in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Agent") {
+		t.Errorf("expected 'Agent' tool summary in output, got:\n%s", got)
+	}
+	// Sub-agent turn text is not shown in the parent's detail view.
+	if strings.Contains(got, "found the answer") || strings.Contains(got, "still searching") {
+		t.Errorf("expected sub-agent text excluded from parent detail view, got:\n%s", got)
 	}
 }
 

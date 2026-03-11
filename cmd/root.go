@@ -278,6 +278,7 @@ func (rm *rootModel) syncView() {
 		if rm.app.ChatFollow {
 			rm.app.Table.GotoBottom()
 		}
+		rm.app.RefreshMenu()
 	}
 
 	rm.lastResource = rt

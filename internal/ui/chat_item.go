@@ -162,17 +162,91 @@ func cleanTextPreview(text string) string {
 			return name
 		}
 	case strings.HasPrefix(text, "Base directory for this skill:"):
+		// Show the skill name (last path component from the first line).
+		firstLine := text
+		if idx := strings.IndexByte(text, '\n'); idx >= 0 {
+			firstLine = text[:idx]
+		}
+		firstLine = strings.TrimPrefix(firstLine, "Base directory for this skill:")
+		firstLine = strings.TrimSpace(firstLine)
+		if lastSlash := strings.LastIndexByte(firstLine, '/'); lastSlash >= 0 {
+			firstLine = firstLine[lastSlash+1:]
+		}
+		if firstLine != "" {
+			return "(skill) " + firstLine
+		}
 		return "(skill loaded)"
 	case strings.HasPrefix(text, "<local-command-caveat>"),
 		strings.HasPrefix(text, "<local-command-stdout>"),
 		strings.HasPrefix(text, "<local-command-stderr>"):
+		// Extract and show the actual command output content.
+		for _, tag := range []string{"local-command-stdout", "local-command-stderr", "local-command-caveat"} {
+			if content := extractXMLContent(text, tag); content != "" {
+				return strings.Join(strings.Fields(content), " ")
+			}
+		}
 		return "(command output)"
+	case strings.HasPrefix(text, "[Image"):
+		// Extract filenames from one or more "[Image: source: /path]" entries.
+		// Uses only the last path component to keep the preview short.
+		return extractImagePreviews(text)
 	}
 
 	// Collapse newlines into spaces so the preview shows as much context as
 	// possible in a single line (the caller truncates to the column width).
 	line := strings.Join(strings.Fields(text), " ")
 	return line
+}
+
+// extractImagePreviews collects the filename from every "[Image: source: /path]"
+// pattern in text and joins them as "[img: name1, name2]".
+func extractImagePreviews(text string) string {
+	var names []string
+	rest := text
+	for {
+		start := strings.Index(rest, "[Image")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(rest[start:], "]")
+		if end < 0 {
+			break
+		}
+		chunk := rest[start : start+end+1] // e.g. "[Image: source: /path/file.png]"
+		// Extract the path after the last colon+space.
+		if colonIdx := strings.LastIndex(chunk, ": "); colonIdx >= 0 {
+			pathStr := strings.TrimSpace(chunk[colonIdx+2 : len(chunk)-1])
+			if slash := strings.LastIndexByte(pathStr, '/'); slash >= 0 {
+				pathStr = pathStr[slash+1:]
+			}
+			// Strip non-ASCII characters (e.g. Korean chars in screenshot
+			// filenames) to avoid terminal width/alignment issues.
+			pathStr = asciiOnly(pathStr)
+			if pathStr != "" {
+				names = append(names, pathStr)
+			}
+		}
+		rest = rest[start+end+1:]
+	}
+	if len(names) == 0 {
+		return "[img]"
+	}
+	return "[img: " + strings.Join(names, ", ") + "]"
+}
+
+// asciiOnly returns s with every non-printable-ASCII rune replaced by a space,
+// then collapses runs of spaces so width calculations stay reliable across
+// terminals and font configurations.
+func asciiOnly(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 0x20 && r <= 0x7e {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte(' ')
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 // extractXMLContent returns the trimmed text inside the first <tag>…</tag> in s.

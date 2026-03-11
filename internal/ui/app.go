@@ -183,7 +183,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Highlight menu items only when not in filter input mode.
 		var highlightCmd tea.Cmd
 		if !m.inFilter {
-			m.Menu.SetHighlight(msg.String())
+			highlightKey := msg.String()
+			if highlightKey == " " {
+				highlightKey = "space"
+			}
+			m.Menu.SetHighlight(highlightKey)
 			highlightCmd = tea.Tick(HighlightDuration, func(time.Time) tea.Msg {
 				return HighlightClearMsg{}
 			})
@@ -267,11 +271,14 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// View transition: clear highlight so next view doesn't show stale flash.
 		m.Menu.ClearHighlight()
-		return m, m.drillDown()
-	case "d":
 		if m.Resource == model.ResourceHistory {
-			m.Menu.ClearHighlight()
 			m.drillDetailFromRow()
+		} else {
+			return m, m.drillDown()
+		}
+	case " ":
+		if m.Resource == model.ResourceHistory {
+			return m, m.toggleExpansion()
 		}
 	default:
 		if isContentView(m.Resource) {
@@ -279,6 +286,7 @@ func (m AppModel) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.updateChatFollow(msg)
 			m.Table.Update(msg)
+			m.refreshMenu()
 		}
 	}
 	return m, nil
@@ -423,9 +431,21 @@ func (m *AppModel) SetSlugGroupData(turns [][]model.Turn, subTurns [][][]model.T
 
 // refreshMenu updates the menu nav and util items based on current state.
 // hasFilter is true when a filter is active OR the filter input is open.
+// RefreshMenu is the exported entry point for callers outside this package (e.g. cmd/root.go)
+// that need to sync the menu after mutating Table state (expansion, cursor restoration).
+func (m *AppModel) RefreshMenu() { m.refreshMenu() }
+
 func (m *AppModel) refreshMenu() {
-	m.Menu.NavItems = TableNavItems(m.Resource, m.Table.Filter != "" || m.inFilter)
-	m.Menu.UtilItems = TableUtilItems(m.Resource)
+	hasFilter := m.Table.Filter != "" || m.inFilter
+	canExpand := false
+	if row := m.Table.SelectedRow(); row != nil {
+		if ci, ok := row.Data.(ChatItem); ok && !ci.IsDivider && len(ci.AllToolCalls()) > 0 {
+			canExpand = true
+		}
+	}
+	m.Menu.NavItems = TableNavItems(m.Resource, hasFilter)
+	m.Menu.ActionItems = TableActionItems(m.Resource, hasFilter, canExpand)
+	m.Menu.UtilItems = TableUtilItems(m.Resource, hasFilter)
 }
 
 // switchResource pops the breadcrumb, sets the resource, and refreshes the menu.
@@ -533,6 +553,30 @@ func (m *AppModel) navigateBack() {
 	}
 }
 
+// toggleExpansion expands or collapses the selected ChatItem's tool call sub-rows.
+// No-ops for dividers, user/assistant rows without tool calls, and ToolCallRow sub-rows.
+func (m *AppModel) toggleExpansion() tea.Cmd {
+	row := m.Table.SelectedRow()
+	if row == nil {
+		return nil
+	}
+	ci, ok := row.Data.(ChatItem)
+	if !ok || ci.IsDivider || len(ci.AllToolCalls()) == 0 {
+		return nil
+	}
+	key := ChatItemKey(ci)
+	if m.ExpandedItems == nil {
+		m.ExpandedItems = make(map[string]bool)
+	}
+	if m.ExpandedItems[key] {
+		delete(m.ExpandedItems, key)
+	} else {
+		m.ExpandedItems[key] = true
+	}
+	m.ChatFollow = false
+	return func() tea.Msg { return SyncViewMsg{} }
+}
+
 func (m *AppModel) drillDown() tea.Cmd {
 	row := m.Table.SelectedRow()
 	if row == nil {
@@ -631,8 +675,8 @@ func (m *AppModel) drillDetail(ci ChatItem) {
 	m.drillInto(model.ResourceHistoryDetail)
 }
 
-// drillDetailFromRow navigates to ResourceHistoryDetail for the currently selected
-// history row, whether it is a ChatItem or a ToolCallRow sub-row.
+// drillDetailFromRow navigates to the appropriate detail view for the currently
+// selected history row: message detail for ChatItem rows, tool call detail for sub-rows.
 func (m *AppModel) drillDetailFromRow() {
 	row := m.Table.SelectedRow()
 	if row == nil {
@@ -644,23 +688,15 @@ func (m *AppModel) drillDetailFromRow() {
 			m.drillDetail(v)
 		}
 	case ToolCallRow:
-		// Find the parent ChatItem
-		for _, item := range m.ChatItems {
-			if ChatItemKey(item) == v.ChatItemKey {
-				m.drillDetail(item)
-				return
-			}
-		}
+		m.SelectedToolCall = &v
+		m.drillInto(model.ResourceToolCallDetail)
 	}
 }
 
 // ApplyExpansion inserts ToolCallRow sub-rows after each expanded ChatItem row
-// in the current Table. It preserves the cursor position by key.
+// in the current Table and adds [+]/[-] indicators to expandable rows.
+// It preserves the cursor position by key.
 func (m *AppModel) ApplyExpansion() {
-	if len(m.ExpandedItems) == 0 {
-		return
-	}
-
 	// Record the currently selected row's identity for cursor restoration.
 	var anchorCIKey string
 	var anchorTCName string
@@ -676,31 +712,39 @@ func (m *AppModel) ApplyExpansion() {
 		}
 	}
 
-	// Build expanded row slice.
+	// Build expanded row slice, adding [+]/[-] indicators and inserting sub-rows.
 	var expanded []Row
 	for _, row := range m.Table.Rows {
-		expanded = append(expanded, row)
-		ci, ok := row.Data.(ChatItem)
-		if !ok {
-			continue
-		}
-		key := ChatItemKey(ci)
-		if !m.ExpandedItems[key] {
-			continue
-		}
-		// Insert sub-rows for tool calls in the primary turn.
-		for _, tc := range ci.Turn.ToolCalls {
-			expanded = append(expanded, buildToolCallSubRow(ToolCallRow{
-				ToolCall: tc, ParentTurn: ci.Turn, ChatItemKey: key,
-			}))
-		}
-		// Insert sub-rows for tool calls in each ExtraTurn.
-		for _, et := range ci.ExtraTurns {
-			for _, tc := range et.ToolCalls {
-				expanded = append(expanded, buildToolCallSubRow(ToolCallRow{
-					ToolCall: tc, ParentTurn: et, ChatItemKey: key,
-				}))
+		ci, isChatItem := row.Data.(ChatItem)
+		if isChatItem && !ci.IsDivider && len(ci.AllToolCalls()) > 0 {
+			key := ChatItemKey(ci)
+			// Copy cells to avoid mutating the underlying array.
+			newCells := make([]string, len(row.Cells))
+			copy(newCells, row.Cells)
+			row.Cells = newCells
+			if m.ExpandedItems[key] {
+				row.Cells[0] += " [-]"
+				expanded = append(expanded, row)
+				// Insert sub-rows for tool calls in the primary turn.
+				for _, tc := range ci.Turn.ToolCalls {
+					expanded = append(expanded, buildToolCallSubRow(ToolCallRow{
+						ToolCall: tc, ParentTurn: ci.Turn, ChatItemKey: key,
+					}))
+				}
+				// Insert sub-rows for tool calls in each ExtraTurn.
+				for _, et := range ci.ExtraTurns {
+					for _, tc := range et.ToolCalls {
+						expanded = append(expanded, buildToolCallSubRow(ToolCallRow{
+							ToolCall: tc, ParentTurn: et, ChatItemKey: key,
+						}))
+					}
+				}
+			} else {
+				row.Cells[0] += " [+]"
+				expanded = append(expanded, row)
 			}
+		} else {
+			expanded = append(expanded, row)
 		}
 	}
 
@@ -803,7 +847,7 @@ func (m AppModel) ContentHeight() int {
 func (m AppModel) contentHeight() int {
 	// Sum chrome heights dynamically so adding/removing UI rows only
 	// requires updating the relevant component's Height() method.
-	chrome := m.Info.Height(len(m.Menu.NavItems), len(m.Menu.UtilItems)) + // info panel (top)
+	chrome := m.Info.Height(len(m.Menu.NavItems), len(m.Menu.ActionItems), len(m.Menu.UtilItems)) + // info panel (top)
 		1 + // title bar (renderTitleBar → always 1 line)
 		m.Crumbs.Height() + // breadcrumb bar
 		m.Flash.Height() // status bar (Flash and Filter render the same 1 line)

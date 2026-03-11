@@ -260,10 +260,13 @@ func TestCleanTextPreview(t *testing.T) {
 			"/autology:triage-knowledge"},
 		{"skill response",
 			"Base directory for this skill: /home/user/.claude/plugins/cache/autology/autology/0.10.2/skills/sync-knowledge\n\n## Overview",
-			"(skill loaded)"},
-		{"local-command-stdout", "<local-command-stdout>some output</local-command-stdout>", "(command output)"},
-		{"local-command-stderr", "<local-command-stderr>error msg</local-command-stderr>", "(command output)"},
-		{"local-command-caveat", "<local-command-caveat>warning</local-command-caveat>", "(command output)"},
+			"(skill) sync-knowledge"},
+		{"local-command-stdout", "<local-command-stdout>some output</local-command-stdout>", "some output"},
+		{"local-command-stderr", "<local-command-stderr>error msg</local-command-stderr>", "error msg"},
+		{"local-command-caveat", "<local-command-caveat>warning</local-command-caveat>", "warning"},
+		{"image single", "[Image: source: /home/curt/스크린샷 2026-03-11 오후 4.53.46.png]", "[img: 2026-03-11 4.53.46.png]"},
+		{"image multiple", "[Image: source: /a/b/foo.png][Image: source: /c/d/bar.png]", "[img: foo.png, bar.png]"},
+		{"image no colon", "[Image source: /a/b/baz.gif]", "[img: baz.gif]"},
 		{"regular text with leading whitespace", "  trimmed  ", "trimmed"},
 	}
 	for _, tt := range tests {
