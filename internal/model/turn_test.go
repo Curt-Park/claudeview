@@ -16,8 +16,9 @@ func TestTurnFields(t *testing.T) {
 		Thinking:     "hmm",
 		ToolCalls:    []*model.ToolCall{},
 		ModelName:    "claude-sonnet",
-		InputTokens:  100,
-		OutputTokens: 50,
+		InputTokens:      100,
+		OutputTokens:     50,
+		CacheReadTokens:  25,
 		Timestamp:    time.Now(),
 	}
 }
