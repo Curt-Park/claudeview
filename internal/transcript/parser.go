@@ -54,12 +54,17 @@ func ParseFile(path string) (*ParsedTranscript, error) {
 }
 
 // flushPendingTurn matches tool results into the pending turn, accumulates metrics, and appends it.
-func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[string]json.RawMessage, toolErrors map[string]bool) {
+// toolTimestamps maps tool_use_id -> timestamp of the user turn that delivered the result;
+// used to compute per-tool-call Duration.
+func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[string]json.RawMessage, toolErrors map[string]bool, toolTimestamps map[string]time.Time) {
 	for i := range turn.ToolCalls {
 		tc := &turn.ToolCalls[i]
 		if res, ok := toolResults[tc.ID]; ok {
 			tc.Result = res
 			tc.IsError = toolErrors[tc.ID]
+			if resultTS, ok := toolTimestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
+				tc.Duration = resultTS.Sub(tc.Timestamp)
+			}
 		}
 	}
 	// Accumulate per-model token usage
@@ -123,6 +128,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 	// toolResults maps tool_use_id -> tool_result content
 	toolResults := map[string]json.RawMessage{}
 	toolErrors := map[string]bool{}
+	toolTimestamps := map[string]time.Time{}
 
 	var pendingAssistantTurn *Turn
 
@@ -149,10 +155,11 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 			for _, c := range msg.toolResults() {
 				toolResults[c.ToolUseID] = c.Content
 				toolErrors[c.ToolUseID] = c.IsError
+				toolTimestamps[c.ToolUseID] = ts
 			}
 			// Flush pending assistant turn with matched results
 			if pendingAssistantTurn != nil {
-				flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors)
+				flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors, toolTimestamps)
 				pendingAssistantTurn = nil
 			}
 			// Add user text turns
@@ -216,7 +223,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 		case "system":
 			if entry.Subtype == "compact_boundary" {
 				if pendingAssistantTurn != nil {
-					flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors)
+					flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors, toolTimestamps)
 					pendingAssistantTurn = nil
 				}
 				result.Turns = append(result.Turns, Turn{
@@ -237,7 +244,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 
 	// Flush any remaining pending turn
 	if pendingAssistantTurn != nil {
-		flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors)
+		flushPendingTurn(result, pendingAssistantTurn, toolResults, toolErrors, toolTimestamps)
 	}
 
 	return result, scanner.Err()
@@ -245,12 +252,13 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 
 // TranscriptCache holds parser state for incremental turns parsing.
 type TranscriptCache struct {
-	committed   []Turn                     // fully flushed turns (tool results matched)
-	pending     *Turn                      // current assistant turn awaiting tool results
-	toolResults map[string]json.RawMessage // collected but unmatched tool results
-	toolErrors  map[string]bool            // error flags for unmatched tool results
-	offset      int64                      // file position after last-read line
-	topic       string                     // first real user message text
+	committed      []Turn                     // fully flushed turns (tool results matched)
+	pending        *Turn                      // current assistant turn awaiting tool results
+	toolResults    map[string]json.RawMessage // collected but unmatched tool results
+	toolErrors     map[string]bool            // error flags for unmatched tool results
+	toolTimestamps map[string]time.Time       // timestamp of user turn delivering each tool result
+	offset         int64                      // file position after last-read line
+	topic          string                     // first real user message text
 }
 
 // Offset returns the current file read position.
@@ -269,6 +277,9 @@ func (c *TranscriptCache) Turns() []Turn {
 		if res, ok := c.toolResults[tc.ID]; ok {
 			tc.Result = res
 			tc.IsError = c.toolErrors[tc.ID]
+			if resultTS, ok := c.toolTimestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
+				tc.Duration = resultTS.Sub(tc.Timestamp)
+			}
 		}
 	}
 	return append(c.committed, snapshot)
@@ -280,8 +291,9 @@ func (c *TranscriptCache) Turns() []Turn {
 func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache, error) {
 	if cache == nil {
 		cache = &TranscriptCache{
-			toolResults: make(map[string]json.RawMessage),
-			toolErrors:  make(map[string]bool),
+			toolResults:    make(map[string]json.RawMessage),
+			toolErrors:     make(map[string]bool),
+			toolTimestamps: make(map[string]time.Time),
 		}
 	}
 
@@ -322,6 +334,7 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 			for _, c := range msg.toolResults() {
 				cache.toolResults[c.ToolUseID] = c.Content
 				cache.toolErrors[c.ToolUseID] = c.IsError
+				cache.toolTimestamps[c.ToolUseID] = ts
 			}
 			// Flush pending assistant turn with matched results
 			if cache.pending != nil {
@@ -330,6 +343,9 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 					if res, ok := cache.toolResults[tc.ID]; ok {
 						tc.Result = res
 						tc.IsError = cache.toolErrors[tc.ID]
+						if resultTS, ok := cache.toolTimestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
+							tc.Duration = resultTS.Sub(tc.Timestamp)
+						}
 					}
 				}
 				cache.committed = append(cache.committed, *cache.pending)
@@ -400,6 +416,9 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 						if res, ok := cache.toolResults[tc.ID]; ok {
 							tc.Result = res
 							tc.IsError = cache.toolErrors[tc.ID]
+							if resultTS, ok := cache.toolTimestamps[tc.ID]; ok && !tc.Timestamp.IsZero() {
+								tc.Duration = resultTS.Sub(tc.Timestamp)
+							}
 						}
 					}
 					cache.committed = append(cache.committed, *cache.pending)

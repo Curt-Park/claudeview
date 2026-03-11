@@ -218,13 +218,17 @@ func renderChatItem(item ChatItem, subItems []ChatItem, width int) []string {
 //	    input summary  ✓/✗
 //	    result...
 func renderExpandedToolCall(tc *model.ToolCall, turn model.Turn, maxWidth int) string {
-	// Line 1: name + model + duration
+	// Line 1: name + model + duration + tokens
 	headerParts := []string{StyleChatToolName.Render("▸ " + tc.Name)}
 	if m := model.ShortModelName(turn.ModelName); m != "" {
 		headerParts = append(headerParts, StyleDim.Render(m))
 	}
 	if tc.Duration > 0 {
 		headerParts = append(headerParts, StyleChatTimestamp.Render(tc.DurationString()))
+	}
+	totalTok := turn.InputTokens + turn.OutputTokens
+	if totalTok > 0 {
+		headerParts = append(headerParts, StyleChatTokens.Render(model.FormatTokenCount(totalTok)+" tok"))
 	}
 	headerLine := "  " + strings.Join(headerParts, "  ")
 
