@@ -11,6 +11,7 @@ type entry struct {
 	SessionID       string           `json:"sessionId"`
 	Slug            string           `json:"slug"`
 	GitBranch       string           `json:"gitBranch"`
+	RequestID       string           `json:"requestId"`
 	Message         json.RawMessage  `json:"message"`
 	CompactMetadata *compactMetadata `json:"compactMetadata,omitempty"`
 }
@@ -45,8 +46,17 @@ type Usage struct {
 }
 
 // TotalInputTokens returns the sum of all input-side tokens including cache.
+// This is valid on both raw and merged Usage values, provided mergeAssistantTurn
+// accumulates each field separately (not via NewInputTokens()).
 func (u Usage) TotalInputTokens() int {
 	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+}
+
+// NewInputTokens returns the count of tokens newly processed this turn —
+// InputTokens plus CacheCreationInputTokens — excluding CacheReadInputTokens,
+// which represent context served from cache rather than freshly processed.
+func (u Usage) NewInputTokens() int {
+	return u.InputTokens + u.CacheCreationInputTokens
 }
 
 // assistantMessage is the message field when type=="assistant".

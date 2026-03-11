@@ -9,8 +9,9 @@ import (
 
 // TokenCount holds per-model token usage.
 type TokenCount struct {
-	InputTokens  int
-	OutputTokens int
+	InputTokens     int
+	CacheReadTokens int
+	OutputTokens    int
 }
 
 // Session represents a Claude Code session.
@@ -72,7 +73,7 @@ func (s *Session) TokenString() string {
 	var parts []string
 	for _, m := range models {
 		tc := s.TokensByModel[m]
-		parts = append(parts, fmt.Sprintf("%s:%s", ShortModelName(m), FormatTokenInOut(tc.InputTokens, tc.OutputTokens)))
+		parts = append(parts, fmt.Sprintf("%s:%s", ShortModelName(m), FormatTokenInOutCache(tc.InputTokens, tc.CacheReadTokens, tc.OutputTokens)))
 	}
 	return strings.Join(parts, " ")
 }

@@ -32,6 +32,7 @@ type Turn struct {
 	Model     string
 	Usage     Usage
 	Timestamp time.Time
+	RequestID string // API request ID for streaming deduplication
 }
 
 // ParsedTranscript is the result of parsing a JSONL file.
@@ -73,14 +74,39 @@ func matchToolResults(calls []ToolCall, results map[string]json.RawMessage, erro
 // flushPendingTurn matches tool results into the pending turn, accumulates metrics, and appends it.
 // toolTimestamps maps tool_use_id -> timestamp of the user turn that delivered the result;
 // used to compute per-tool-call Duration.
+// If the last flushed turn shares the same non-empty requestId (streaming deduplication),
+// the previous turn is replaced and its metrics are undone before adding the new ones.
 func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[string]json.RawMessage, toolErrors map[string]bool, toolTimestamps map[string]time.Time) {
 	matchToolResults(turn.ToolCalls, toolResults, toolErrors, toolTimestamps)
-	// Accumulate per-model token usage
+
+	// Streaming dedup: same requestId as last flushed turn → replace instead of append.
+	if turn.RequestID != "" && len(result.Turns) > 0 {
+		if last := &result.Turns[len(result.Turns)-1]; last.RequestID == turn.RequestID {
+			// Undo previous accumulation
+			u := result.TokensByModel[last.Model]
+			u.InputTokens -= last.Usage.NewInputTokens()
+			u.CacheReadInputTokens -= last.Usage.CacheReadInputTokens
+			u.OutputTokens -= last.Usage.OutputTokens
+			result.TokensByModel[last.Model] = u
+			result.TotalToolCalls -= len(last.ToolCalls)
+			// Replace with new turn and re-accumulate
+			*last = *turn
+			u = result.TokensByModel[turn.Model]
+			u.InputTokens += turn.Usage.NewInputTokens()
+			u.CacheReadInputTokens += turn.Usage.CacheReadInputTokens
+			u.OutputTokens += turn.Usage.OutputTokens
+			result.TokensByModel[turn.Model] = u
+			result.TotalToolCalls += len(turn.ToolCalls)
+			return
+		}
+	}
+
+	// Normal path: accumulate and append.
 	u := result.TokensByModel[turn.Model]
-	u.InputTokens += turn.Usage.TotalInputTokens()
+	u.InputTokens += turn.Usage.NewInputTokens()
+	u.CacheReadInputTokens += turn.Usage.CacheReadInputTokens
 	u.OutputTokens += turn.Usage.OutputTokens
 	result.TokensByModel[turn.Model] = u
-	// Count tool calls
 	result.TotalToolCalls += len(turn.ToolCalls)
 	result.Turns = append(result.Turns, *turn)
 }
@@ -162,7 +188,13 @@ func buildAssistantTurn(msg assistantMessage, ts time.Time) Turn {
 }
 
 // mergeAssistantTurn merges next into pending (consecutive assistant entries).
+// If both share the same non-empty requestId (streaming deduplication), the
+// pending turn is replaced wholesale with next rather than accumulated.
 func mergeAssistantTurn(pending *Turn, next Turn) {
+	if next.RequestID != "" && pending.RequestID == next.RequestID {
+		*pending = next
+		return
+	}
 	if next.Text != "" {
 		if pending.Text != "" {
 			pending.Text += "\n"
@@ -176,7 +208,9 @@ func mergeAssistantTurn(pending *Turn, next Turn) {
 		pending.Thinking += next.Thinking
 	}
 	pending.ToolCalls = append(pending.ToolCalls, next.ToolCalls...)
-	pending.Usage.InputTokens += next.Usage.TotalInputTokens()
+	pending.Usage.InputTokens += next.Usage.InputTokens
+	pending.Usage.CacheCreationInputTokens += next.Usage.CacheCreationInputTokens
+	pending.Usage.CacheReadInputTokens += next.Usage.CacheReadInputTokens
 	pending.Usage.OutputTokens += next.Usage.OutputTokens
 }
 
@@ -237,8 +271,10 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 				continue
 			}
 			turn := buildAssistantTurn(msg, ts)
+			turn.RequestID = entry.RequestID
 			if pendingAssistantTurn != nil {
-				// Merge consecutive assistant entries (e.g. text-only followed by tool-only)
+				// Merge consecutive assistant entries (e.g. text-only followed by tool-only).
+				// mergeAssistantTurn replaces instead of merging when same requestId.
 				mergeAssistantTurn(pendingAssistantTurn, turn)
 			} else {
 				pendingAssistantTurn = &turn
@@ -350,7 +386,13 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 			// Flush pending assistant turn with matched results
 			if cache.pending != nil {
 				matchToolResults(cache.pending.ToolCalls, cache.toolResults, cache.toolErrors, cache.toolTimestamps)
-				cache.committed = append(cache.committed, *cache.pending)
+				// Streaming dedup: same requestId as last committed → replace instead of append.
+				if cache.pending.RequestID != "" && len(cache.committed) > 0 &&
+					cache.committed[len(cache.committed)-1].RequestID == cache.pending.RequestID {
+					cache.committed[len(cache.committed)-1] = *cache.pending
+				} else {
+					cache.committed = append(cache.committed, *cache.pending)
+				}
 				cache.pending = nil
 			}
 			// Add user text turns
@@ -369,8 +411,10 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 				continue
 			}
 			turn := buildAssistantTurn(msg, ts)
+			turn.RequestID = e.RequestID
 			if cache.pending != nil {
-				// Merge consecutive assistant entries
+				// Merge consecutive assistant entries.
+				// mergeAssistantTurn replaces instead of merging when same requestId.
 				mergeAssistantTurn(cache.pending, turn)
 			} else {
 				cache.pending = &turn
@@ -412,6 +456,12 @@ type SessionAggregates struct {
 	DurationMS     int64
 	NumTurns       int
 	Offset         int64 // next read start position
+	// streaming dedup state: tracks the last assistant entry to undo it when
+	// the same requestId appears again (streaming duplicate events).
+	lastRequestID     string
+	lastRequestModel  string
+	lastRequestUsage  Usage
+	lastToolCallDelta int
 }
 
 // ParseAggregatesIncremental reads a JSONL file from the stored offset,
@@ -479,16 +529,37 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 			if err := json.Unmarshal(entry.Message, &msg); err != nil {
 				break
 			}
+			// Streaming dedup: same requestId as last assistant entry → undo previous accumulation.
+			if entry.RequestID != "" && entry.RequestID == agg.lastRequestID {
+				u := agg.TokensByModel[agg.lastRequestModel]
+				u.InputTokens -= agg.lastRequestUsage.NewInputTokens()
+				u.CacheReadInputTokens -= agg.lastRequestUsage.CacheReadInputTokens
+				u.OutputTokens -= agg.lastRequestUsage.OutputTokens
+				agg.TokensByModel[agg.lastRequestModel] = u
+				agg.TotalToolCalls -= agg.lastToolCallDelta
+				agg.NumTurns--
+			}
+			// Accumulate the current (possibly replacement) entry.
 			u := agg.TokensByModel[msg.Model]
-			u.InputTokens += msg.Usage.TotalInputTokens()
+			u.InputTokens += msg.Usage.NewInputTokens()
+			u.CacheReadInputTokens += msg.Usage.CacheReadInputTokens
 			u.OutputTokens += msg.Usage.OutputTokens
 			agg.TokensByModel[msg.Model] = u
+			toolCallDelta := 0
 			for _, c := range msg.Content {
 				if c.Type == "tool_use" {
-					agg.TotalToolCalls++
+					toolCallDelta++
 				}
 			}
+			agg.TotalToolCalls += toolCallDelta
 			agg.NumTurns++
+			// Update last-request state for potential future dedup.
+			if entry.RequestID != "" {
+				agg.lastRequestID = entry.RequestID
+				agg.lastRequestModel = msg.Model
+				agg.lastRequestUsage = msg.Usage
+				agg.lastToolCallDelta = toolCallDelta
+			}
 
 		case "system":
 			dur, turns, _ := parseSystemDuration(entry.Message, line)

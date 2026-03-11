@@ -11,13 +11,14 @@ import (
 // There are no methods to test — this is a compile-time structural check.
 func TestTurnFields(t *testing.T) {
 	_ = model.Turn{
-		Role:         "assistant",
-		Text:         "hello",
-		Thinking:     "hmm",
-		ToolCalls:    []*model.ToolCall{},
-		ModelName:    "claude-sonnet",
-		InputTokens:  100,
-		OutputTokens: 50,
-		Timestamp:    time.Now(),
+		Role:            "assistant",
+		Text:            "hello",
+		Thinking:        "hmm",
+		ToolCalls:       []*model.ToolCall{},
+		ModelName:       "claude-sonnet",
+		InputTokens:     100,
+		OutputTokens:    50,
+		CacheReadTokens: 25,
+		Timestamp:       time.Now(),
 	}
 }

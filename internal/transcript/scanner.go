@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Curt-Park/claudeview/internal/parallel"
 )
 
 // ProjectInfo holds metadata about a discovered project directory.
@@ -35,36 +37,51 @@ func ScanProjects(claudeDir string) ([]ProjectInfo, error) {
 		return nil, err
 	}
 
-	var projects []ProjectInfo
+	type dirEntry struct {
+		hash        string
+		projectPath string
+		modTime     time.Time
+	}
+	var dirs []dirEntry
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		hash := e.Name()
-		projectPath := filepath.Join(projectsDir, hash)
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
+		dirs = append(dirs, dirEntry{
+			hash:        e.Name(),
+			projectPath: filepath.Join(projectsDir, e.Name()),
+			modTime:     info.ModTime(),
+		})
+	}
 
-		sessions, err := scanSessions(projectPath)
+	results := parallel.Map(dirs, func(d dirEntry) ProjectInfo {
+		sessions, err := scanSessions(d.projectPath)
 		if err != nil {
-			continue
+			return ProjectInfo{} // zero value, filtered below by p.Hash check
 		}
-
-		lastSeen := info.ModTime()
+		lastSeen := d.modTime
 		for _, s := range sessions {
 			if s.ModTime.After(lastSeen) {
 				lastSeen = s.ModTime
 			}
 		}
-
-		projects = append(projects, ProjectInfo{
-			Hash:     hash,
-			Path:     projectPath,
+		return ProjectInfo{
+			Hash:     d.hash,
+			Path:     d.projectPath,
 			Sessions: sessions,
 			LastSeen: lastSeen,
-		})
+		}
+	})
+
+	var projects []ProjectInfo
+	for _, p := range results {
+		if p.Hash != "" {
+			projects = append(projects, p)
+		}
 	}
 
 	// Sort by last activity descending

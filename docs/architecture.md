@@ -21,8 +21,8 @@ main.go
   └─ cmd/root.go (Cobra)
        ├─ ui.AppModel     — Bubble Tea model; owns keyboard, layout, mode, navigation state
        ├─ ui.DataProvider — interface; two implementations:
-       │    ├─ liveDataProvider  — reads ~/.claude/ via transcript + config packages
-       │    └─ demoDataProvider  — returns synthetic data (internal/demo)
+       │    ├─ provider.Live  — reads ~/.claude/ via transcript + config packages (internal/provider)
+       │    └─ demo.Provider  — returns synthetic data (internal/demo)
        └─ view.ResourceView[T] — generic table renderer; one constructor per resource type
 ```
 
@@ -35,8 +35,10 @@ main.go
 | `internal/model`     | Data models: Project, Session, Agent, ToolCall, Plugin, Memory  |
 | `internal/ui`        | Bubble Tea AppModel + chrome components                         |
 | `internal/view`      | Generic `ResourceView[T]` + 6 resource constructors             |
-| `internal/stringutil`| Shared string utilities (XML tag extraction)                    |
-| `internal/demo`      | Synthetic demo data generator                                   |
+| `internal/stringutil`| Shared string utilities (XML tag extraction, markdown heading)  |
+| `internal/demo`      | Synthetic demo data generator + `DataProvider` implementation   |
+| `internal/provider`  | Live `DataProvider` implementation (reads `~/.claude/`)         |
+| `internal/parallel`  | Generic `Map[T,R]` concurrent helper (errgroup-backed)          |
 
 ## DataProvider Interface
 
@@ -82,6 +84,9 @@ memories → memory-detail  (requires project context)
 - [[transcript-package]] — JSONL parsing and project scanning
 - [[config-package]] — Claude settings and plugin config parsing
 - [[stringutil-package]] — shared string utilities
-- [[demo-package]] — synthetic demo data generator
+- [[demo-package]] — synthetic demo data generator and DataProvider
+- [[provider-package]] — live DataProvider implementation
+- [[parallel-package]] — generic concurrent map helper
+- [[streaming-dedup-convention]] — JSONL streaming dedup convention for the transcript parser
 - [[test-suite]] — test coverage
 - [[ui-spec]] — UI behavior specification

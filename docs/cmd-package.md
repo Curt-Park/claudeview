@@ -6,15 +6,15 @@ tags: [cmd, internals]
 
 # Command Package — `cmd`
 
-Wires all internal packages into a runnable Bubble Tea application. Contains the Cobra CLI definition, the top-level Bubble Tea model, both `DataProvider` implementations, and async data loading.
+Wires all internal packages into a runnable Bubble Tea application. Contains the Cobra CLI definition, the top-level Bubble Tea model, and async data loading. `DataProvider` implementations live in [[provider-package]] and [[demo-package]].
 
 ## Files
 
-| File              | Purpose                                                                         |
-|-------------------|---------------------------------------------------------------------------------|
-| `root.go`         | Cobra `rootCmd`; `rootModel`; `liveDataProvider`; `demoDataProvider`; async load |
+| File              | Purpose                                                                          |
+|-------------------|----------------------------------------------------------------------------------|
+| `root.go`         | Cobra `rootCmd`; `rootModel`; async data loading; wires `provider.NewLive` and `demo.NewProvider` |
 | `update.go`       | `--update` self-update: fetch latest GitHub release, download, atomic replace    |
-| `update_test.go`  | 4 tests for update logic using `httptest.NewServer` (no network)                |
+| `update_test.go`  | 4 tests for update logic using `httptest.NewServer` (no network)                 |
 
 ## rootModel
 
@@ -65,32 +65,32 @@ On `Init`, it fires `loadData()` synchronously, then async reloads via `loadData
 
 ## DataProvider Implementations
 
-Both implement `ui.DataProvider`:
+Both implement `ui.DataProvider` and live in their own packages:
 
-- **`liveDataProvider`** — reads `~/.claude/` via `transcript.ScanProjects`, `transcript.ParseAggregatesIncremental`, `config.LoadInstalledPlugins`, and `config.LoadSettings`. Populates `model.Project`, `model.Session`, `model.Agent`, `model.Plugin`, `model.Memory`. Has `aggCache` for session metrics and `turnsCache` for incremental turns, both protected by `mu sync.Mutex`. `GetTurns(filePath)` uses `transcript.ParseFileIncremental` with `turnsCache` for offset-based incremental parsing (avoids re-parsing the entire JSONL file every tick).
-- **`demoDataProvider`** — delegates to `internal/demo` for synthetic data; used with `--demo` flag. `GetTurns` returns nil (no demo turn data).
+- **`provider.Live`** (`internal/provider`) — reads `~/.claude/`; see [[provider-package]] for details
+- **`demo.Provider`** (`internal/demo`) — synthetic data for `--demo`; see [[demo-package]] for details
+
+`run()` in `root.go` selects between them: `provider.NewLive(config.ClaudeDir())` or `demo.NewProvider()`.
 
 ## CLI Flags
 
-| Flag           | Effect                                                     |
-|----------------|------------------------------------------------------------|
-| `--demo`       | Use `demoDataProvider` instead of live filesystem data     |
-| `--update`     | Self-update to the latest GitHub release                   |
+| Flag           | Effect                                                  |
+|----------------|---------------------------------------------------------|
+| `--demo`       | Use `demo.Provider` instead of live filesystem data     |
+| `--update`     | Self-update to the latest GitHub release                |
 
 ## Helper Functions
 
-- `parseAgentsFromSession(s *model.Session)` — builds `[]*model.Agent` by parsing the session's transcript and subagent transcripts
-- `populateToolCalls(agent *model.Agent, sessionID string, parsed *transcript.ParsedTranscript)` — fills agent's `ToolCalls` slice and sets `LastActivity`
-- `extractAgentTypesFromCalls(calls []toolCallInfo)` — core logic: reads `subagent_type` from Agent/Task tool calls to determine each subagent's `AgentType`
-- `extractSubagentTypes(turns []model.Turn)` — thin adapter: collects `toolCallInfo` from model turns and delegates to `extractAgentTypesFromCalls`
-- `toolCallInfo` struct — shared type (`Name string`, `Input json.RawMessage`) enabling a single extraction implementation for both `model.Turn` and `transcript.Turn` sources
 - `refreshSlugGroup(dp, projectHash, sessionID, currentSlug)` — re-scans sessions to detect new/removed sessions in a slug group during history view refresh
-- `mdTitle(path string)` — reads a Markdown file and returns the first `# Heading` text
+
+`loadDataAsync()` uses `parallel.Map` (from [[parallel-package]]) for concurrent slug-group and subagent turn loading. Agent/subagent type extraction is handled by `model.ExtractSubagentTypes` and `model.ExtractAgentTypesFromCalls` (see [[model-package]]).
 
 ## Related
 
 - [[architecture]] — how cmd wires packages together
 - [[ui-package]] — `AppModel` and `DataProvider` interface consumed here
-- [[transcript-package]] — filesystem scanning and parsing used by `liveDataProvider`
-- [[config-package]] — settings and plugin loading used by `liveDataProvider`
-- [[demo-package]] — synthetic data used by `demoDataProvider`
+- [[provider-package]] — live `DataProvider` wired in `run()`
+- [[demo-package]] — demo `DataProvider` wired in `run()`
+- [[parallel-package]] — used in `loadDataAsync` for concurrent turn loading
+- [[transcript-package]] — `ScanSubagents` used directly in `loadDataAsync`
+- [[config-package]] — `ClaudeDir()` used in `run()`
