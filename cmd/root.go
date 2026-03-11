@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,6 +19,7 @@ import (
 	"github.com/Curt-Park/claudeview/internal/provider"
 	"github.com/Curt-Park/claudeview/internal/transcript"
 	"github.com/Curt-Park/claudeview/internal/ui"
+	"github.com/Curt-Park/claudeview/internal/usage"
 	"github.com/Curt-Park/claudeview/internal/view"
 )
 
@@ -66,6 +69,12 @@ func run(cmd *cobra.Command, args []string) error {
 	)
 	_, err := p.Run()
 	return err
+}
+
+// usageLoadedMsg carries freshly loaded usage data back to the UI goroutine.
+type usageLoadedMsg struct {
+	data  *usage.Data
+	stale bool
 }
 
 // dataLoadedMsg carries freshly loaded data back to the UI goroutine.
@@ -124,6 +133,12 @@ type rootModel struct {
 	// historyToolCallID identifies the specific ToolCallRow sub-row; "" means cursor is on the parent.
 	historyCursorKey  string
 	historyToolCallID string
+
+	// Usage bar
+	usageClient *usage.Client
+	usageData   *usage.Data
+	usageStale  bool
+	usageTick   int // increments each tick; refresh at multiples of 60
 }
 
 func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
@@ -141,6 +156,21 @@ func newRootModel(app ui.AppModel, dp ui.DataProvider) *rootModel {
 		cursor:          make(map[model.ResourceType]struct{ sel, off int }),
 		lastResource:    app.Resource,
 	}
+	// Initialize usage client if credentials are available.
+	credPath := filepath.Join(config.ClaudeDir(), ".credentials.json")
+	if token, err := usage.ReadToken(credPath); err == nil {
+		rm.usageClient = usage.NewClient(token, "")
+		// Fetch immediately so bar shows on first render.
+		if data, stale, err := rm.usageClient.Fetch(context.Background()); err == nil {
+			rm.usageData = data
+			rm.usageStale = stale
+		}
+	}
+	// Demo mode: use synthetic usage data.
+	if demoMode {
+		rm.usageData = demo.GenerateUsage()
+	}
+
 	rm.loadData()
 	return rm
 }
@@ -198,6 +228,9 @@ func (rm *rootModel) syncView() {
 	if h <= 0 {
 		h = 30
 	}
+
+	// Render usage bar (empty string if no data).
+	rm.app.Info.UsageLine = usage.RenderBar(rm.usageData, rm.usageStale, w)
 
 	rm.updateInfo()
 
@@ -303,17 +336,25 @@ func (rm *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.syncView()
 
 	case ui.TickMsg:
-		// Refresh time-based columns (LAST ACTIVE) on every tick
 		rm.syncView()
-		// Trigger async data reload if not already in progress
+		rm.usageTick++
 		if !rm.loading {
 			rm.loading = true
 			extraCmd = rm.loadDataAsync()
+		}
+		// Refresh usage every 60 ticks (≈60 seconds).
+		if rm.usageTick%60 == 0 {
+			extraCmd = tea.Batch(extraCmd, rm.loadUsageAsync())
 		}
 
 	case ui.SyncViewMsg:
 		rm.syncView()
 		return rm, nil
+
+	case usageLoadedMsg:
+		rm.usageData = msg.data
+		rm.usageStale = msg.stale
+		rm.syncView()
 
 	case dataLoadedMsg:
 		rm.loading = false
@@ -434,6 +475,21 @@ func (rm *rootModel) loadDataAsync() tea.Cmd {
 			}
 		}
 		return msg
+	}
+}
+
+// loadUsageAsync returns a tea.Cmd that fetches usage data in a background goroutine.
+func (rm *rootModel) loadUsageAsync() tea.Cmd {
+	if rm.usageClient == nil {
+		return nil
+	}
+	client := rm.usageClient
+	return func() tea.Msg {
+		data, stale, err := client.Fetch(context.Background())
+		if err != nil {
+			return usageLoadedMsg{stale: true}
+		}
+		return usageLoadedMsg{data: data, stale: stale}
 	}
 }
 
