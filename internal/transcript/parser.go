@@ -69,7 +69,7 @@ func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[stri
 	}
 	// Accumulate per-model token usage
 	u := result.TokensByModel[turn.Model]
-	u.InputTokens += turn.Usage.InputTokens
+	u.InputTokens += turn.Usage.TotalInputTokens()
 	u.OutputTokens += turn.Usage.OutputTokens
 	result.TokensByModel[turn.Model] = u
 	// Count tool calls
@@ -214,7 +214,7 @@ func Parse(r io.Reader) (*ParsedTranscript, error) {
 					pendingAssistantTurn.Thinking += turn.Thinking
 				}
 				pendingAssistantTurn.ToolCalls = append(pendingAssistantTurn.ToolCalls, turn.ToolCalls...)
-				pendingAssistantTurn.Usage.InputTokens += turn.Usage.InputTokens
+				pendingAssistantTurn.Usage.InputTokens += turn.Usage.TotalInputTokens()
 				pendingAssistantTurn.Usage.OutputTokens += turn.Usage.OutputTokens
 			} else {
 				pendingAssistantTurn = &turn
@@ -402,7 +402,7 @@ func ParseFileIncremental(path string, cache *TranscriptCache) (*TranscriptCache
 					cache.pending.Thinking += turn.Thinking
 				}
 				cache.pending.ToolCalls = append(cache.pending.ToolCalls, turn.ToolCalls...)
-				cache.pending.Usage.InputTokens += turn.Usage.InputTokens
+				cache.pending.Usage.InputTokens += turn.Usage.TotalInputTokens()
 				cache.pending.Usage.OutputTokens += turn.Usage.OutputTokens
 			} else {
 				cache.pending = &turn
@@ -521,7 +521,7 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 				break
 			}
 			u := agg.TokensByModel[msg.Model]
-			u.InputTokens += msg.Usage.InputTokens
+			u.InputTokens += msg.Usage.TotalInputTokens()
 			u.OutputTokens += msg.Usage.OutputTokens
 			agg.TokensByModel[msg.Model] = u
 			for _, c := range msg.Content {

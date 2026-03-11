@@ -844,7 +844,7 @@ func (l *liveDataProvider) GetTurns(filePath string) []model.Turn {
 			Text:         t.Text,
 			Thinking:     t.Thinking,
 			ModelName:    t.Model,
-			InputTokens:  t.Usage.InputTokens,
+			InputTokens:  t.Usage.TotalInputTokens(),
 			OutputTokens: t.Usage.OutputTokens,
 			Timestamp:    t.Timestamp,
 		}

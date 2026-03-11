@@ -44,6 +44,11 @@ type Usage struct {
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 }
 
+// TotalInputTokens returns the sum of all input-side tokens including cache.
+func (u Usage) TotalInputTokens() int {
+	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+}
+
 // assistantMessage is the message field when type=="assistant".
 type assistantMessage struct {
 	Role    string           `json:"role"`
