@@ -42,6 +42,12 @@ type rootModel struct {
     // Cached chat items for the chat table
     chatItems []ui.ChatItem
 
+    // Usage monitoring
+    usageClient *usage.Client
+    usageData   *usage.Data
+    usageStale  bool
+    usageTick   int
+
     // Static info (set once at startup)
     userStr       string
     claudeVersion string
@@ -56,6 +62,8 @@ type rootModel struct {
     historyToolCallID string // ToolCall.ID of selected sub-row; "" = cursor on parent
 }
 ```
+
+`newRootModel()` reads the OAuth token from `~/.claude/.credentials.json`, creates a `usage.Client`, and fires an initial `Fetch`; in `--demo` mode it calls `demo.GenerateUsage()` directly. `loadUsageAsync()` fires an async fetch and sends a `usageLoadedMsg{data, stale}` back into the update loop. The `TickMsg` handler increments `usageTick` and triggers `loadUsageAsync()` every 60 ticks. `syncView()` calls `usage.RenderBar(rm.usageData, rm.usageStale, w)` and assigns the result to `app.Info.UsageLine` before `updateInfo()`.
 
 On `Init`, it fires `loadData()` synchronously, then async reloads via `loadDataAsync()` which sends a `dataLoadedMsg` back into the update loop. This keeps the initial render fast while data refreshes in the background.
 
@@ -94,3 +102,4 @@ Both implement `ui.DataProvider` and live in their own packages:
 - [[parallel-package]] — used in `loadDataAsync` for concurrent turn loading
 - [[transcript-package]] — `ScanSubagents` used directly in `loadDataAsync`
 - [[config-package]] — `ClaudeDir()` used in `run()`
+- [[usage-package]] — usage client wired into rootModel; `UsageLine` injected into `app.Info`

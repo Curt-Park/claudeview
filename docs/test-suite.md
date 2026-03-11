@@ -19,6 +19,7 @@ Tests span five packages. `internal/ui` has the largest test surface (integratio
 | `filter_test.go`        | `FilterModel` unit tests                                    |
 | `crumbs_test.go`        | `CrumbsModel` unit tests                                    |
 | `menu_test.go`          | `MenuModel` and nav hint unit tests                         |
+| `header_test.go`        | `InfoModel.Height()` with multi-line usage, `ViewWithMenu()` usage-first output, no leading newline when empty |
 | `testhelpers_test.go`   | Shared helpers: `mockDP`, key senders, row builders         |
 
 ## Other Test Packages
@@ -29,6 +30,7 @@ Tests span five packages. `internal/ui` has the largest test surface (integratio
 | `internal/config`      | `settings_test.go`, `plugins_test.go`        | ~15   |
 | `internal/model`       | `agent_test.go`, `session_test.go`, `project_test.go`, `tool_call_test.go`, `plugin_test.go`, `resource_test.go`, `turn_test.go`, `slug_group_test.go` | ~52 |
 | `internal/transcript`  | `scanner_test.go`, `parser_test.go` (includes slug extraction tests and streaming dedup coverage: `TestStreamingDeduplicationInParse`, `TestMergeConsecutiveSameRequestID`, `TestStreamingDeduplicationInAggregates`, `TestStreamingDeduplicationInFileIncremental`) | ~17 |
+| `internal/usage`       | `credentials_test.go`, `client_test.go`, `bar_test.go` | ~15 |
 
 ## Pattern
 
