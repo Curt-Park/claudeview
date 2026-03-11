@@ -45,6 +45,8 @@ type Usage struct {
 }
 
 // TotalInputTokens returns the sum of all input-side tokens including cache.
+// This is valid on both raw and merged Usage values, provided mergeAssistantTurn
+// accumulates each field separately (not via NewInputTokens()).
 func (u Usage) TotalInputTokens() int {
 	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
 }

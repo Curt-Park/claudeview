@@ -2,6 +2,7 @@ package transcript_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/Curt-Park/claudeview/internal/transcript"
@@ -500,6 +501,49 @@ func TestParseAggregatesIncremental_SlugEmpty(t *testing.T) {
 	}
 	if agg.Slug != "" {
 		t.Errorf("expected empty slug, got %q", agg.Slug)
+	}
+}
+
+func TestParseConsecutiveAssistantEntriesWithCache(t *testing.T) {
+	// Two consecutive assistant entries both with cache tokens
+	// Should accumulate each field separately so NewInputTokens()
+	// is not double-counted at flush time.
+	const input = `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi"}],"model":"claude-opus-4-6","usage":{"input_tokens":100,"cache_creation_input_tokens":200,"cache_read_input_tokens":300,"output_tokens":50}},"uuid":"a1","parentUuid":""}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"there"}],"model":"claude-opus-4-6","usage":{"input_tokens":50,"cache_creation_input_tokens":100,"cache_read_input_tokens":150,"output_tokens":30}},"uuid":"a2","parentUuid":"a1"}
+{"type":"user","message":{"role":"user","content":[]},"uuid":"u1","parentUuid":"a2"}
+`
+	result, err := transcript.Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(result.Turns) != 1 {
+		t.Fatalf("expected 1 merged turn, got %d", len(result.Turns))
+	}
+	u := result.Turns[0].Usage
+	// Each field should be individually accumulated:
+	// InputTokens = 100 + 50 = 150
+	if u.InputTokens != 150 {
+		t.Errorf("merged InputTokens = %d, want 150", u.InputTokens)
+	}
+	// CacheCreationInputTokens = 200 + 100 = 300
+	if u.CacheCreationInputTokens != 300 {
+		t.Errorf("merged CacheCreationInputTokens = %d, want 300", u.CacheCreationInputTokens)
+	}
+	// NewInputTokens = (100+200) + (50+100) = 450
+	if got := u.NewInputTokens(); got != 450 {
+		t.Errorf("merged NewInputTokens() = %d, want 450", got)
+	}
+	// CacheReadInputTokens should be 300+150=450
+	if u.CacheReadInputTokens != 450 {
+		t.Errorf("merged CacheReadInputTokens = %d, want 450", u.CacheReadInputTokens)
+	}
+	// TokensByModel should reflect the correct NewInputTokens total
+	usage := result.TokensByModel["claude-opus-4-6"]
+	if usage.InputTokens != 450 {
+		t.Errorf("TokensByModel InputTokens = %d, want 450", usage.InputTokens)
+	}
+	if usage.CacheReadInputTokens != 450 {
+		t.Errorf("TokensByModel CacheReadInputTokens = %d, want 450", usage.CacheReadInputTokens)
 	}
 }
 

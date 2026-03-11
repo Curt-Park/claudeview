@@ -177,7 +177,8 @@ func mergeAssistantTurn(pending *Turn, next Turn) {
 		pending.Thinking += next.Thinking
 	}
 	pending.ToolCalls = append(pending.ToolCalls, next.ToolCalls...)
-	pending.Usage.InputTokens += next.Usage.NewInputTokens()
+	pending.Usage.InputTokens += next.Usage.InputTokens
+	pending.Usage.CacheCreationInputTokens += next.Usage.CacheCreationInputTokens
 	pending.Usage.CacheReadInputTokens += next.Usage.CacheReadInputTokens
 	pending.Usage.OutputTokens += next.Usage.OutputTokens
 }
