@@ -22,8 +22,8 @@ func renderTurnBoundary(t model.Turn, width int) string {
 	if !t.Timestamp.IsZero() {
 		parts = append(parts, StyleChatTimestamp.Render(t.Timestamp.Format("15:04")))
 	}
-	if t.InputTokens > 0 || t.OutputTokens > 0 {
-		parts = append(parts, StyleChatTokens.Render(model.FormatTokenInOut(t.InputTokens, t.OutputTokens)+" tok"))
+	if t.InputTokens > 0 || t.CacheReadTokens > 0 || t.OutputTokens > 0 {
+		parts = append(parts, StyleChatTokens.Render(model.FormatTokenInOutCache(t.InputTokens, t.CacheReadTokens, t.OutputTokens)+" tok"))
 	}
 	inner := strings.Join(parts, "  ")
 	if inner == "" {
@@ -115,13 +115,15 @@ func renderChatItemHeader(item ChatItem) string {
 		parts = append(parts, StyleChatTimestamp.Render(turn.Timestamp.Format("15:04")))
 	}
 	totalIn := turn.InputTokens
+	totalCache := turn.CacheReadTokens
 	totalOut := turn.OutputTokens
 	for _, et := range item.ExtraTurns {
 		totalIn += et.InputTokens
+		totalCache += et.CacheReadTokens
 		totalOut += et.OutputTokens
 	}
-	if totalIn > 0 || totalOut > 0 {
-		parts = append(parts, StyleChatTokens.Render(model.FormatTokenInOut(totalIn, totalOut)+" tok"))
+	if totalIn > 0 || totalCache > 0 || totalOut > 0 {
+		parts = append(parts, StyleChatTokens.Render(model.FormatTokenInOutCache(totalIn, totalCache, totalOut)+" tok"))
 	}
 	return strings.Join(parts, "  ")
 }
@@ -157,8 +159,8 @@ func renderExpandedToolCall(tc *model.ToolCall, turn model.Turn, maxWidth int) s
 	if tc.Duration > 0 {
 		headerParts = append(headerParts, StyleChatTimestamp.Render(tc.DurationString()))
 	}
-	if turn.InputTokens > 0 || turn.OutputTokens > 0 {
-		headerParts = append(headerParts, StyleChatTokens.Render(model.FormatTokenInOut(turn.InputTokens, turn.OutputTokens)+" tok"))
+	if turn.InputTokens > 0 || turn.CacheReadTokens > 0 || turn.OutputTokens > 0 {
+		headerParts = append(headerParts, StyleChatTokens.Render(model.FormatTokenInOutCache(turn.InputTokens, turn.CacheReadTokens, turn.OutputTokens)+" tok"))
 	}
 	headerLine := "  " + strings.Join(headerParts, "  ")
 
