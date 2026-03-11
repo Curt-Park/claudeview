@@ -77,7 +77,8 @@ func flushPendingTurn(result *ParsedTranscript, turn *Turn, toolResults map[stri
 	matchToolResults(turn.ToolCalls, toolResults, toolErrors, toolTimestamps)
 	// Accumulate per-model token usage
 	u := result.TokensByModel[turn.Model]
-	u.InputTokens += turn.Usage.TotalInputTokens()
+	u.InputTokens += turn.Usage.NewInputTokens()
+	u.CacheReadInputTokens += turn.Usage.CacheReadInputTokens
 	u.OutputTokens += turn.Usage.OutputTokens
 	result.TokensByModel[turn.Model] = u
 	// Count tool calls
@@ -176,7 +177,8 @@ func mergeAssistantTurn(pending *Turn, next Turn) {
 		pending.Thinking += next.Thinking
 	}
 	pending.ToolCalls = append(pending.ToolCalls, next.ToolCalls...)
-	pending.Usage.InputTokens += next.Usage.TotalInputTokens()
+	pending.Usage.InputTokens += next.Usage.NewInputTokens()
+	pending.Usage.CacheReadInputTokens += next.Usage.CacheReadInputTokens
 	pending.Usage.OutputTokens += next.Usage.OutputTokens
 }
 
@@ -480,7 +482,8 @@ func ParseAggregatesIncremental(path string, agg *SessionAggregates) (*SessionAg
 				break
 			}
 			u := agg.TokensByModel[msg.Model]
-			u.InputTokens += msg.Usage.TotalInputTokens()
+			u.InputTokens += msg.Usage.NewInputTokens()
+			u.CacheReadInputTokens += msg.Usage.CacheReadInputTokens
 			u.OutputTokens += msg.Usage.OutputTokens
 			agg.TokensByModel[msg.Model] = u
 			for _, c := range msg.Content {
