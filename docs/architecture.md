@@ -87,5 +87,6 @@ memories → memory-detail  (requires project context)
 - [[demo-package]] — synthetic demo data generator and DataProvider
 - [[provider-package]] — live DataProvider implementation
 - [[parallel-package]] — generic concurrent map helper
+- [[streaming-dedup-convention]] — JSONL streaming dedup convention for the transcript parser
 - [[test-suite]] — test coverage
 - [[ui-spec]] — UI behavior specification
