@@ -11,6 +11,7 @@ type entry struct {
 	SessionID       string           `json:"sessionId"`
 	Slug            string           `json:"slug"`
 	GitBranch       string           `json:"gitBranch"`
+	RequestID       string           `json:"requestId"`
 	Message         json.RawMessage  `json:"message"`
 	CompactMetadata *compactMetadata `json:"compactMetadata,omitempty"`
 }

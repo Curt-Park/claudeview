@@ -547,6 +547,150 @@ func TestParseConsecutiveAssistantEntriesWithCache(t *testing.T) {
 	}
 }
 
+// TestStreamingDeduplicationInParse verifies that when the same requestId appears
+// on two assistant entries separated by a non-text user entry, only the final
+// event's tokens are counted (streaming deduplication).
+func TestStreamingDeduplicationInParse(t *testing.T) {
+	// Claude Code's JSONL format: one API call writes multiple assistant entries
+	// all with the same requestId, interleaved with user/progress entries.
+	// Only the final event's data should be used.
+	const input = `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Do something"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"main.go"}}],"model":"claude-opus-4-6","usage":{"input_tokens":50,"output_tokens":5}},"requestId":"req1"}
+{"type":"user","message":{"role":"user","content":[]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"main.go"}}],"model":"claude-opus-4-6","usage":{"input_tokens":100,"output_tokens":10}},"requestId":"req1"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"package main"}]}}
+`
+	result, err := transcript.Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	// Should have 2 turns: 1 user text + 1 deduplicated assistant (not 3)
+	if len(result.Turns) != 2 {
+		t.Fatalf("expected 2 turns (user + 1 deduplicated assistant), got %d", len(result.Turns))
+	}
+	assistant := result.Turns[1]
+	// Tokens must be from FINAL event only (100/10), not summed (150/15)
+	if assistant.Usage.InputTokens != 100 {
+		t.Errorf("InputTokens = %d, want 100 (final event only)", assistant.Usage.InputTokens)
+	}
+	if assistant.Usage.OutputTokens != 10 {
+		t.Errorf("OutputTokens = %d, want 10 (final event only)", assistant.Usage.OutputTokens)
+	}
+	u := result.TokensByModel["claude-opus-4-6"]
+	if u.InputTokens != 100 {
+		t.Errorf("TokensByModel InputTokens = %d, want 100", u.InputTokens)
+	}
+	if u.OutputTokens != 10 {
+		t.Errorf("TokensByModel OutputTokens = %d, want 10", u.OutputTokens)
+	}
+	// TotalToolCalls should be 1 (from the final event), not 2
+	if result.TotalToolCalls != 1 {
+		t.Errorf("TotalToolCalls = %d, want 1", result.TotalToolCalls)
+	}
+}
+
+// TestMergeConsecutiveSameRequestID verifies that two consecutive assistant
+// entries with the same requestId trigger a replace (not an accumulate merge).
+func TestMergeConsecutiveSameRequestID(t *testing.T) {
+	const input = `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Do something"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me help."}],"model":"claude-opus-4-6","usage":{"input_tokens":50,"output_tokens":5}},"requestId":"req1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me help."},{"type":"tool_use","id":"t1","name":"Read","input":{}}],"model":"claude-opus-4-6","usage":{"input_tokens":100,"output_tokens":15}},"requestId":"req1"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"result"}]}}
+`
+	result, err := transcript.Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(result.Turns) != 2 {
+		t.Fatalf("expected 2 turns, got %d", len(result.Turns))
+	}
+	assistant := result.Turns[1]
+	// Tokens from FINAL event only (100/15), not accumulated (150/20)
+	if assistant.Usage.InputTokens != 100 {
+		t.Errorf("InputTokens = %d, want 100", assistant.Usage.InputTokens)
+	}
+	if assistant.Usage.OutputTokens != 15 {
+		t.Errorf("OutputTokens = %d, want 15", assistant.Usage.OutputTokens)
+	}
+}
+
+// TestStreamingDeduplicationInAggregates verifies ParseAggregatesIncremental
+// does not double-count tokens for streaming duplicate assistant entries.
+func TestStreamingDeduplicationInAggregates(t *testing.T) {
+	f, err := os.CreateTemp("", "streaming-agg-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	const input = `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Do something"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}],"model":"claude-opus-4-6","usage":{"input_tokens":50,"output_tokens":5}},"requestId":"req1"}
+{"type":"user","message":{"role":"user","content":[]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}],"model":"claude-opus-4-6","usage":{"input_tokens":100,"output_tokens":10}},"requestId":"req1"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"pkg main"}]}}
+`
+	if _, err := f.WriteString(input); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	agg, err := transcript.ParseAggregatesIncremental(f.Name(), nil)
+	if err != nil {
+		t.Fatalf("ParseAggregatesIncremental failed: %v", err)
+	}
+	u := agg.TokensByModel["claude-opus-4-6"]
+	// Should count only final event (100/10), not both (150/15)
+	if u.InputTokens != 100 {
+		t.Errorf("InputTokens = %d, want 100", u.InputTokens)
+	}
+	if u.OutputTokens != 10 {
+		t.Errorf("OutputTokens = %d, want 10", u.OutputTokens)
+	}
+	// Tool calls should be counted once (1 unique API call)
+	if agg.TotalToolCalls != 1 {
+		t.Errorf("TotalToolCalls = %d, want 1", agg.TotalToolCalls)
+	}
+}
+
+// TestStreamingDeduplicationInFileIncremental verifies ParseFileIncremental
+// deduplicates streaming assistant entries with the same requestId.
+func TestStreamingDeduplicationInFileIncremental(t *testing.T) {
+	f, err := os.CreateTemp("", "streaming-inc-*.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+
+	const input = `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Do something"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}],"model":"claude-opus-4-6","usage":{"input_tokens":50,"output_tokens":5}},"requestId":"req1"}
+{"type":"user","message":{"role":"user","content":[]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}],"model":"claude-opus-4-6","usage":{"input_tokens":100,"output_tokens":10}},"requestId":"req1"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"pkg main"}]}}
+`
+	if _, err := f.WriteString(input); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	cache, err := transcript.ParseFileIncremental(f.Name(), nil)
+	if err != nil {
+		t.Fatalf("ParseFileIncremental failed: %v", err)
+	}
+	turns := cache.Turns()
+	// Should have 2 turns: 1 user + 1 deduplicated assistant
+	if len(turns) != 2 {
+		t.Fatalf("expected 2 turns, got %d", len(turns))
+	}
+	assistant := turns[1]
+	// Tokens from FINAL event only (100/10), not summed (150/15)
+	if assistant.Usage.InputTokens != 100 {
+		t.Errorf("InputTokens = %d, want 100", assistant.Usage.InputTokens)
+	}
+	if assistant.Usage.OutputTokens != 10 {
+		t.Errorf("OutputTokens = %d, want 10", assistant.Usage.OutputTokens)
+	}
+}
+
 func TestCountSubagents(t *testing.T) {
 	// Empty directory
 	dir, err := os.MkdirTemp("", "subagents-*")
