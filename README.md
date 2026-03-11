@@ -22,6 +22,7 @@ The dashboard follows the k9s model: hierarchical drill-down with vim-style navi
 4. **Live follow mode** — history view streams new turns as they arrive; scroll up to lock position, `G` to re-enable
 5. **Plugin and memory inspection** — jump to plugins (`p`) or memories (`m`) from any view, with state preserved for `esc`-to-restore
 6. **Detail views** — expanded content with thinking blocks, tool call inputs/outputs, and per-model token counts
+7. **Usage monitor** — `█░` progress bars for 5-hour and 7-day Claude Max token windows with reset countdowns, shown above the info panel; hidden automatically when no credentials are found
 
 **Data Model**
 
