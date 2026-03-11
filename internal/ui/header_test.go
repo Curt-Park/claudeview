@@ -14,8 +14,8 @@ func TestInfoModelHeightWithUsageLine(t *testing.T) {
 	info.UsageLine = "line1\nline2" // 2-line usage bar
 	withUsage := info.Height(4, 3, 1)
 
-	if withUsage != base+3 { // 2 usage lines + 1 separator
-		t.Errorf("expected height %d with 2-line usage + separator, got %d", base+3, withUsage)
+	if withUsage != base+2 { // 2 usage lines + 1 joining newline
+		t.Errorf("expected height %d with 2-line usage + newline, got %d", base+2, withUsage)
 	}
 }
 
@@ -30,9 +30,9 @@ func TestInfoModelViewWithUsageLine(t *testing.T) {
 	if lines[0] != "USAGE_BAR_LINE" {
 		t.Errorf("expected usage line as first line, got %q", lines[0])
 	}
-	// Line 1 (index 1) should be the separator: a background-colored blank line.
-	if len(lines) < 3 {
-		t.Errorf("expected at least 3 lines (usage + separator + info), got %d", len(lines))
+	// Line 1 (index 1) should be the first info line.
+	if len(lines) < 2 {
+		t.Errorf("expected at least 2 lines (usage + info), got %d", len(lines))
 	}
 }
 
