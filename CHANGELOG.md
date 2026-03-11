@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Curt-Park/claudeview/compare/v0.3.0...v0.4.0) (2026-03-11)
+
+
+### Features
+
+* parallelize I/O, fix token overcounting, and improve history detail view ([#28](https://github.com/Curt-Park/claudeview/issues/28)) ([40f9e92](https://github.com/Curt-Park/claudeview/commit/40f9e923b16e4b32eaadfa918afb57cda32571dc))
+
 ## [0.3.0](https://github.com/Curt-Park/claudeview/compare/v0.2.0...v0.3.0) (2026-03-11)
 
 
